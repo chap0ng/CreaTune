@@ -1,0 +1,150 @@
+/* Creature sprite styles - simplified */
+.visualizer {
+  position: absolute;
+  top: 15%;
+  left: 0;
+  width: 100%;
+  height: 60%;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.visualizer.hidden {
+  display: none;
+}
+
+.creature {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  background-size: 300% 100%; /* 3 columns, 1 row */
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 0.3s;
+  transform-origin: center;
+}
+
+.creature.pulse {
+  animation: pulse-effect 0.3s ease-in-out;
+}
+
+.creature.fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(80, 80, 80, 0.8);
+  border-radius: 50%;
+  font-size: 120px;
+  font-weight: bold;
+  color: white;
+}
+
+.creature1 { background-image: url('../images/creature1.png'); }
+.creature2 { background-image: url('../images/creature2.png'); }
+.creature3 { background-image: url('../images/creature3.png'); }
+.creature4 { background-image: url('../images/creature4.png'); }
+.creature5 { background-image: url('../images/creature5.png'); }
+.creature6 { background-image: url('../images/creature6.png'); }
+.creature7 { background-image: url('../images/creature7.png'); }
+
+@keyframes pulse-effect {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+/* Synth buttons */
+.synth-buttons {
+  position: absolute;
+  bottom: 45px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  z-index: 4;
+}
+
+.synth-buttons.hidden {
+  display: none;
+}
+
+.synth-button {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.synth-button:hover {
+  transform: scale(1.05);
+}
+
+.synth-button:active {
+  transform: scale(0.95);
+}
+
+#button1 { background-color: #8B735A; }
+#button2 { background-color: #9C6644; }
+#button3 { background-color: #567568; }
+
+.synth-button.active {
+  box-shadow: 0 0 20px 5px rgba(255, 255, 255, 0.4);
+}
+
+#button1.active { background-color: #D7C0AE; }
+#button2.active { background-color: #C8AE7D; }
+#button3.active { background-color: #A9C0A6; }
+
+.synth-status {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  color: white;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.5s;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .synth-button {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .creature {
+    width: 200px;
+    height: 200px;
+  }
+  
+  .creature.fallback {
+    font-size: 80px;
+  }
+}
+
+@media (max-width: 480px) {
+  .synth-button {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .creature {
+    width: 150px;
+    height: 150px;
+  }
+  
+  .creature.fallback {
+    font-size: 60px;
+  }
+}

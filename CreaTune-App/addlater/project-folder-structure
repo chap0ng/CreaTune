@@ -1,0 +1,32 @@
+Project/
+├── README.md                # Project documentation and setup instructions
+├── package.json            # Project metadata and dependencies
+├── websocket-server.js      # WebSocket server for real-time communication
+    web/
+    ├── index.html                # Main HTML file 
+    ├── service-worker.js         # Service worker for caching and offline support
+    ├── websocket-manager.js      # WebSocket manager for handling connections
+    ├── css/
+    │   ├── styles.css            # Original styles for the frame
+    │   └── simplified-styles.css # Combined styles for synth and creatures
+    ├── js/
+    │   ├── frame-anim.js         # Original frame animation
+    │   ├── drag-container.js     # Original drag behavior
+    │   ├── synth-logic.js        # Tone.js synth engine
+    │   └── integrated-creatures.js # Combined creature and UI management
+    ├── images/
+    │   ├── creature1.png         # Creature sprite sheets (920×920 px, 3 frames)
+    │   ├── creature2.png
+    │   ├── creature3.png
+    │   ├── creature4.png
+    │   ├── creature5.png
+    │   ├── creature6.png
+    │   └── creature7.png
+    ├── sounds/
+    ├── icons/
+    │   ├── icon-192x192.png      
+    │   ├── icon-512x512.png   
+    └── assets/
+        ├── frame-sprite.png      # Original frame assets
+        ├── tab-top.png
+        └── top-bar-image.png
