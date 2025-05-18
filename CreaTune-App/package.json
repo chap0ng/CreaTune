@@ -1,0 +1,29 @@
+{
+  "name": "creatune",
+  "version": "1.0.0",
+  "description": "Interactive musical experience with ESP32 sensor integration",
+  "main": "websocket-server.js",
+  "scripts": {
+    "start": "node websocket-server.js",
+    "dev": "nodemon websocket-server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "music",
+    "websocket",
+    "esp32",
+    "pwa",
+    "tone.js"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

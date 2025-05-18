@@ -1,0 +1,166 @@
+/* Base Styles */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f5eee0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: Arial, sans-serif;
+}
+
+/* Container Layout */
+.container-wrapper {
+  position: relative;
+  width: calc(100% - 60px);
+  max-width: 1200px;
+  margin: 40px;
+  display: flex;
+  justify-content: center;
+}
+
+.container {
+  width: 100%;
+  aspect-ratio: 2340 / 962;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  contain: layout;
+}
+
+/* Top Tab */
+.top-tab {
+  position: absolute;
+  top: -500px;
+  left: -30px;
+  width: calc(100% + 60px);
+  height: 500px;
+  background-color: #f5eee0;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  z-index: 6;
+  display: flex;
+  transition: top 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  background-size: 100% 100%;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+.top-tab * {
+  pointer-events: auto;
+}
+
+.top-tab.dragging {
+  transition: none;
+}
+
+/* Frame Covers */
+.frame-cover-left,
+.frame-cover-right,
+.frame-cover-top {
+  position: absolute;
+  background-color: #f5eee0;
+  z-index: 5;
+  display: none;
+  pointer-events: none;
+}
+
+.frame-cover-left,
+.frame-cover-right {
+  top: 0;
+  bottom: 0;
+  width: 0px;
+}
+
+.frame-cover-left {
+  left: -2px;
+}
+
+.frame-cover-right {
+  right: 0px;
+}
+
+.frame-cover-top {
+  top: 0px;
+  left: 0;
+  right: 0;
+  height: 0px;
+}
+
+/* Sprite - fixed positioning */
+.sprite {
+  width: 100%;
+  height: 100%;
+  background-image: url('assets/frame-sprite.png');
+  background-size: 300% 400%;
+  background-repeat: no-repeat;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border-radius: 5px;
+  border: 0px solid transparent;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  will-change: background-position;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.container.tab-open .sprite {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* Instructions */
+.instructions {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  color: #333;
+  z-index: 7;
+}
+
+/* Drag Handle */
+.drag-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 7%;
+  cursor: ns-resize;
+  z-index: 11;
+  background-image: url('assets/top-bar-image.png');
+  background-size: 100% auto;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: #f5eee0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  margin: 0;
+  padding: 0;
+}
+
+.handle-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.drag-handle.dragging,
+.drag-handle.active {
+  opacity: 1 !important;
+  transition: none;
+}
+
+.container:hover .drag-handle:not(.dragging) {
+  opacity: 0;
+}
