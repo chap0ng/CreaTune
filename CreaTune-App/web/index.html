@@ -6,6 +6,7 @@
     <title>Creature Synth Animation</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/simplified-styles.css">
+    <link rel="stylesheet" href="css/recording-styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
 </head>
 <body>
@@ -20,11 +21,19 @@
             </div>
             <div class="sprite" id="sprite"></div>
             <div class="instructions"></div>
+            <div class="visualizer-container">
+                <div class="audio-visualizer" id="audioVisualizer">
+                    <div class="rhythm-indicator"></div>
+                </div>
+            </div>
+            <button id="randomSynthButton" class="random-button">Random</button>
         </div>
     </div>
     <script src="js/frame-anim.js"></script>
     <script src="js/drag-container.js"></script>
     <script src="js/synth-logic.js"></script>
     <script src="js/integrated-creatures.js"></script>
+    <script src="js/recording-logic.js"></script>
+    <script src="js/random-synth.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-// Initialize Tone.js synths and audio system
+// synth-logic.js with modifications for recording integration
 document.addEventListener('DOMContentLoaded', () => {
   let audioStarted = false;
   const state = {
@@ -103,6 +103,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Main sequence loop
     synths.mainLoop = new Tone.Loop((time) => {
+      // Don't play if recordingSystem has a loop playing
+      if (window.recordingSystem && window.recordingSystem.hasLoop()) {
+        return;
+      }
+    
       const rhythmFactor = getRhythmValue();
       const noteDuration = rhythmFactor < 0.7 ? "4n" : "2n";
       
@@ -113,12 +118,12 @@ document.addEventListener('DOMContentLoaded', () => {
         chord.forEach(note => {
           synths.synth7.triggerAttackRelease(note, noteDuration, time);
         });
-        window.synthUI.pulseShape('shape7');
+        window.synthUI && window.synthUI.pulseShape('shape7');
       } 
       else if (state.button1 && state.button2) {
         const note = cMajorNotes[Math.floor(Math.random() * cMajorNotes.length)];
         synths.synth4.triggerAttackRelease(note, noteDuration, time);
-        window.synthUI.pulseShape('shape4');
+        window.synthUI && window.synthUI.pulseShape('shape4');
       } 
       else if (state.button1 && state.button3) {
         const randomIndex = Math.floor(Math.random() * cMajorChords.length);
@@ -126,32 +131,32 @@ document.addEventListener('DOMContentLoaded', () => {
         chord.forEach(note => {
           synths.synth5.triggerAttackRelease(note, noteDuration, time);
         });
-        window.synthUI.pulseShape('shape5');
+        window.synthUI && window.synthUI.pulseShape('shape5');
       } 
       else if (state.button2 && state.button3) {
         const note = cMajorNotes[Math.floor(Math.random() * cMajorNotes.length)];
         synths.synth6.triggerAttackRelease(note, noteDuration, time);
-        window.synthUI.pulseShape('shape6');
+        window.synthUI && window.synthUI.pulseShape('shape6');
       } 
       else if (state.button1) {
         const note = pattern1[Math.floor(Math.random() * pattern1.length)];
         if (note !== null) {
           synths.synth1.triggerAttackRelease(note, noteDuration, time);
-          window.synthUI.pulseShape('shape1');
+          window.synthUI && window.synthUI.pulseShape('shape1');
         }
       } 
       else if (state.button2) {
         const note = pattern2[Math.floor(Math.random() * pattern2.length)];
         if (note !== null) {
           synths.synth2.triggerAttackRelease(note, noteDuration, time);
-          window.synthUI.pulseShape('shape2');
+          window.synthUI && window.synthUI.pulseShape('shape2');
         }
       } 
       else if (state.button3) {
         const note = pattern3[Math.floor(Math.random() * pattern3.length)];
         if (note !== null) {
           synths.synth3.triggerAttackRelease(note, noteDuration, time);
-          window.synthUI.pulseShape('shape3');
+          window.synthUI && window.synthUI.pulseShape('shape3');
         }
       }
     }, "8n").start(0);
@@ -186,9 +191,12 @@ document.addEventListener('DOMContentLoaded', () => {
           if (statusCallback) statusCallback(null);
         }, 2000);
         
+        return true;
+        
       } catch (error) {
         console.error("Error starting audio:", error);
         if (statusCallback) statusCallback("Error starting audio. Please try again.");
+        return false;
       }
     },
     
@@ -204,6 +212,54 @@ document.addEventListener('DOMContentLoaded', () => {
     
     isInitialized: function() {
       return audioStarted;
+    },
+    
+    // Add this new function to expose synths
+    getSynths: function() {
+      return synths;
+    },
+    
+    // Add a function to trigger a synth directly based on current state
+    triggerNote: function(note = "C4", duration = "8n") {
+      // Determine which synth to use based on button state
+      let selectedSynth;
+      
+      if (state.button1 && state.button2 && state.button3) {
+        selectedSynth = synths.synth7;
+        window.synthUI && window.synthUI.pulseShape('shape7');
+      } 
+      else if (state.button1 && state.button2) {
+        selectedSynth = synths.synth4;
+        window.synthUI && window.synthUI.pulseShape('shape4');
+      } 
+      else if (state.button1 && state.button3) {
+        selectedSynth = synths.synth5;
+        window.synthUI && window.synthUI.pulseShape('shape5');
+      } 
+      else if (state.button2 && state.button3) {
+        selectedSynth = synths.synth6;
+        window.synthUI && window.synthUI.pulseShape('shape6');
+      } 
+      else if (state.button1) {
+        selectedSynth = synths.synth1;
+        window.synthUI && window.synthUI.pulseShape('shape1');
+      } 
+      else if (state.button2) {
+        selectedSynth = synths.synth2;
+        window.synthUI && window.synthUI.pulseShape('shape2');
+      } 
+      else if (state.button3) {
+        selectedSynth = synths.synth3;
+        window.synthUI && window.synthUI.pulseShape('shape3');
+      } 
+      else {
+        // Default if no buttons are active
+        selectedSynth = synths.synth1;
+        window.synthUI && window.synthUI.pulseShape('shape1');
+      }
+      
+      // Play the note
+      selectedSynth.triggerAttackRelease(note, duration);
     }
   };
 });
