@@ -1,16 +1,27 @@
-// service-worker.js
-const CACHE_NAME = 'CreaTune-cache-v2';
+// service-worker.js - Enables offline functionality and PWA features
+
+const CACHE_NAME = 'creaTune-cache-v1';
 const urlsToCache = [
   './',
   './index.html',
   './styles.css',
-  './app.js',
+  './main.js',
+  './audio-engine.js',
+  './ui-controller.js',
+  './sprite-integration.js',
+  './sensor-manager.js',
+  './websocket-manager.js',
+  './frame-anim.js',
+  './drag-container.js',
   './manifest.json',
-  './images/mic-icon.png',
-  './images/plant-icon.png',
   './images/creature.png',
+  './assets/frame-sprite.png',
+  './assets/top-bar-image.png',
+  './assets/tab-top.png',
   './icons/icon-192x192.png',
-  './icons/icon-512x512.png'
+  './icons/icon-512x512.png',
+  'https://fonts.googleapis.com/css2?family=VT323&display=swap',
+  'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js'
 ];
 
 // Install event - cache assets
@@ -55,7 +66,7 @@ self.addEventListener('fetch', event => {
           return response;
         }
         
-        // Clone the request
+        // Clone the request for fetch
         const fetchRequest = event.request.clone();
         
         return fetch(fetchRequest).then(
@@ -65,7 +76,7 @@ self.addEventListener('fetch', event => {
               return response;
             }
 
-            // Clone the response
+            // Clone the response for caching
             const responseToCache = response.clone();
 
             caches.open(CACHE_NAME)
@@ -76,8 +87,8 @@ self.addEventListener('fetch', event => {
             return response;
           }
         ).catch(() => {
-          // Fallback for offline use
-          if (event.request.url.endsWith('.html')) {
+          // Fallback for offline access - return index.html for HTML requests
+          if (event.request.url.match(/\.html$/) || event.request.mode === 'navigate') {
             return caches.match('./index.html');
           }
         });
