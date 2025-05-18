@@ -3,10 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sprite Animation</title>
+    <meta name="theme-color" content="#e6695a">
+    <title>CreaTune</title>
+    <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="./icons/icon-192x192.png">
+    <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
 </head>
 <body>
+    <!-- Original Sprite Animation Container (Preserved) -->
     <div class="container-wrapper">
         <div class="container" id="spriteContainer">
             <div class="top-tab" id="topTab"></div>
@@ -17,10 +22,95 @@
                 <div class="handle-overlay" id="handleOverlay"></div>
             </div>
             <div class="sprite" id="sprite"></div>
-            <div class="instructions"></div>
+            <div class="instructions">Tap to animate</div>
         </div>
     </div>
+
+    <!-- CreaTune Control Panel (Added at the bottom) -->
+    <div class="creatune-panel">
+        <div class="header">
+            <h1>CreaTune</h1>
+            <div class="status-indicators">
+                <div class="status-indicator" id="esp-status">
+                    <div class="led" id="esp-led"></div>
+                    <span>ESP32</span>
+                </div>
+                <div class="status-indicator" id="data-status">
+                    <div class="led" id="data-led"></div>
+                    <span>Data</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-row">
+                <button id="mic-button" class="control-button">
+                    <img src="./images/mic-icon.png" id="mic-icon" alt="Microphone">
+                    <span>Record</span>
+                </button>
+                
+                <button id="ambient-button" class="control-button">
+                    <span>Ambient</span>
+                </button>
+                
+                <button id="toy-piano-button" class="control-button">
+                    <span>Toy Piano</span>
+                </button>
+            </div>
+            
+            <div class="control-row">
+                <button id="tempo-button" class="control-button">
+                    <span>Tempo: Normal</span>
+                </button>
+                
+                <button id="simulate-esp-button" class="control-button">
+                    <span>Simulate ESP32</span>
+                </button>
+                
+                <button id="visualizer-button" class="control-button">
+                    <img src="./images/plant-icon.png" id="plant-icon" alt="Plant">
+                    <span>Visualizer</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="creature-container" class="hidden">
+            <div id="creature" class="creature"></div>
+        </div>
+
+        <div class="sensor-displays">
+            <div class="sensor-display" id="sensor1">
+                <h3>ESP32 #1</h3>
+                <div class="sensor-value">--</div>
+            </div>
+            <div class="sensor-display" id="sensor2">
+                <h3>ESP32 #2</h3>
+                <div class="sensor-value">--</div>
+            </div>
+            <div class="sensor-display" id="sensor3">
+                <h3>ESP32 #3</h3>
+                <div class="sensor-value">--</div>
+            </div>
+        </div>
+
+        <div class="log-container">
+            <div id="log" class="log"></div>
+        </div>
+    </div>
+
+    <!-- Load External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.39/Tone.min.js"></script>
+    
+    <!-- Load Original Scripts (Preserved) -->
     <script src="frame-anim.js"></script>
     <script src="drag-container.js"></script>
+    
+    <!-- Load CreaTune Modules -->
+    <script src="ui-controller.js"></script>
+    <script src="sensor-manager.js"></script>
+    <script src="audio-engine.js"></script>
+    <script src="websocket-manager.js"></script>
+    <script src="sprite-integration.js"></script>
+    <script src="main.js"></script>
 </body>
 </html>

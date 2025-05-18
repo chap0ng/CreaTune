@@ -1,0 +1,20 @@
+// config.h
+// Configuration for CreaSense ESP32
+
+// WiFi configuration
+#define WIFI_SSID "your_wifi_ssid"      // Change to your WiFi SSID
+#define WIFI_PASSWORD "your_wifi_pass"  // Change to your WiFi password
+
+// WebSocket configuration
+#define WEBSOCKET_HOST "192.168.1.100"  // Change to your server IP
+#define WEBSOCKET_PORT 8080
+#define WEBSOCKET_PATH "/"
+
+// Sensor configuration
+#define SENSOR_NAME "CreaSense"
+#define SENSOR_PIN 36                   // Analog pin for sensor (ADC1_CH0)
+#define READING_INTERVAL 1000           // Send data every 1000ms (1 second)
+
+// ADC configuration
+#define ADC_RESOLUTION 4095.0           // 12-bit ADC (2^12 - 1)
+#define VOLTAGE_REFERENCE 3.3           // ESP32 reference voltage (3.3V)
