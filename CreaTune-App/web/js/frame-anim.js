@@ -1,4 +1,4 @@
-// frame-anim.js - Extended with recording integration
+// Modify frame-anim.js to work better with recording
 document.addEventListener('DOMContentLoaded', () => {
     const sprite = document.getElementById('sprite');
     const container = document.getElementById('spriteContainer');
@@ -30,12 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isAnimating) stopAnimation();
         if (window.dragContainer && window.dragContainer.isTabOpen()) return;
         
-        // Don't start animation if there's a rhythm loop playing
-        // Check if recordingSystem exists and has a loop
-        if (window.recordingSystem && window.recordingSystem.hasLoop()) {
-            return;
-        }
-        
+        // Allow animation during recording - don't block it
         resetFrame();
         isAnimating = true;
         
@@ -59,6 +54,8 @@ document.addEventListener('DOMContentLoaded', () => {
         showFrame(0);
     }
     
+    // Disable the container click to handle animation - let state-manager handle clicks
+    // We only want clicks for dragging to work
     container.addEventListener('click', (e) => {
         const dragHandle = document.getElementById('dragHandle');
         const handleOverlay = document.getElementById('handleOverlay');
@@ -69,19 +66,22 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('frameCoverTop')
         ];
         
+        // If clicking on drag elements, don't start animation
         if ([dragHandle, handleOverlay, topTab, ...frameCovers].includes(e.target) || 
             (topTab && topTab.contains(e.target))) return;
-        
-        // Check if recording system exists and is recording or has a loop
-        // If so, don't start animation
-        if (window.recordingSystem) {
-            if (window.recordingSystem.isRecording() || window.recordingSystem.hasLoop()) {
-                return;
+            
+        // Let state-manager handle the recording logic
+        // We only animate if no recording is active
+        if ((!window.stateManager || window.stateManager.getSubState() !== 'record') &&
+            (!window.dragContainer || !window.dragContainer.isTabOpen())) {
+            
+            // Check if recording system exists and is recording or has a loop
+            const recordingActive = window.recordingSystem && 
+                (window.recordingSystem.isRecording() || window.recordingSystem.hasLoop());
+                
+            if (!recordingActive) {
+                startAnimation();
             }
-        }
-        
-        if (!window.dragContainer || !window.dragContainer.isTabOpen()) {
-            startAnimation();
         }
     });
     

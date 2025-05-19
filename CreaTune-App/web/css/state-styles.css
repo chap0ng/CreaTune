@@ -1,99 +1,179 @@
-/* state-styles.css */
-/* CSS styles for the different states of the CreaTune application */
+/* Base sprite and container styles */
+#spriteContainer {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  background-color: #f5f5f5;
+}
 
-/* Google Font Import */
-@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
-
-/* State-specific backgrounds with fallbacks */
-.sprite.state-idle {
+#sprite {
+  width: 100%;
+  height: 100%;
   background-image: url('../assets/frame-sprite.png');
+  background-size: 300% 400%;
+  background-repeat: no-repeat;
+  position: relative;
+  transition: background-position 0.2s ease;
 }
 
-.sprite.state-soil {
-  background-image: url('../images/soil.png');
+/* Frame and UI Components */
+.drag-handle {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 30px;
+  cursor: grab;
+  z-index: 20;
+  transition: top 0.3s ease-out;
 }
 
-.sprite.state-light {
-  background-image: url('../images/light.png');
+.drag-handle.active {
+  background-color: rgba(0, 0, 0, 0.3);
 }
 
-.sprite.state-temp {
-  background-image: url('../images/temp.png');
+.drag-handle.dragging {
+  cursor: grabbing;
 }
 
-.sprite.state-growth {
-  background-image: url('../images/growth.png');
+.handle-overlay {
+  width: 100%;
+  height: 100%;
+  background-image: url('../assets/top-bar-image.png');
+  background-size: 100% auto;
+  background-repeat: no-repeat;
+  background-position: center center;
+  z-index: 25;
 }
 
-.sprite.state-mirrage {
-  background-image: url('../images/mirrage.png');
+.top-tab {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 500px;
+  z-index: 15;
+  transition: top 0.3s ease-out;
 }
 
-.sprite.state-flower {
-  background-image: url('../images/flower.png');
+.frame-cover {
+  position: absolute;
+  z-index: 10;
+  background-color: #333;
+  display: none;
 }
 
-.sprite.state-total {
-  background-image: url('../images/total.png');
+.frame-cover.left {
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 20px;
 }
 
-/* Fallback colors if images don't load */
-.sprite.state-idle.no-image {
-  background-image: none;
-  background-color: #f5eee0;
-  z-index: 90;
+.frame-cover.right {
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 20px;
 }
 
-.sprite.state-soil.no-image {
-  background-image: none;
-  background-color: #8B735A;
-  z-index: 90;
+.frame-cover.top {
+  top: 0;
+  left: 0;
+  height: 20px;
+  width: 100%;
 }
 
-.sprite.state-light.no-image {
-  background-image: none;
-  background-color: #DFBE5F;
-  z-index: 90;
+/* State backgrounds as overlays */
+.sprite.state-idle::after,
+.sprite.state-soil::after,
+.sprite.state-light::after,
+.sprite.state-temp::after,
+.sprite.state-growth::after,
+.sprite.state-mirrage::after,
+.sprite.state-flower::after,
+.sprite.state-total::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-repeat: no-repeat;
+  z-index: 1;
+  pointer-events: none;
 }
 
-.sprite.state-temp.no-image {
-  background-image: none;
-  background-color: #D67B54;
-  z-index: 90;
+.sprite.state-idle::after { background-image: url('../assets/frame-sprite.png'); }
+.sprite.state-soil::after { background-image: url('../images/soil.png'); }
+.sprite.state-light::after { background-image: url('../images/light.png'); }
+.sprite.state-temp::after { background-image: url('../images/temp.png'); }
+.sprite.state-growth::after { background-image: url('../images/growth.png'); }
+.sprite.state-mirrage::after { background-image: url('../images/mirrage.png'); }
+.sprite.state-flower::after { background-image: url('../images/flower.png'); }
+.sprite.state-total::after { background-image: url('../images/total.png'); }
+
+/* Creature containers */
+.visualizer {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  height: 80%;
+  z-index: 2;
 }
 
-.sprite.state-growth.no-image {
-  background-image: none;
-  background-color: #9CB380;
-  z-index: 90;
+.visualizer.hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
-.sprite.state-mirrage.no-image {
-  background-image: none ;
-  background-color: #9A7AA0;
-  z-index: 90;
+/* Creature styles */
+.creature {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 0.5s ease, transform 0.5s ease, filter 0.5s ease;
 }
 
-.sprite.state-flower.no-image {
-  background-image: none;
-  background-color: #D496B9;
-  z-index: 90;
+.creature.fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'VT323', monospace;
+  font-size: 48px;
+  color: white;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
 }
 
-.sprite.state-total.no-image {
-  background-image: none;
-  background-color: #7A9CC2;
-  z-index: 90;
+.creature1 { background-image: url('../images/creature1.png'); top: 20%; left: 20%; }
+.creature2 { background-image: url('../images/creature2.png'); top: 20%; right: 20%; }
+.creature3 { background-image: url('../images/creature3.png'); bottom: 20%; left: 20%; }
+.creature4 { background-image: url('../images/creature4.png'); bottom: 20%; right: 20%; }
+.creature5 { background-image: url('../images/creature5.png'); top: 40%; left: 40%; }
+.creature6 { background-image: url('../images/creature6.png'); bottom: 40%; left: 40%; }
+.creature7 { background-image: url('../images/creature7.png'); top: 50%; left: 50%; transform: translate(-50%, -50%); }
+
+/* Animation for creature pulse */
+.creature.pulse {
+  animation: creaturePulse 0.15s ease-in-out;
 }
 
-/* Recording state and pulse effect */
+@keyframes creaturePulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* Recording state */
 .container.recording {
   box-shadow: 0 0 20px rgba(255, 0, 0, 0.7);
   animation: recordingPulse 1s infinite;
-}
-
-.container.pulse {
-  animation: pulseFeedback 0.2s ease-in-out;
 }
 
 @keyframes recordingPulse {
@@ -102,46 +182,65 @@
   100% { box-shadow: 0 0 10px rgba(255, 0, 0, 0.7); }
 }
 
-@keyframes pulseFeedback {
-  0% { box-shadow: 0 0 0px rgba(255, 255, 255, 0); }
-  50% { box-shadow: 0 0 30px rgba(255, 255, 255, 0.9); }
-  100% { box-shadow: 0 0 0px rgba(255, 255, 255, 0); }
-}
-
-/* BPM Text as Slider */
-.bpm-display {
-  font-family: 'VT323', monospace;
+/* BPM Slider */
+.bpm-slider-container {
   position: absolute;
-  top: 40%;
-  left: 0;
-  width: 100%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
   text-align: center;
-  font-size: 3em;
+  z-index: 30;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 20px;
+  border-radius: 10px;
   color: white;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-  cursor: ew-resize; /* East-west resize cursor to indicate draggable */
-  user-select: none; /* Prevent text selection when dragging */
-  opacity: 0;
-  transition: opacity 0.3s;
-  z-index: 110;
-}
-
-.bpm-display.active {
-  opacity: 1;
-}
-
-/* Status indicators */
-#espStatusPanel {
   font-family: 'VT323', monospace;
+}
+
+.bpm-value {
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+.bpm-slider {
+  width: 100%;
+  appearance: none;
+  height: 10px;
+  border-radius: 5px;
+  background: #555;
+  outline: none;
+}
+
+.bpm-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
+}
+
+.bpm-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
+}
+
+/* Status panel */
+#espStatusPanel {
   position: fixed;
   top: 10px;
   left: 10px;
-  z-index: 90;
+  z-index: 1000;
   padding: 10px;
   background-color: rgba(0, 0, 0, 0.7);
   color: white;
   border-radius: 5px;
-  min-width: 200px;
+  font-family: 'VT323', monospace;
 }
 
 .esp-indicator {
@@ -158,31 +257,93 @@
   margin-left: 5px;
 }
 
-#connectionStatus {
-  font-family: 'VT323', monospace;
-  position: fixed;
-  bottom: 10px;
-  left: 10px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  font-size: 14px;
-  z-index: 90;
-}
-
+/* Random button */
 #debugStateButton {
-  font-family: 'VT323', monospace;
   position: fixed;
   bottom: 10px;
   right: 10px;
-  z-index: 90;
+  z-index: 1000;
   padding: 8px;
   border-radius: 4px;
   background-color: #333;
   color: white;
   cursor: pointer;
+  font-family: 'VT323', monospace;
   border: none;
 }
 
 #debugStateButton:hover {
   background-color: #555;
+}
+
+/* Volume meter for recording */
+#volumeMeter {
+  position: absolute;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  height: 10px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 5px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+#meterFill {
+  height: 100%;
+  width: 0%;
+  background-color: green;
+  transition: width 0.05s;
+}
+
+/* Random synth button */
+#randomSynthButton {
+  position: fixed;
+  bottom: 50px;
+  right: 10px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #4CAF50;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 1000;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  border: none;
+}
+
+#randomSynthButton:hover {
+  background-color: #45a049;
+}
+
+#randomSynthButton.active {
+  background-color: #f44336;
+  animation: buttonPulse 1s infinite;
+}
+
+@keyframes buttonPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .creature {
+    width: 80px;
+    height: 80px;
+  }
+  
+  #espStatusPanel {
+    font-size: 14px;
+  }
+  
+  .bpm-slider-container {
+    width: 90%;
+  }
 }

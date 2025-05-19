@@ -205,7 +205,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Remove all state classes first
     Object.values(STATES).forEach(state => {
       sprite.classList.remove(`state-${state}`);
-      sprite.classList.remove('no-image');
     });
     
     // Add current state class
@@ -220,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
     
-    // Only change the background if the sprite animation is not running
+    // Only change the background position if the sprite animation is not running
     if (!window.spriteAnimation || !window.spriteAnimation.isRunning()) {
       // Select the appropriate sprite frame
       let frameIndex = 0;
@@ -236,7 +235,8 @@ document.addEventListener('DOMContentLoaded', () => {
         case STATES.TOTAL:   frameIndex = 7; break;
       }
       
-      // If we have the original showFrame function, use it
+      // IMPORTANT: Don't change the background image, just the position
+      // This preserves the frame while changing the state display
       if (window.spriteAnimation && window.spriteAnimation.showFrame) {
         window.spriteAnimation.showFrame(frameIndex);
       } else {
@@ -582,6 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let dataArray = null;
     let playbackInterval = null;
     
+    // Listen for clicks on the container for recording
     container.addEventListener('click', (e) => {
       // Don't trigger recording if we're in BPM mode
       if (currentSubState === SUB_STATES.BPM) return;
@@ -599,7 +600,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('frameCoverRight'),
         document.getElementById('frameCoverTop'),
         document.getElementById('debugStateButton'),
-        document.getElementById('espStatusPanel')
+        document.getElementById('espStatusPanel'),
+        document.getElementById('randomSynthButton')
       ];
       
       if (controlElements.some(el => el && (el === e.target || el.contains(e.target)))) return;
@@ -620,8 +622,8 @@ document.addEventListener('DOMContentLoaded', () => {
       currentSubState = SUB_STATES.RECORD;
       container.classList.add('recording');
       
-      // Start sprite animation
-      if (window.spriteAnimation) {
+      // Start sprite animation without blocking the recording UI
+      if (window.spriteAnimation && !window.spriteAnimation.isRunning()) {
         window.spriteAnimation.start();
       }
       
