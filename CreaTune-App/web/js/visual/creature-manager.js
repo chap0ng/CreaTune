@@ -1,7 +1,8 @@
-// enhanced-creatures.js
-// Enhanced version of integrated-creatures.js to work with state machine
+// creature-manager.js
+// Creature animation and management for CreaTune
 
 document.addEventListener('DOMContentLoaded', () => {
+  // DOM elements
   const container = document.getElementById('spriteContainer');
   
   // Configuration
@@ -20,6 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Create UI elements
   function createUI() {
+    // Don't recreate if already exists
+    if (document.getElementById('visualizer')) return;
+    
     // Status display
     const statusEl = document.createElement('div');
     statusEl.id = 'synthStatus';
@@ -34,8 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
     createCreatures(visualizer);
     
     // Add elements to DOM
-    container.appendChild(visualizer);
-    container.appendChild(statusEl);
+    if (container) {
+      container.appendChild(visualizer);
+      container.appendChild(statusEl);
+    }
     
     return { visualizer, statusEl };
   }
@@ -134,13 +140,13 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Apply visual effects based on sensor data
   function applySensorEffects(id) {
-    if (!window.stateManager) return;
+    if (!window.ESPManager) return;
     
     const creature = document.getElementById(id);
     if (!creature) return;
     
-    const espStatus = window.stateManager.getEspStatus();
-    const currentState = window.stateManager.getState();
+    const espStatus = window.ESPManager.getESPStatus();
+    const currentState = window.StateManager ? window.StateManager.getState() : 'idle';
     
     // Apply effects based on current state and sensor values
     switch (id) {
@@ -237,100 +243,123 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 150);
   }
   
-  // Update visuals based on button state
-  function updateVisuals() {
-    if (!window.synthEngine) return;
+  // Update creatures based on current state and valid sensors
+  function updateCreatures(currentState, espStatus) {
+    // Check if required sensors are valid
+    const isValid = {
+      soil: espStatus.esp1.connected && espStatus.esp1.valid,
+      light: espStatus.esp2.connected && espStatus.esp2.valid,
+      temp: espStatus.esp3.connected && espStatus.esp3.valid
+    };
     
-    const state = window.synthEngine.getState();
-    
-    // If we have a state manager, let it handle the visualization
-    if (window.stateManager) {
-      return;
-    }
-    
-    // Otherwise, fall back to the original behavior
-    // Hide all creatures
+    // Hide all creatures first
     for (let i = 1; i <= 7; i++) {
       stopAnimation(`creature${i}`);
     }
     
-    // Show creature based on button combination
-    if (state.button1 && state.button2 && state.button3) {
-      animateCreature('creature7');
-    } else if (state.button1 && state.button2) {
-      animateCreature('creature4');
-    } else if (state.button1 && state.button3) {
-      animateCreature('creature5');
-    } else if (state.button2 && state.button3) {
-      animateCreature('creature6');
-    } else if (state.button1) {
-      animateCreature('creature1');
-    } else if (state.button2) {
-      animateCreature('creature2');
-    } else if (state.button3) {
-      animateCreature('creature3');
-    }
-  }
-  
-  // Handle state changes
-  function handleStateChange(e) {
-    if (e.detail && e.detail.state) {
-      const state = e.detail.state;
-      const espStatus = e.detail.espStatus;
-      
-      // For active creatures, update their sensor effects
-      Object.keys(animations.creatures).forEach(id => {
-        if (animations.creatures[id].visible) {
-          applySensorEffects(id);
+    // Show appropriate creature based on state and valid data
+    switch (currentState) {
+      case 'soil':
+        if (isValid.soil) {
+          animateCreature('creature1');
         }
-      });
+        break;
+      case 'light':
+        if (isValid.light) {
+          animateCreature('creature2');
+        }
+        break;
+      case 'temp':
+        if (isValid.temp) {
+          animateCreature('creature3');
+        }
+        break;
+      case 'growth':
+        if (isValid.soil && isValid.light) {
+          animateCreature('creature4');
+        }
+        break;
+      case 'mirrage':
+        if (isValid.soil && isValid.temp) {
+          animateCreature('creature5');
+        }
+        break;
+      case 'flower':
+        if (isValid.light && isValid.temp) {
+          animateCreature('creature6');
+        }
+        break;
+      case 'total':
+        if (isValid.soil && isValid.light && isValid.temp) {
+          animateCreature('creature7');
+        }
+        break;
     }
   }
-  
-  // Create UI components
-  const ui = createUI();
   
   // Handle tab visibility
-  if (window.dragContainer) {
-    const originalIsTabOpen = window.dragContainer.isTabOpen;
-    
-    // If the original method is not already modified, do it here
-    if (typeof window.dragContainer._stateModified === 'undefined') {
-      window.dragContainer.isTabOpen = function() {
-        const tabOpen = originalIsTabOpen.call(window.dragContainer);
-        
-        // Only hide/show based on tab state, don't add any custom events
-        if (tabOpen) {
-          document.getElementById('visualizer')?.classList.add('hidden');
-        } else {
-          document.getElementById('visualizer')?.classList.remove('hidden');
-        }
-        
-        return tabOpen;
-      };
+  function setupTabVisibility() {
+    if (window.dragContainer) {
+      const originalIsTabOpen = window.dragContainer.isTabOpen;
       
-      // Mark as modified so we don't double-modify it
-      window.dragContainer._stateModified = true;
+      // If the original method is not already modified, do it here
+      if (typeof window.dragContainer._creatureModified === 'undefined') {
+        window.dragContainer.isTabOpen = function() {
+          const tabOpen = originalIsTabOpen.call(window.dragContainer);
+          
+          // Hide/show visualizer based on tab state
+          const visualizer = document.getElementById('visualizer');
+          if (visualizer) {
+            if (tabOpen) {
+              visualizer.classList.add('hidden');
+            } else {
+              visualizer.classList.remove('hidden');
+            }
+          }
+          
+          return tabOpen;
+        };
+        
+        // Mark as modified so we don't double-modify it
+        window.dragContainer._creatureModified = true;
+      }
     }
   }
   
-  // Listen for state changes
-  document.addEventListener('stateChange', handleStateChange);
+  // Initialize the creature manager
+  function initialize() {
+    // Create UI elements
+    createUI();
+    
+    // Setup tab visibility
+    setupTabVisibility();
+    
+    // Listen for state changes
+    EventBus.subscribe('stateChanged', (data) => {
+      updateCreatures(data.state, data.espStatus);
+    });
+    
+    // Listen for tab changes
+    EventBus.subscribe('tabStateChanged', (isOpen) => {
+      const visualizer = document.getElementById('visualizer');
+      if (visualizer) {
+        if (isOpen) {
+          visualizer.classList.add('hidden');
+        } else {
+          visualizer.classList.remove('hidden');
+        }
+      }
+    });
+  }
   
-  // Expose API to synth-logic.js
-  window.synthUI = {
-    updateVisuals: updateVisuals,
-    pulseShape: function(shapeId) {
-      const creatureId = shapeId.replace('shape', 'creature');
-      pulseCreature(creatureId);
-    }
-  };
+  // Initialize when DOM is ready
+  initialize();
   
-  // Expose creatures API
-  window.creatureManager = {
+  // Expose API for synth-logic.js and other modules
+  window.CreatureManager = {
     animate: animateCreature,
     stopAnimation: stopAnimation,
-    updateVisibility: updateVisuals,
-    applySensorEffects: applySensorEffects
+    updateCreatures: updateCreatures,
+    pulseCreature: pulseCreature
   };
 });

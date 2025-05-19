@@ -1,7 +1,7 @@
 /* combined-styles.css */
-/* Combined styles with proper z-index layering */
+/* Combined modular styles for CreaTune */
 
-/* Google Font Import */
+/* Import fonts */
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
 /* ======== BASE STYLES ======== */
@@ -37,7 +37,7 @@ body {
   z-index: 10;
 }
 
-/* ======== BASIC FRAME UI ELEMENTS ======== */
+/* ======== FRAME UI ELEMENTS ======== */
 /* Top Tab */
 .top-tab {
   position: absolute;
@@ -99,7 +99,7 @@ body {
   height: 0px;
 }
 
-/* Sprite - fixed positioning */
+/* Sprite */
 .sprite {
   width: 100%;
   height: 100%;
@@ -110,7 +110,7 @@ body {
   top: 0;
   left: 0;
   z-index: 100;
-  border-radius: 5px;
+  border-radius: 0px;
   border: 0px solid transparent;
   margin: 0;
   padding: 0;
@@ -176,171 +176,62 @@ body {
 }
 
 /* ======== STATE-SPECIFIC BACKGROUNDS ======== */
-/* State-specific backgrounds with fallbacks */
-.sprite.state-idle {
-  background-image: url('../assets/frame-sprite.png');
-}
-
-.sprite.state-soil {
-  background-image: url('../images/soil.png');
-}
-
-.sprite.state-light {
-  background-image: url('../images/light.png');
-}
-
-.sprite.state-temp {
-  background-image: url('../images/temp.png');
-}
-
-.sprite.state-growth {
-  background-image: url('../images/growth.png');
-}
-
-.sprite.state-mirrage {
-  background-image: url('../images/mirrage.png');
-}
-
-.sprite.state-flower {
-  background-image: url('../images/flower.png');
-}
-
-.sprite.state-total {
-  background-image: url('../images/total.png');
-}
-
-/* Fallback colors if images don't load */
-.sprite.state-idle.no-image {
-  background-image: none;
-  background-color: #f5eee0;
-  z-index: 3;
-}
-
-.sprite.state-soil.no-image {
-  background-image: none;
-  background-color: #8B735A;
-  z-index: 3;
-}
-
-.sprite.state-light.no-image {
-  background-image: none;
-  background-color: #DFBE5F;
-  z-index: 3;
-}
-
-.sprite.state-temp.no-image {
-  background-image: none;
-  background-color: #D67B54;
-  z-index: 3;
-}
-
-.sprite.state-growth.no-image {
-  background-image: none;
-  background-color: #9CB380;
-  z-index: 3;
-}
-
-.sprite.state-mirrage.no-image {
-  background-image: none;
-  background-color: #9A7AA0;
-  z-index: 3;
-}
-
-.sprite.state-flower.no-image {
-  background-image: none;
-  background-color: #D496B9;
-  z-index: 3;
-}
-
-.sprite.state-total.no-image {
-  background-image: none;
-  background-color: #7A9CC2;
-  z-index: 3;
-}
+/* Import state-specific styles */
+@import url('state-styles.css');
 
 /* ======== CREATURE STYLES ======== */
-.visualizer {
-  position: absolute;
-  top: 15%;
-  left: 0;
-  width: 100%;
-  height: 60%;
-  z-index: 15;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.visualizer.hidden {
-  display: none;
-}
-
-.creature {
-  position: absolute;
-  width: 300px;
-  height: 300px;
-  background-size: 300% 100%; /* 3 columns, 1 row */
-  background-repeat: no-repeat;
-  opacity: 0;
-  transition: opacity 0.3s;
-  transform-origin: center;
-}
-
-.creature.pulse {
-  animation: pulse-effect 0.3s ease-in-out;
-}
-
-.creature.fallback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(80, 80, 80, 0.8);
-  border-radius: 50%;
-  font-size: 120px;
-  font-weight: bold;
-  color: white;
-}
-
-.creature1 { background-image: url('../images/creature1.png'); }
-.creature2 { background-image: url('../images/creature2.png'); }
-.creature3 { background-image: url('../images/creature3.png'); }
-.creature4 { background-image: url('../images/creature4.png'); }
-.creature5 { background-image: url('../images/creature5.png'); }
-.creature6 { background-image: url('../images/creature6.png'); }
-.creature7 { background-image: url('../images/creature7.png'); }
-
-@keyframes pulse-effect {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-  100% { transform: scale(1); }
-}
+/* Import creature styles */
+@import url('simplified-styles.css');
 
 /* ======== BPM CONTROL ======== */
-/* BPM Text as Slider */
-.bpm-display {
-  font-family: 'VT323', monospace;
+.bpm-slider-container {
   position: absolute;
-  top: 40%;
-  left: 0;
-  width: 100%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
   text-align: center;
-  font-size: 3em;
-  color: #e6695a;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-  cursor: ew-resize; /* East-west resize cursor to indicate draggable */
-  user-select: none; /* Prevent text selection when dragging */
-  opacity: 0;
-  transition: opacity 0.3s;
-  z-index: 45;
+  z-index: 300;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 20px;
+  border-radius: 10px;
+  color: white;
+  font-family: 'VT323', monospace;
 }
 
-.bpm-display.active {
-  opacity: 1;
+.bpm-value {
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+.bpm-slider {
+  width: 100%;
+  appearance: none;
+  height: 10px;
+  border-radius: 5px;
+  background: #555;
+  outline: none;
+}
+
+.bpm-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
+}
+
+.bpm-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
 }
 
 /* ======== RECORDING EFFECTS ======== */
-/* Recording state and pulse effect */
 .container.recording {
   box-shadow: 0 0 20px rgba(255, 0, 0, 0.7);
   animation: recordingPulse 1s infinite;
@@ -369,7 +260,7 @@ body {
   position: fixed;
   top: 10px;
   left: 10px;
-  z-index: 100;
+  z-index: 1000;
   padding: 10px;
   background-color: rgba(0, 0, 0, 0.7);
   color: white;
@@ -399,7 +290,7 @@ body {
   padding: 5px 10px;
   border-radius: 5px;
   font-size: 14px;
-  z-index: 100;
+  z-index: 1000;
 }
 
 #debugStateButton {
@@ -407,7 +298,7 @@ body {
   position: fixed;
   bottom: 10px;
   right: 10px;
-  z-index: 100;
+  z-index: 1000;
   padding: 8px;
   border-radius: 4px;
   background-color: #333;
@@ -430,7 +321,7 @@ body {
   height: 10px;
   background-color: rgba(0, 0, 0, 0.3);
   border-radius: 5px;
-  z-index: 30;
+  z-index: 300;
   overflow: hidden;
   display: none;
 }
@@ -442,7 +333,20 @@ body {
   transition: width 0.05s;
 }
 
-/* Auto-init status */
+/* Status messages */
+#statusMessage {
+  position: fixed;
+  bottom: 50px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  color: white;
+  padding: 10px;
+  font-family: 'VT323', monospace;
+  z-index: 1000;
+  display: none;
+}
+
 #autoInitStatus {
   position: fixed;
   bottom: 20px;
@@ -452,11 +356,11 @@ body {
   color: white;
   background-color: rgba(0, 0, 0, 0.7);
   padding: 10px;
-  z-index: 100;
+  z-index: 1000;
   font-family: 'VT323', monospace;
 }
 
-/* Responsive adjustments */
+/* ======== RESPONSIVE ADJUSTMENTS ======== */
 @media (max-width: 768px) {
   .creature {
     width: 200px;
@@ -465,6 +369,15 @@ body {
   
   .creature.fallback {
     font-size: 80px;
+  }
+  
+  .bpm-slider-container {
+    width: 90%;
+    padding: 15px;
+  }
+  
+  .bpm-value {
+    font-size: 20px;
   }
 }
 
@@ -476,5 +389,16 @@ body {
   
   .creature.fallback {
     font-size: 60px;
+  }
+  
+  #espStatusPanel {
+    font-size: 12px;
+    padding: 8px;
+    min-width: auto;
+  }
+  
+  #debugStateButton {
+    padding: 6px;
+    font-size: 12px;
   }
 }
