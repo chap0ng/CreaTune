@@ -1,5 +1,6 @@
 // websocket-server.js
-// Enhanced WebSocket server for CreaTune
+// WebSocket server for CreaTune
+// Structure: Webapp is the server, ESP32 devices are clients
 
 const WebSocket = require('ws');
 const http = require('http');

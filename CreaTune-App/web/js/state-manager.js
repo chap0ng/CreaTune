@@ -415,11 +415,11 @@ document.addEventListener('DOMContentLoaded', () => {
       let espId = null;
       
       // Determine which ESP32 sent the data
-      if (data.sensor.includes('soil') || data.id === 'ESP32-1') {
+      if (data.sensor.includes('soil') || data.sensor === 'ESP32-1') {
         espId = 'esp1';
-      } else if (data.sensor.includes('light') || data.id === 'ESP32-2') {
+      } else if (data.sensor.includes('light') || data.sensor === 'ESP32-2') {
         espId = 'esp2';
-      } else if (data.sensor.includes('temp') || data.id === 'ESP32-3') {
+      } else if (data.sensor.includes('temp') || data.sensor === 'ESP32-3') {
         espId = 'esp3';
       }
       
@@ -440,11 +440,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Process ESP32 connection status
     if (data.type === 'esp_connected') {
       let espId = null;
-      if (data.name.includes('ESP32-1') || data.name.includes('soil')) {
+      if (data.name === 'ESP32-1' || data.name.includes('soil')) {
         espId = 'esp1';
-      } else if (data.name.includes('ESP32-2') || data.name.includes('light')) {
+      } else if (data.name === 'ESP32-2' || data.name.includes('light')) {
         espId = 'esp2';
-      } else if (data.name.includes('ESP32-3') || data.name.includes('temp')) {
+      } else if (data.name === 'ESP32-3' || data.name.includes('temp')) {
         espId = 'esp3';
       }
       
@@ -458,11 +458,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Process ESP32 disconnection
     if (data.type === 'esp_disconnected') {
       let espId = null;
-      if (data.name.includes('ESP32-1') || data.name.includes('soil')) {
+      if (data.name === 'ESP32-1' || data.name.includes('soil')) {
         espId = 'esp1';
-      } else if (data.name.includes('ESP32-2') || data.name.includes('light')) {
+      } else if (data.name === 'ESP32-2' || data.name.includes('light')) {
         espId = 'esp2';
-      } else if (data.name.includes('ESP32-3') || data.name.includes('temp')) {
+      } else if (data.name === 'ESP32-3' || data.name.includes('temp')) {
         espId = 'esp3';
       }
       

@@ -1,5 +1,6 @@
 // websocket-client.js
 // Client-side WebSocket handling for CreaTune
+// Structure: Webapp is the server, ESP32 devices are clients
 
 document.addEventListener('DOMContentLoaded', () => {
   let socket;
@@ -192,11 +193,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Handle animation frame updates
-    if (data.type === 'frame_update') {
+    if (data.type === 'frame_update' && data.frameIndex !== undefined) {
       console.log('Frame update:', data.frameIndex);
       
       // Update sprite frame if needed
-      if (window.spriteAnimation && data.frameIndex !== undefined) {
+      if (window.spriteAnimation && window.spriteAnimation.showFrame) {
         window.spriteAnimation.showFrame(data.frameIndex);
       }
       
@@ -204,14 +205,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Handle animation speed updates
-    if (data.type === 'animation_speed') {
+    if (data.type === 'animation_speed' && data.speed !== undefined) {
       console.log('Animation speed update:', data.speed);
       
       // Update animation speed if needed
-      if (window.spriteAnimation && data.speed !== undefined) {
+      if (window.spriteAnimation && typeof window.spriteAnimation.setSpeed === 'function') {
         window.spriteAnimation.setSpeed(data.speed);
       }
       
+      return;
+    }
+    
+    // Handle animation intensity and color updates
+    if (data.type === 'animation_intensity' || data.type === 'animation_color') {
+      console.log(`${data.type} update:`, data);
+      // Handle updates if needed
+      return;
+    }
+    
+    // Handle status updates
+    if (data.type === 'status_update') {
+      console.log('Status update:', data);
+      // Handle status update if needed
       return;
     }
     
