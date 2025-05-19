@@ -33,58 +33,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Create creatures
     createCreatures(visualizer);
     
-    // Create buttons - these will be hidden but still functional
-    const buttonsContainer = document.createElement('div');
-    buttonsContainer.id = 'synthButtons';
-    buttonsContainer.className = 'synth-buttons';
-    
-    for (let i = 1; i <= 3; i++) {
-      const button = document.createElement('button');
-      button.id = `button${i}`;
-      button.className = 'synth-button';
-      button.setAttribute('data-id', i);
-      
-      // Click handler
-      button.addEventListener('click', async (e) => {
-        e.stopPropagation(); // Prevent frame click
-        
-        // Initialize audio if needed
-        if (!window.synthEngine.isInitialized()) {
-          await window.synthEngine.init((status) => {
-            if (status) {
-              statusEl.textContent = status;
-              statusEl.style.opacity = "1";
-            } else {
-              statusEl.style.opacity = "0";
-            }
-          });
-        }
-        
-        // Toggle button state
-        const state = window.synthEngine.getState();
-        const newState = !state[`button${i}`];
-        window.synthEngine.setButtonState(i, newState);
-        
-        // Update appearance
-        if (newState) {
-          button.classList.add('active');
-        } else {
-          button.classList.remove('active');
-        }
-        
-        // Update visualizer
-        updateVisuals();
-      });
-      
-      buttonsContainer.appendChild(button);
-    }
-    
     // Add elements to DOM
     container.appendChild(visualizer);
-    container.appendChild(buttonsContainer);
     container.appendChild(statusEl);
     
-    return { visualizer, buttonsContainer, statusEl };
+    return { visualizer, statusEl };
   }
   
   // Create creatures
@@ -98,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const img = new Image();
       img.src = `images/creature${i}.png`;
       img.onerror = () => {
+        console.log(`Failed to load creature image: creature${i}.png - using fallback`);
         creature.classList.add('fallback');
         creature.textContent = String.fromCharCode(64 + i); // A-G
       };
@@ -128,29 +82,54 @@ document.addEventListener('DOMContentLoaded', () => {
     // Stop existing animation
     stopAnimation(id);
     
-    // For letter fallbacks, just show without animation
+    // Check if image exists or if we're already using fallback
     if (creature.classList.contains('fallback')) {
+      // Just show the fallback
       creature.style.opacity = "1";
       animations.creatures[id].visible = true;
       return;
     }
     
-    // Start animation
-    let frame = 0;
-    updateSpriteFrame(creature, frame);
-    
-    // Animation loop
-    animations.creatures[id].interval = setInterval(() => {
-      frame = (frame + 1) % config.totalFrames;
-      updateSpriteFrame(creature, frame);
-    }, config.animationSpeed);
-    
-    // Show creature
-    animations.creatures[id].visible = true;
-    creature.style.opacity = "1";
-    
-    // Apply animation based on sensor data if available
-    applySensorEffects(id);
+    // Check if the image source exists
+    const imgUrl = `images/${id}.png`;
+    checkImageExists(imgUrl, function(exists) {
+      if (!exists) {
+        console.log(`Creature image not found: ${imgUrl}, using fallback`);
+        creature.classList.add('fallback');
+        creature.textContent = id.replace('creature', ''); // Just use the number
+        creature.style.opacity = "1";
+        animations.creatures[id].visible = true;
+      } else {
+        // Start animation with valid image
+        let frame = 0;
+        updateSpriteFrame(creature, frame);
+        
+        // Animation loop
+        animations.creatures[id].interval = setInterval(() => {
+          frame = (frame + 1) % config.totalFrames;
+          updateSpriteFrame(creature, frame);
+        }, config.animationSpeed);
+        
+        // Show creature
+        animations.creatures[id].visible = true;
+        creature.style.opacity = "1";
+        
+        // Apply animation based on sensor data if available
+        applySensorEffects(id);
+      }
+    });
+  }
+  
+  // Check if an image exists
+  function checkImageExists(url, callback) {
+    const img = new Image();
+    img.onload = function() {
+      callback(true);
+    };
+    img.onerror = function() {
+      callback(false);
+    };
+    img.src = url;
   }
   
   // Apply visual effects based on sensor data
@@ -315,24 +294,24 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.dragContainer) {
     const originalIsTabOpen = window.dragContainer.isTabOpen;
     
-    window.dragContainer.isTabOpen = function() {
-      const tabOpen = originalIsTabOpen.call(window.dragContainer);
+    // If the original method is not already modified, do it here
+    if (typeof window.dragContainer._stateModified === 'undefined') {
+      window.dragContainer.isTabOpen = function() {
+        const tabOpen = originalIsTabOpen.call(window.dragContainer);
+        
+        // Only hide/show based on tab state, don't add any custom events
+        if (tabOpen) {
+          document.getElementById('visualizer')?.classList.add('hidden');
+        } else {
+          document.getElementById('visualizer')?.classList.remove('hidden');
+        }
+        
+        return tabOpen;
+      };
       
-      if (tabOpen) {
-        document.getElementById('synthButtons')?.classList.add('hidden');
-        document.getElementById('visualizer')?.classList.add('hidden');
-      } else {
-        document.getElementById('synthButtons')?.classList.remove('hidden');
-        document.getElementById('visualizer')?.classList.remove('hidden');
-      }
-      
-      // Trigger custom event for tab state change
-      document.dispatchEvent(new CustomEvent('tabStateChange', {
-        detail: { isOpen: tabOpen }
-      }));
-      
-      return tabOpen;
-    };
+      // Mark as modified so we don't double-modify it
+      window.dragContainer._stateModified = true;
+    }
   }
   
   // Listen for state changes

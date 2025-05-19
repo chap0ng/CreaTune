@@ -4,16 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CreaTune - Interactive Musical Experience</title>
-    
+   
     <!-- PWA Support -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#f5eee0">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
-    
-    <!-- Load styles in proper order for layering -->
-    <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="css/state-styles.css">
-    <link rel="stylesheet" href="css/simplified-styles.css">
+   
+    <!-- Single combined stylesheet for proper z-index layering -->
+    <link rel="stylesheet" href="css/combined-styles.css">
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
 </head>
@@ -43,7 +41,7 @@
     <!-- Enhanced scripts - load these last -->
     <script src="js/enhanced-synth-logic.js"></script>
     <script src="js/enhanced-creatures.js"></script>
-    
+   
     <!-- Service Worker Registration -->
     <script>
         // Register the service worker
