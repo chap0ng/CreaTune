@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CreaTune - Interactive Musical Experience</title>
+    
+    <!-- PWA Support -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#f5eee0">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    
     <!-- Load styles in proper order for layering -->
     <link rel="stylesheet" href="css/state-styles.css">
     <link rel="stylesheet" href="css/simplified-styles.css">
@@ -25,17 +31,33 @@
             <div class="instructions">Click to play</div>
         </div>
     </div>
-    
+   
     <!-- Original scripts - load these first -->
     <script src="js/frame-anim.js"></script>
     <script src="js/drag-container.js"></script>
-    
+   
     <!-- WebSocket and state manager -->
     <script src="js/websocket-client.js"></script>
     <script src="js/state-manager.js"></script>
-    
+   
     <!-- Enhanced scripts - load these last -->
     <script src="js/enhanced-synth-logic.js"></script>
     <script src="js/enhanced-creatures.js"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        // Register the service worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker registered with scope:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.error('Service Worker registration failed:', error);
+                    });
+            });
+        }
+    </script>
 </body>
 </html>

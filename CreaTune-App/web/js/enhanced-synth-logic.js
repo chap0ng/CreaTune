@@ -426,6 +426,31 @@ document.addEventListener('DOMContentLoaded', () => {
     testSynth.triggerAttackRelease("C4", "8n");
   }
   
+  // Add cleanup event listener for page unload
+  window.addEventListener('beforeunload', function() {
+    // Release all synths and clean up
+    if (audioStarted && synths) {
+      console.log('Cleaning up synths before page unload');
+      
+      // Stop all loops
+      if (synths.mainLoop) {
+        synths.mainLoop.stop();
+      }
+      
+      // Release all synths
+      Object.values(synths).forEach(synth => {
+        if (synth && typeof synth.releaseAll === 'function') {
+          synth.releaseAll();
+        }
+      });
+      
+      // Close Tone.js context if possible
+      if (Tone && Tone.context) {
+        Tone.context.close().catch(err => console.error('Error closing Tone context:', err));
+      }
+    }
+  });
+  
   // Export the API for the synth system
   window.synthEngine = {
     init: async function(statusCallback) {
@@ -473,6 +498,89 @@ document.addEventListener('DOMContentLoaded', () => {
     setBPM: function(bpm) {
       if (Tone.Transport) {
         Tone.Transport.bpm.value = bpm;
+      }
+    },
+    
+    // Silence all synths during recording
+    silenceSynths: function(silence) {
+      if (silence) {
+        // Stop all active synths immediately
+        Object.values(synths).forEach(synth => {
+          // Check if it's a Tone.js instrument with releaseAll method
+          if (synth && typeof synth.releaseAll === 'function') {
+            synth.releaseAll();
+          }
+        });
+        
+        // Pause the main loop during recording
+        if (synths.mainLoop) {
+          synths.mainLoop.stop();
+        }
+        
+        // Mute the master output for immediate silence
+        Tone.getDestination().volume.value = -Infinity;
+        
+        // Reset master volume after a very short delay
+        setTimeout(() => {
+          Tone.getDestination().volume.value = 0;
+        }, 100);
+      } else {
+        // Resume the main loop after recording
+        if (synths.mainLoop) {
+          synths.mainLoop.start();
+        }
+      }
+    },
+    
+    // Trigger a note based on recorded pattern
+    triggerPatternNote: function(intensity) {
+      // Use intensity to determine volume and note choice
+      const normalizedIntensity = Math.min(1, Math.max(0, intensity));
+      const noteDuration = normalizedIntensity < 0.5 ? "8n" : "4n";
+      
+      // Get current state for synth selection
+      const activeState = this.getState();
+      
+      // Select notes based on intensity
+      const cMajorNotes = ["C4", "D4", "E4", "G4", "A4", "C5"];
+      const noteIndex = Math.floor(normalizedIntensity * cMajorNotes.length);
+      const note = cMajorNotes[noteIndex];
+      
+      // Determine which synth to trigger based on active buttons
+      if (activeState.button1 && activeState.button2 && activeState.button3) {
+        // All buttons - use synth7
+        synths.synth7.triggerAttackRelease(note, noteDuration);
+        window.synthUI?.pulseShape('shape7');
+      } 
+      else if (activeState.button1 && activeState.button2) {
+        // Buttons 1+2 - use synth4
+        synths.synth4.triggerAttackRelease(note, noteDuration);
+        window.synthUI?.pulseShape('shape4');
+      } 
+      else if (activeState.button1 && activeState.button3) {
+        // Buttons 1+3 - use synth5
+        synths.synth5.triggerAttackRelease(note, noteDuration);
+        window.synthUI?.pulseShape('shape5');
+      } 
+      else if (activeState.button2 && activeState.button3) {
+        // Buttons 2+3 - use synth6
+        synths.synth6.triggerAttackRelease(note, noteDuration);
+        window.synthUI?.pulseShape('shape6');
+      } 
+      else if (activeState.button1) {
+        // Button 1 - use synth1
+        synths.synth1.triggerAttackRelease(note, noteDuration);
+        window.synthUI?.pulseShape('shape1');
+      } 
+      else if (activeState.button2) {
+        // Button 2 - use synth2
+        synths.synth2.triggerAttackRelease(note, noteDuration);
+        window.synthUI?.pulseShape('shape2');
+      } 
+      else if (activeState.button3) {
+        // Button 3 - use synth3
+        synths.synth3.triggerAttackRelease(note, noteDuration);
+        window.synthUI?.pulseShape('shape3');
       }
     }
   };

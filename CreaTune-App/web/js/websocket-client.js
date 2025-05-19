@@ -246,6 +246,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize WebSocket
   initWebSocket();
   
+  // Add cleanup on page unload
+  window.addEventListener('beforeunload', function() {
+    // Close WebSocket connection on page unload
+    if (window.wsSocket && window.wsSocket.readyState === WebSocket.OPEN) {
+      console.log('Closing WebSocket connection before page unload');
+      window.wsSocket.close();
+    }
+  });
+  
   // Expose the API
   window.wsClient = {
     isConnected: () => isConnected,

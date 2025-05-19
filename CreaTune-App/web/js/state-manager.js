@@ -521,6 +521,14 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Set up Record & Repeat state
   function setupRecordRepeat() {
+    let recordedPattern = null;
+    let isPlayingRecordedPattern = false;
+    let recordingAudioContext = null;
+    let recordingMediaStream = null;
+    let recordingAnalyser = null;
+    let dataArray = null;
+    let playbackInterval = null;
+    
     container.addEventListener('click', (e) => {
       // Don't trigger recording if we're in BPM mode
       if (currentSubState === SUB_STATES.BPM) return;
@@ -543,57 +551,372 @@ document.addEventListener('DOMContentLoaded', () => {
       
       if (controlElements.some(el => el && (el === e.target || el.contains(e.target)))) return;
       
-      // Trigger the original spriteAnimation if it exists, otherwise handle it ourselves
-      if (window.spriteAnimation && window.spriteAnimation.start) {
-        // Use the original animation system
-        if (currentSubState === SUB_STATES.RECORD) {
-          stopRecording();
-        } else {
-          startRecording();
-        }
-      }
-    });
-  }
-  
-  // Start recording
-  function startRecording() {
-    if (currentSubState === SUB_STATES.RECORD) return;
-    
-    console.log('Start recording');
-    currentSubState = SUB_STATES.RECORD;
-    container.classList.add('recording');
-    
-    // Start sprite animation if it's not already running
-    if (window.spriteAnimation && !window.spriteAnimation.isRunning()) {
-      window.spriteAnimation.start();
-    }
-    
-    // In a real implementation, you would access the microphone
-    // and start recording here
-    
-    // Auto-stop after 5 seconds
-    setTimeout(() => {
+      // Toggle record state
       if (currentSubState === SUB_STATES.RECORD) {
         stopRecording();
+      } else {
+        startRecording();
       }
-    }, 5000);
-  }
-  
-  // Stop recording
-  function stopRecording() {
-    if (currentSubState !== SUB_STATES.RECORD) return;
+    });
     
-    console.log('Stop recording');
-    currentSubState = SUB_STATES.NORMAL;
-    container.classList.remove('recording');
-    
-    // Stop sprite animation
-    if (window.spriteAnimation) {
-      window.spriteAnimation.stop();
+    // Start recording
+    function startRecording() {
+      if (currentSubState === SUB_STATES.RECORD) return;
+      
+      console.log('Start recording');
+      currentSubState = SUB_STATES.RECORD;
+      container.classList.add('recording');
+      
+      // Start sprite animation
+      if (window.spriteAnimation) {
+        window.spriteAnimation.start();
+      }
+      
+      // If we're already playing a recorded pattern, stop it
+      if (isPlayingRecordedPattern) {
+        stopPlayingRecordedPattern();
+      }
+      
+      // Silence active synths immediately before recording
+      if (window.synthEngine) {
+        window.synthEngine.silenceSynths(true);
+      }
+      
+      // Add a small delay before starting the recording to ensure silence
+      setTimeout(() => {
+        // Start recording audio
+        startAudioRecording();
+      }, 200);
+      
+      // Auto-stop after 5 seconds
+      setTimeout(() => {
+        if (currentSubState === SUB_STATES.RECORD) {
+          stopRecording();
+        }
+      }, 5000);
     }
     
-    // In a real implementation, you would stop recording
-    // and process the recorded audio here
+    // Stop recording
+    function stopRecording() {
+      if (currentSubState !== SUB_STATES.RECORD) return;
+      
+      console.log('Stop recording');
+      currentSubState = SUB_STATES.NORMAL;
+      container.classList.remove('recording');
+      
+      // Stop sprite animation
+      if (window.spriteAnimation) {
+        window.spriteAnimation.stop();
+      }
+      
+      // Hide volume meter if it exists
+      const volumeMeter = document.getElementById('volumeMeter');
+      if (volumeMeter) {
+        volumeMeter.style.display = 'none';
+      }
+      
+      // Stop audio recording and process the data
+      stopAudioRecording();
+      
+      // Add a small delay before starting pattern playback
+      // to ensure clean transition
+      setTimeout(() => {
+        // Start playing the recorded pattern
+        startPlayingRecordedPattern();
+      }, 100);
+    }
+    
+    // Start audio recording
+    function startAudioRecording() {
+      try {
+        // Reset previous recording
+        recordedPattern = [];
+        
+        // Set up audio recording if Web Audio API is available
+        if (window.AudioContext || window.webkitAudioContext) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          recordingAudioContext = new AudioContext();
+          
+          // Get user microphone with specific constraints
+          navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: false  // Disable automatic gain to better detect peaks
+            }, 
+            video: false 
+          })
+            .then(stream => {
+              recordingMediaStream = stream;
+              
+              // Create analyser node
+              recordingAnalyser = recordingAudioContext.createAnalyser();
+              recordingAnalyser.fftSize = 1024; // More detailed FFT for better detection
+              recordingAnalyser.smoothingTimeConstant = 0.2; // Less smoothing for quicker response
+              
+              // Connect microphone to analyser
+              const source = recordingAudioContext.createMediaStreamSource(stream);
+              source.connect(recordingAnalyser);
+              
+              // Create buffer for frequency data
+              const bufferLength = recordingAnalyser.frequencyBinCount;
+              dataArray = new Uint8Array(bufferLength);
+              
+              // Create visual feedback element
+              let volumeMeter = document.getElementById('volumeMeter');
+              if (!volumeMeter) {
+                volumeMeter = document.createElement('div');
+                volumeMeter.id = 'volumeMeter';
+                volumeMeter.style.position = 'absolute';
+                volumeMeter.style.bottom = '100px';
+                volumeMeter.style.left = '50%';
+                volumeMeter.style.transform = 'translateX(-50%)';
+                volumeMeter.style.width = '80%';
+                volumeMeter.style.height = '10px';
+                volumeMeter.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+                volumeMeter.style.borderRadius = '5px';
+                volumeMeter.style.zIndex = '100';
+                volumeMeter.style.overflow = 'hidden';
+                
+                const meterFill = document.createElement('div');
+                meterFill.id = 'meterFill';
+                meterFill.style.height = '100%';
+                meterFill.style.width = '0%';
+                meterFill.style.backgroundColor = 'green';
+                meterFill.style.transition = 'width 0.05s';
+                
+                volumeMeter.appendChild(meterFill);
+                container.appendChild(volumeMeter);
+              } else {
+                volumeMeter.style.display = 'block';
+                document.getElementById('meterFill').style.width = '0%';
+              }
+              
+              // Previous peak detection variables
+              let lastPeakTime = 0;
+              const peakDelay = 300; // Minimum ms between peaks
+              
+              // Start analyzing audio at regular intervals (30ms for more responsiveness)
+              const analyzeInterval = setInterval(() => {
+                if (currentSubState !== SUB_STATES.RECORD) {
+                  clearInterval(analyzeInterval);
+                  volumeMeter.style.display = 'none';
+                  return;
+                }
+                
+                recordingAnalyser.getByteFrequencyData(dataArray);
+                
+                // Calculate average volume
+                let sum = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                  sum += dataArray[i];
+                }
+                const average = sum / bufferLength;
+                
+                // Update volume meter
+                const meterFill = document.getElementById('meterFill');
+                if (meterFill) {
+                  const percentage = Math.min(100, average * 0.6); // Scale appropriately
+                  meterFill.style.width = percentage + '%';
+                  
+                  // Change color based on level
+                  if (percentage > 70) {
+                    meterFill.style.backgroundColor = 'red';
+                  } else if (percentage > 40) {
+                    meterFill.style.backgroundColor = 'orange';
+                  } else {
+                    meterFill.style.backgroundColor = 'green';
+                  }
+                }
+                
+                // Detect peaks - adjust threshold based on testing
+                const threshold = 40; // Lower threshold for better sensitivity
+                const now = Date.now();
+                
+                if (average > threshold && (now - lastPeakTime) > peakDelay) {
+                  // Record the timestamp of this pulse
+                  recordedPattern.push({
+                    time: now,
+                    intensity: Math.min(1, average / 150) // Normalize to 0-1, capped at 1
+                  });
+                  
+                  lastPeakTime = now;
+                  
+                  // Visual feedback
+                  container.classList.add('pulse');
+                  setTimeout(() => {
+                    container.classList.remove('pulse');
+                  }, 100);
+                }
+              }, 30); // Check every 30ms for more responsiveness
+            })
+            .catch(err => {
+              console.error('Error accessing microphone:', err);
+              showErrorMessage('Could not access microphone. Recording functionality disabled.');
+              
+              // Fallback to rhythm mode without microphone
+              currentSubState = SUB_STATES.NORMAL;
+              container.classList.remove('recording');
+              
+              // Restore synths
+              if (window.synthEngine) {
+                window.synthEngine.silenceSynths(false);
+              }
+            });
+        } else {
+          console.error('Web Audio API not supported');
+          showErrorMessage('Your browser does not support audio recording');
+          
+          // Fallback
+          currentSubState = SUB_STATES.NORMAL;
+          container.classList.remove('recording');
+          
+          // Restore synths
+          if (window.synthEngine) {
+            window.synthEngine.silenceSynths(false);
+          }
+        }
+      } catch (error) {
+        console.error('Error starting audio recording:', error);
+        
+        // Fallback
+        currentSubState = SUB_STATES.NORMAL;
+        container.classList.remove('recording');
+        
+        // Restore synths
+        if (window.synthEngine) {
+          window.synthEngine.silenceSynths(false);
+        }
+      }
+    }
+    
+    // Stop audio recording
+    function stopAudioRecording() {
+      // Stop media stream tracks
+      if (recordingMediaStream) {
+        recordingMediaStream.getTracks().forEach(track => track.stop());
+        recordingMediaStream = null;
+      }
+      
+      // Clean up audio context
+      if (recordingAudioContext && recordingAudioContext.state !== 'closed') {
+        recordingAudioContext.close().catch(err => console.error('Error closing audio context:', err));
+      }
+      
+      recordingAudioContext = null;
+      recordingAnalyser = null;
+      
+      // Process recorded pattern
+      if (recordedPattern && recordedPattern.length > 0) {
+        // Convert absolute timestamps to relative intervals
+        const startTime = recordedPattern[0].time;
+        recordedPattern = recordedPattern.map((pulse, index) => ({
+          time: pulse.time - startTime,
+          intensity: pulse.intensity
+        }));
+        
+        console.log('Recorded pattern:', recordedPattern);
+      } else {
+        // No pattern recorded, or empty pattern
+        recordedPattern = null;
+      }
+    }
+    
+    // Start playing recorded pattern as a trigger for synths
+    function startPlayingRecordedPattern() {
+      if (!recordedPattern || recordedPattern.length === 0) {
+        // No pattern to play, restore synths to normal
+        if (window.synthEngine) {
+          window.synthEngine.silenceSynths(false);
+        }
+        return;
+      }
+      
+      // Enable synths but use pattern for triggering
+      if (window.synthEngine) {
+        window.synthEngine.silenceSynths(false);
+      }
+      
+      isPlayingRecordedPattern = true;
+      
+      // Calculate total pattern duration
+      const patternDuration = recordedPattern[recordedPattern.length - 1].time;
+      
+      // Create a loop that triggers synth based on recorded pattern
+      let patternStartTime = Date.now();
+      
+      playbackInterval = setInterval(() => {
+        const currentTime = Date.now() - patternStartTime;
+        
+        // Check if we need to restart the pattern
+        if (currentTime > patternDuration) {
+          patternStartTime = Date.now();
+          return;
+        }
+        
+        // Find pulses that should trigger now
+        recordedPattern.forEach(pulse => {
+          // Check if this pulse is happening now (within 30ms window)
+          if (Math.abs(currentTime - pulse.time) < 30) {
+            // Trigger synth note based on current state
+            triggerSynthFromPattern(pulse.intensity);
+            
+            // Visual feedback
+            container.classList.add('pulse');
+            setTimeout(() => {
+              container.classList.remove('pulse');
+            }, 100);
+          }
+        });
+      }, 20); // Check every 20ms for accurate timing
+    }
+    
+    // Stop playing recorded pattern
+    function stopPlayingRecordedPattern() {
+      if (playbackInterval) {
+        clearInterval(playbackInterval);
+        playbackInterval = null;
+      }
+      
+      isPlayingRecordedPattern = false;
+    }
+    
+    // Trigger synth based on pattern pulse
+    function triggerSynthFromPattern(intensity) {
+      if (!window.synthEngine) return;
+      
+      // Determine which synths to trigger based on active state
+      // This will use the intensity from the recorded pulse
+      window.synthEngine.triggerPatternNote(intensity);
+    }
+    
+    // Display error message
+    function showErrorMessage(message) {
+      // Create error message element if needed
+      let errorEl = document.getElementById('recordingError');
+      if (!errorEl) {
+        errorEl = document.createElement('div');
+        errorEl.id = 'recordingError';
+        errorEl.style.position = 'fixed';
+        errorEl.style.bottom = '50px';
+        errorEl.style.left = '0';
+        errorEl.style.width = '100%';
+        errorEl.style.textAlign = 'center';
+        errorEl.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
+        errorEl.style.color = 'white';
+        errorEl.style.padding = '10px';
+        errorEl.style.fontFamily = 'VT323, monospace';
+        errorEl.style.zIndex = '1000';
+        document.body.appendChild(errorEl);
+      }
+      
+      errorEl.textContent = message;
+      
+      // Hide after 3 seconds
+      setTimeout(() => {
+        errorEl.style.display = 'none';
+      }, 3000);
+    }
   }
   
   // Set up BPM state
@@ -803,6 +1126,26 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Start initialization when DOM is ready
   initialize();
+  
+  // Add cleanup for page unload
+  window.addEventListener('beforeunload', function() {
+    // Clean up any resources
+    
+    // Stop any recording in progress
+    if (currentSubState === SUB_STATES.RECORD) {
+      stopRecording();
+    }
+    
+    // Remove event listeners if possible
+    const espEventListeners = document.listeners?.filter(l => l.type === 'espEvent');
+    if (espEventListeners) {
+      espEventListeners.forEach(listener => {
+        document.removeEventListener('espEvent', listener.callback);
+      });
+    }
+    
+    console.log('State manager cleanup completed');
+  });
   
   // Expose API
   window.stateManager = {
