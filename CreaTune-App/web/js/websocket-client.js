@@ -1,264 +1,155 @@
 // websocket-client.js
-// Client-side WebSocket handling for CreaTune
-// Structure: Webapp is the server, ESP32 devices are clients
+export default class WebSocketClient {
+  constructor(stateManager) {
+    this.stateManager = stateManager;
+    this.socket = null;
+    this.reconnectInterval = null;
+    this.isConnected = false;
+    this.connectionAttempts = 0;
+    this.maxConnectionAttempts = 5;
+    
+    this.initWebSocket();
+    this.setupEventListeners();
+  }
 
-document.addEventListener('DOMContentLoaded', () => {
-  let socket;
-  let reconnectInterval;
-  let isConnected = false;
+  initWebSocket() {
+    // Clear any existing connection
+    if (this.socket && this.socket.readyState !== WebSocket.CLOSED) {
+      this.socket.close();
+    }
 
-  // Initialize the WebSocket connection
-  function initWebSocket() {
-    // Determine WebSocket URL based on current location
+    // Determine WebSocket URL
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = window.location.hostname;
-    const wsPort = window.location.port || (wsProtocol === 'wss:' ? '443' : '80');
-    const wsUrl = `${wsProtocol}//${wsHost}:${wsPort}`;
+    const wsUrl = `${wsProtocol}//${window.location.host}`;
     
     console.log(`Connecting to WebSocket server at ${wsUrl}`);
     
-    // Close any existing connection
-    if (socket && socket.readyState !== WebSocket.CLOSED) {
-      socket.close();
-    }
-    
-    // Create new WebSocket connection
-    socket = new WebSocket(wsUrl);
-    
+    this.socket = new WebSocket(wsUrl);
+
     // Connection opened
-    socket.addEventListener('open', () => {
-      console.log('Connected to WebSocket server');
-      isConnected = true;
-      clearInterval(reconnectInterval);
+    this.socket.addEventListener('open', () => {
+      console.log('WebSocket connected');
+      this.isConnected = true;
+      this.connectionAttempts = 0;
+      clearInterval(this.reconnectInterval);
       
-      // Send identification message
-      socket.send(JSON.stringify({
+      // Send identification
+      this.sendMessage({
         type: 'hello',
         client: 'CreaTune Web Client'
-      }));
+      });
       
-      // Update connection status display
-      updateConnectionStatus(true);
+      // Notify state manager
+      this.stateManager.handleWebSocketStatus(true);
     });
-    
-    // Listen for messages
-    socket.addEventListener('message', (event) => {
-      console.log('Message from server:', event.data);
-      
+
+    // Message handler
+    this.socket.addEventListener('message', (event) => {
       try {
         const data = JSON.parse(event.data);
-        handleMessage(data);
+        this.handleMessage(data);
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
       }
     });
-    
+
     // Connection closed
-    socket.addEventListener('close', () => {
-      console.log('Disconnected from WebSocket server');
-      isConnected = false;
-      
-      // Update connection status display
-      updateConnectionStatus(false);
-      
-      // Attempt to reconnect
-      if (!reconnectInterval) {
-        reconnectInterval = setInterval(() => {
-          if (!isConnected) {
-            console.log('Attempting to reconnect...');
-            initWebSocket();
-          } else {
-            clearInterval(reconnectInterval);
-            reconnectInterval = null;
-          }
-        }, 5000);
-      }
+    this.socket.addEventListener('close', () => {
+      console.log('WebSocket disconnected');
+      this.isConnected = false;
+      this.stateManager.handleWebSocketStatus(false);
+      this.attemptReconnect();
     });
-    
+
     // Connection error
-    socket.addEventListener('error', (error) => {
+    this.socket.addEventListener('error', (error) => {
       console.error('WebSocket error:', error);
-      updateConnectionStatus(false);
+      this.isConnected = false;
+      this.stateManager.handleWebSocketStatus(false);
     });
-    
-    // Store socket reference
-    window.wsSocket = socket;
+
+    window.wsSocket = this.socket;
   }
-  
-  // Create or update connection status display
-  function updateConnectionStatus(connected) {
-    let statusDisplay = document.getElementById('connectionStatus');
-    
-    if (!statusDisplay) {
-      statusDisplay = document.createElement('div');
-      statusDisplay.id = 'connectionStatus';
-      statusDisplay.style.position = 'fixed';
-      statusDisplay.style.bottom = '10px';
-      statusDisplay.style.left = '10px';
-      statusDisplay.style.padding = '5px 10px';
-      statusDisplay.style.borderRadius = '5px';
-      statusDisplay.style.fontSize = '14px';
-      statusDisplay.style.fontFamily = 'VT323, monospace';
-      statusDisplay.style.zIndex = '1000';
-      document.body.appendChild(statusDisplay);
-    }
-    
-    if (connected) {
-      statusDisplay.textContent = '● Connected';
-      statusDisplay.style.backgroundColor = 'rgba(0, 128, 0, 0.7)';
-      statusDisplay.style.color = 'white';
-    } else {
-      statusDisplay.textContent = '● Disconnected';
-      statusDisplay.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
-      statusDisplay.style.color = 'white';
-    }
-  }
-  
-  // Handle incoming WebSocket messages
-  function handleMessage(data) {
-    // Handle welcome message
-    if (data.type === 'welcome') {
-      console.log('Received welcome message:', data.message);
+
+  attemptReconnect() {
+    if (this.connectionAttempts >= this.maxConnectionAttempts) {
+      console.log('Max reconnection attempts reached. Running in standalone mode.');
+      this.stateManager.setOfflineMode(true);
       return;
     }
-    
-    // Handle ESP32 status
-    if (data.type === 'esp_status') {
-      console.log('Received ESP32 status:', data.devices);
+
+    if (!this.reconnectInterval) {
+      this.connectionAttempts++;
+      const delay = Math.min(5000, 1000 * this.connectionAttempts); // Exponential backoff
       
-      // Process each ESP32 device status
-      data.devices.forEach(device => {
-        // Create ESP event
-        const espEvent = new CustomEvent('espEvent', {
-          detail: {
-            type: 'esp_connected',
-            espId: device.id,
-            name: device.name,
-            lastData: device.lastData
-          }
-        });
-        
-        // Dispatch event
-        document.dispatchEvent(espEvent);
-        
-        // If we have last data for this device, also send that
+      console.log(`Attempting to reconnect in ${delay}ms...`);
+      
+      this.reconnectInterval = setTimeout(() => {
+        this.reconnectInterval = null;
+        this.initWebSocket();
+      }, delay);
+    }
+  }
+
+  handleMessage(data) {
+    // Convert WebSocket messages to state manager events
+    const eventMap = {
+      'welcome': 'wsWelcome',
+      'esp_status': 'espStatus',
+      'esp_connected': 'espConnected',
+      'esp_disconnected': 'espDisconnected',
+      'sensor_data': 'sensorData',
+      'frame_update': 'frameUpdate',
+      'animation_speed': 'animationSpeed',
+      'animation_intensity': 'animationIntensity',
+      'animation_color': 'animationColor',
+      'status_update': 'statusUpdate'
+    };
+
+    const eventType = eventMap[data.type] || 'wsMessage';
+    
+    // Dispatch normalized event to state manager
+    const event = new CustomEvent(eventType, { detail: data });
+    document.dispatchEvent(event);
+    
+    // Special case: ESP32 status needs additional processing
+    if (data.type === 'esp_status') {
+      data.devices?.forEach(device => {
         if (device.lastData) {
-          const sensorEvent = new CustomEvent('espEvent', {
-            detail: device.lastData
-          });
-          document.dispatchEvent(sensorEvent);
+          document.dispatchEvent(new CustomEvent('sensorData', { 
+            detail: device.lastData 
+          }));
         }
       });
-      
-      return;
     }
-    
-    // Handle ESP32 connections
-    if (data.type === 'esp_connected') {
-      console.log('ESP32 connected:', data);
-      
-      // Create and dispatch event
-      const espEvent = new CustomEvent('espEvent', {
-        detail: data
-      });
-      
-      document.dispatchEvent(espEvent);
-      return;
-    }
-    
-    // Handle ESP32 disconnections
-    if (data.type === 'esp_disconnected') {
-      console.log('ESP32 disconnected:', data);
-      
-      // Create and dispatch event
-      const espEvent = new CustomEvent('espEvent', {
-        detail: data
-      });
-      
-      document.dispatchEvent(espEvent);
-      return;
-    }
-    
-    // Handle sensor data
-    if (data.type === 'sensor_data' || data.sensor) {
-      console.log('Sensor data received:', data);
-      
-      // Create and dispatch event
-      const sensorEvent = new CustomEvent('espEvent', {
-        detail: data
-      });
-      
-      document.dispatchEvent(sensorEvent);
-      return;
-    }
-    
-    // Handle animation frame updates
-    if (data.type === 'frame_update' && data.frameIndex !== undefined) {
-      console.log('Frame update:', data.frameIndex);
-      
-      // Update sprite frame if needed
-      if (window.spriteAnimation && window.spriteAnimation.showFrame) {
-        window.spriteAnimation.showFrame(data.frameIndex);
-      }
-      
-      return;
-    }
-    
-    // Handle animation speed updates
-    if (data.type === 'animation_speed' && data.speed !== undefined) {
-      console.log('Animation speed update:', data.speed);
-      
-      // Update animation speed if needed
-      if (window.spriteAnimation && typeof window.spriteAnimation.setSpeed === 'function') {
-        window.spriteAnimation.setSpeed(data.speed);
-      }
-      
-      return;
-    }
-    
-    // Handle animation intensity and color updates
-    if (data.type === 'animation_intensity' || data.type === 'animation_color') {
-      console.log(`${data.type} update:`, data);
-      // Handle updates if needed
-      return;
-    }
-    
-    // Handle status updates
-    if (data.type === 'status_update') {
-      console.log('Status update:', data);
-      // Handle status update if needed
-      return;
-    }
-    
-    // Handle other message types
-    console.log('Unhandled message type:', data.type, data);
   }
-  
-  // Send data to the server
-  function sendMessage(data) {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(data));
+
+  sendMessage(data) {
+    if (this.isConnected && this.socket?.readyState === WebSocket.OPEN) {
+      try {
+        this.socket.send(JSON.stringify(data));
+        return true;
+      } catch (error) {
+        console.error('Error sending WebSocket message:', error);
+        return false;
+      }
     } else {
-      console.error('WebSocket not connected. Cannot send message.');
+      console.warn('WebSocket not connected. Message not sent:', data);
+      return false;
     }
   }
-  
-  // Initialize WebSocket
-  initWebSocket();
-  
-  // Add cleanup on page unload
-  window.addEventListener('beforeunload', function() {
-    // Close WebSocket connection on page unload
-    if (window.wsSocket && window.wsSocket.readyState === WebSocket.OPEN) {
-      console.log('Closing WebSocket connection before page unload');
-      window.wsSocket.close();
-    }
-  });
-  
-  // Expose the API
-  window.wsClient = {
-    isConnected: () => isConnected,
-    sendMessage: sendMessage,
-    reconnect: initWebSocket
-  };
-});
+
+  setupEventListeners() {
+    window.addEventListener('beforeunload', () => {
+      if (this.socket?.readyState === WebSocket.OPEN) {
+        this.socket.close();
+      }
+    });
+  }
+
+  // Public API
+  reconnect() {
+    this.connectionAttempts = 0;
+    this.initWebSocket();
+  }
+}

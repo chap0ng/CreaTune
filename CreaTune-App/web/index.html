@@ -10,14 +10,30 @@
     <meta name="theme-color" content="#f5eee0">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
    
-    <!-- Single combined stylesheet for proper z-index layering -->
+    <!-- Combined stylesheet with font import -->
     <link rel="stylesheet" href="css/combined-styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
 </head>
 <body>
+    <!-- Loading indicator (initially visible, hidden by JS) -->
+    <div id="loadingIndicator" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #f5eee0; display: flex; justify-content: center; align-items: center; z-index: 1000; font-family: 'VT323', monospace; font-size: 2em;">
+        Loading CreaTune...
+    </div>
+
     <div class="container-wrapper">
         <div class="container" id="spriteContainer">
+            <!-- Visualizer and creatures container -->
+            <div class="visualizer" id="visualizer">
+                <div class="creature creature1" id="creature1"></div>
+                <div class="creature creature2" id="creature2"></div>
+                <div class="creature creature3" id="creature3"></div>
+                <div class="creature creature4" id="creature4"></div>
+                <div class="creature creature5" id="creature5"></div>
+                <div class="creature creature6" id="creature6"></div>
+                <div class="creature creature7" id="creature7"></div>
+            </div>
+            
+            <!-- Frame elements -->
             <div class="top-tab" id="topTab"></div>
             <div class="frame-cover-left" id="frameCoverLeft"></div>
             <div class="frame-cover-right" id="frameCoverRight"></div>
@@ -44,9 +60,12 @@
    
     <!-- Service Worker Registration -->
     <script>
-        // Register the service worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
+        // Hide loading indicator when everything is loaded
+        window.addEventListener('load', () => {
+            document.getElementById('loadingIndicator').style.display = 'none';
+            
+            // Register the service worker
+            if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('service-worker.js')
                     .then(registration => {
                         console.log('Service Worker registered with scope:', registration.scope);
@@ -54,8 +73,14 @@
                     .catch(error => {
                         console.error('Service Worker registration failed:', error);
                     });
-            });
-        }
+            }
+        });
+
+        // Show loading indicator if JS takes too long
+        setTimeout(() => {
+            const loader = document.getElementById('loadingIndicator');
+            if (loader) loader.style.display = 'flex';
+        }, 3000);
     </script>
 </body>
 </html>
