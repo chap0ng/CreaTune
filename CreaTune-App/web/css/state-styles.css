@@ -39,43 +39,51 @@
 
 /* Fallback colors if images don't load */
 .sprite.state-idle.no-image {
-  background-image: none !important;
-  background-color: #f5eee0 !important;
+  background-image: none;
+  background-color: #f5eee0;
+  z-index: 90;
 }
 
 .sprite.state-soil.no-image {
-  background-image: none !important;
-  background-color: #8B735A !important;
+  background-image: none;
+  background-color: #8B735A;
+  z-index: 90;
 }
 
 .sprite.state-light.no-image {
-  background-image: none !important;
-  background-color: #DFBE5F !important;
+  background-image: none;
+  background-color: #DFBE5F;
+  z-index: 90;
 }
 
 .sprite.state-temp.no-image {
-  background-image: none !important;
-  background-color: #D67B54 !important;
+  background-image: none;
+  background-color: #D67B54;
+  z-index: 90;
 }
 
 .sprite.state-growth.no-image {
-  background-image: none !important;
-  background-color: #9CB380 !important;
+  background-image: none;
+  background-color: #9CB380;
+  z-index: 90;
 }
 
 .sprite.state-mirrage.no-image {
-  background-image: none !important;
-  background-color: #9A7AA0 !important;
+  background-image: none ;
+  background-color: #9A7AA0;
+  z-index: 90;
 }
 
 .sprite.state-flower.no-image {
-  background-image: none !important;
-  background-color: #D496B9 !important;
+  background-image: none;
+  background-color: #D496B9;
+  z-index: 90;
 }
 
 .sprite.state-total.no-image {
-  background-image: none !important;
-  background-color: #7A9CC2 !important;
+  background-image: none;
+  background-color: #7A9CC2;
+  z-index: 90;
 }
 
 /* Recording state and pulse effect */
@@ -115,7 +123,7 @@
   user-select: none; /* Prevent text selection when dragging */
   opacity: 0;
   transition: opacity 0.3s;
-  z-index: 10;
+  z-index: 110;
 }
 
 .bpm-display.active {
@@ -128,7 +136,7 @@
   position: fixed;
   top: 10px;
   left: 10px;
-  z-index: 1000;
+  z-index: 90;
   padding: 10px;
   background-color: rgba(0, 0, 0, 0.7);
   color: white;
@@ -158,7 +166,7 @@
   padding: 5px 10px;
   border-radius: 5px;
   font-size: 14px;
-  z-index: 1000;
+  z-index: 90;
 }
 
 #debugStateButton {
@@ -166,7 +174,7 @@
   position: fixed;
   bottom: 10px;
   right: 10px;
-  z-index: 1000;
+  z-index: 90;
   padding: 8px;
   border-radius: 4px;
   background-color: #333;

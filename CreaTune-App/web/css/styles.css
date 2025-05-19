@@ -18,6 +18,7 @@ body {
   margin: 40px;
   display: flex;
   justify-content: center;
+  z-index: 100;
 }
 
 .container {
@@ -27,6 +28,7 @@ body {
   position: relative;
   overflow: hidden;
   contain: layout;
+  z-index: 100;
 }
 
 /* Top Tab */
@@ -39,7 +41,7 @@ body {
   background-color: #f5eee0;
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
-  z-index: 6;
+  z-index: 1000;
   display: flex;
   transition: top 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   background-size: 100% 100%;
@@ -63,7 +65,7 @@ body {
 .frame-cover-top {
   position: absolute;
   background-color: #f5eee0;
-  z-index: 5;
+  z-index: 80;
   display: none;
   pointer-events: none;
 }
