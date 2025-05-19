@@ -1,0 +1,201 @@
+/* state-styles.css */
+/* CSS styles for the different states of the CreaTune application */
+
+/* Google Font Import */
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+/* State-specific backgrounds with fallbacks */
+.sprite.state-idle {
+  background-image: url('../assets/frame-sprite.png');
+}
+
+.sprite.state-soil {
+  background-image: url('../images/soil.png');
+}
+
+.sprite.state-light {
+  background-image: url('../images/light.png');
+}
+
+.sprite.state-temp {
+  background-image: url('../images/temp.png');
+}
+
+.sprite.state-growth {
+  background-image: url('../images/growth.png');
+}
+
+.sprite.state-mirrage {
+  background-image: url('../images/mirrage.png');
+}
+
+.sprite.state-flower {
+  background-image: url('../images/flower.png');
+}
+
+.sprite.state-total {
+  background-image: url('../images/total.png');
+}
+
+/* Fallback colors if images don't load */
+.sprite.state-idle.no-image {
+  background-image: none !important;
+  background-color: #f5eee0 !important;
+}
+
+.sprite.state-soil.no-image {
+  background-image: none !important;
+  background-color: #8B735A !important;
+}
+
+.sprite.state-light.no-image {
+  background-image: none !important;
+  background-color: #DFBE5F !important;
+}
+
+.sprite.state-temp.no-image {
+  background-image: none !important;
+  background-color: #D67B54 !important;
+}
+
+.sprite.state-growth.no-image {
+  background-image: none !important;
+  background-color: #9CB380 !important;
+}
+
+.sprite.state-mirrage.no-image {
+  background-image: none !important;
+  background-color: #9A7AA0 !important;
+}
+
+.sprite.state-flower.no-image {
+  background-image: none !important;
+  background-color: #D496B9 !important;
+}
+
+.sprite.state-total.no-image {
+  background-image: none !important;
+  background-color: #7A9CC2 !important;
+}
+
+/* Recording state */
+.container.recording {
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.7);
+  animation: recordingPulse 1s infinite;
+}
+
+@keyframes recordingPulse {
+  0% { box-shadow: 0 0 10px rgba(255, 0, 0, 0.7); }
+  50% { box-shadow: 0 0 20px rgba(255, 0, 0, 0.9); }
+  100% { box-shadow: 0 0 10px rgba(255, 0, 0, 0.7); }
+}
+
+/* BPM slider */
+.bpm-slider-container {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  z-index: 20;
+  pointer-events: auto;
+  text-align: center;
+}
+
+.bpm-value {
+  font-family: 'VT323', monospace;
+  font-size: 3em;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  margin-bottom: 15px;
+  pointer-events: none;
+}
+
+.bpm-slider {
+  width: 100%;
+  height: 20px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.3);
+  outline: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.bpm-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  box-shadow: 0 0 5px rgba(0,0,0,0.3);
+}
+
+.bpm-slider::-moz-range-thumb {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  box-shadow: 0 0 5px rgba(0,0,0,0.3);
+  border: none;
+}
+
+/* Status indicators */
+#espStatusPanel {
+  font-family: 'VT323', monospace;
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+  padding: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  border-radius: 5px;
+  min-width: 200px;
+}
+
+.esp-indicator {
+  margin: 5px 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-left: 5px;
+}
+
+#connectionStatus {
+  font-family: 'VT323', monospace;
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 14px;
+  z-index: 1000;
+}
+
+#debugStateButton {
+  font-family: 'VT323', monospace;
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  z-index: 1000;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: #333;
+  color: white;
+  cursor: pointer;
+  border: none;
+}
+
+#debugStateButton:hover {
+  background-color: #555;
+}

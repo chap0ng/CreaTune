@@ -1,4 +1,6 @@
-// Main integration file - combines creature sprites and synth
+// enhanced-creatures.js
+// Enhanced version of integrated-creatures.js to work with state machine
+
 document.addEventListener('DOMContentLoaded', () => {
   const container = document.getElementById('spriteContainer');
   
@@ -31,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Create creatures
     createCreatures(visualizer);
     
-    // Create buttons
+    // Create buttons - these will be hidden but still functional
     const buttonsContainer = document.createElement('div');
     buttonsContainer.id = 'synthButtons';
     buttonsContainer.className = 'synth-buttons';
@@ -146,6 +148,87 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show creature
     animations.creatures[id].visible = true;
     creature.style.opacity = "1";
+    
+    // Apply animation based on sensor data if available
+    applySensorEffects(id);
+  }
+  
+  // Apply visual effects based on sensor data
+  function applySensorEffects(id) {
+    if (!window.stateManager) return;
+    
+    const creature = document.getElementById(id);
+    if (!creature) return;
+    
+    const espStatus = window.stateManager.getEspStatus();
+    const currentState = window.stateManager.getState();
+    
+    // Apply effects based on current state and sensor values
+    switch (id) {
+      case 'creature1': // Soil creature
+        if (espStatus.esp1.valid) {
+          // Scale size based on soil moisture
+          const scale = 0.8 + (espStatus.esp1.value * 0.4);
+          creature.style.transform = `scale(${scale})`;
+        }
+        break;
+        
+      case 'creature2': // Light creature
+        if (espStatus.esp2.valid) {
+          // Brightness based on light level
+          const brightness = 70 + (espStatus.esp2.value * 50);
+          creature.style.filter = `brightness(${brightness}%)`;
+        }
+        break;
+        
+      case 'creature3': // Temperature creature
+        if (espStatus.esp3.valid) {
+          // Color tint based on temperature
+          const hue = Math.floor(180 + (espStatus.esp3.value * 120)); // blue to red
+          creature.style.filter = `hue-rotate(${hue}deg)`;
+        }
+        break;
+        
+      case 'creature4': // Growth (soil + light)
+        if (espStatus.esp1.valid && espStatus.esp2.valid) {
+          // Combine scale and brightness
+          const scale = 0.8 + (espStatus.esp1.value * 0.4);
+          const brightness = 70 + (espStatus.esp2.value * 50);
+          creature.style.transform = `scale(${scale})`;
+          creature.style.filter = `brightness(${brightness}%)`;
+        }
+        break;
+        
+      case 'creature5': // Mirrage (soil + temp)
+        if (espStatus.esp1.valid && espStatus.esp3.valid) {
+          // Combine scale and color
+          const scale = 0.8 + (espStatus.esp1.value * 0.4);
+          const hue = Math.floor(180 + (espStatus.esp3.value * 120));
+          creature.style.transform = `scale(${scale})`;
+          creature.style.filter = `hue-rotate(${hue}deg)`;
+        }
+        break;
+        
+      case 'creature6': // Flower (light + temp)
+        if (espStatus.esp2.valid && espStatus.esp3.valid) {
+          // Combine brightness and color
+          const brightness = 70 + (espStatus.esp2.value * 50);
+          const hue = Math.floor(180 + (espStatus.esp3.value * 120));
+          creature.style.filter = `brightness(${brightness}%) hue-rotate(${hue}deg)`;
+        }
+        break;
+        
+      case 'creature7': // Total (all sensors)
+        if (espStatus.esp1.valid && espStatus.esp2.valid && espStatus.esp3.valid) {
+          // Apply all effects
+          const scale = 0.8 + (espStatus.esp1.value * 0.4);
+          const brightness = 70 + (espStatus.esp2.value * 50);
+          const hue = Math.floor(180 + (espStatus.esp3.value * 120));
+          creature.style.transform = `scale(${scale})`;
+          creature.style.filter = `brightness(${brightness}%) hue-rotate(${hue}deg)`;
+        }
+        break;
+    }
   }
   
   // Stop animation
@@ -157,6 +240,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const creature = document.getElementById(id);
       if (creature) {
         creature.style.opacity = "0";
+        // Reset any applied effects
+        creature.style.transform = '';
+        creature.style.filter = '';
       }
     }
   }
@@ -178,6 +264,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const state = window.synthEngine.getState();
     
+    // If we have a state manager, let it handle the visualization
+    if (window.stateManager) {
+      return;
+    }
+    
+    // Otherwise, fall back to the original behavior
     // Hide all creatures
     for (let i = 1; i <= 7; i++) {
       stopAnimation(`creature${i}`);
@@ -201,6 +293,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
+  // Handle state changes
+  function handleStateChange(e) {
+    if (e.detail && e.detail.state) {
+      const state = e.detail.state;
+      const espStatus = e.detail.espStatus;
+      
+      // For active creatures, update their sensor effects
+      Object.keys(animations.creatures).forEach(id => {
+        if (animations.creatures[id].visible) {
+          applySensorEffects(id);
+        }
+      });
+    }
+  }
+  
   // Create UI components
   const ui = createUI();
   
@@ -219,9 +326,17 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('visualizer')?.classList.remove('hidden');
       }
       
+      // Trigger custom event for tab state change
+      document.dispatchEvent(new CustomEvent('tabStateChange', {
+        detail: { isOpen: tabOpen }
+      }));
+      
       return tabOpen;
     };
   }
+  
+  // Listen for state changes
+  document.addEventListener('stateChange', handleStateChange);
   
   // Expose API to synth-logic.js
   window.synthUI = {
@@ -236,6 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.creatureManager = {
     animate: animateCreature,
     stopAnimation: stopAnimation,
-    updateVisibility: updateVisuals
+    updateVisibility: updateVisuals,
+    applySensorEffects: applySensorEffects
   };
 });

@@ -1,0 +1,500 @@
+/* combined-styles.css */
+/* A single CSS file with proper layering to prevent conflicts */
+
+/* Google Font Import */
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+/*==============================================================================*\
+ * ######  #######    #    ####### #######    #####  ####### #     # #       #######  #####  
+ * #          #      # #      #    #         #     #    #     #   #  #       #       #     # 
+ * #          #     #   #     #    #         #          #      # #   #       #       #       
+ * ######     #    #     #    #    #####      #####     #       #    #       #####    #####  
+ *      #     #    #######    #    #               #    #       #    #       #             # 
+ *      #     #    #     #    #    #         #     #    #       #    #       #       #     # 
+ * ######     #    #     #    #    #######    #####     #       #    ####### #######  #####  
+\*==============================================================================*/
+/* State-specific backgrounds with fallbacks */
+.sprite.state-idle {
+  background-image: url('../assets/frame-sprite.png');
+}
+
+.sprite.state-soil {
+  background-image: url('../images/soil.png');
+}
+
+.sprite.state-light {
+  background-image: url('../images/light.png');
+}
+
+.sprite.state-temp {
+  background-image: url('../images/temp.png');
+}
+
+.sprite.state-growth {
+  background-image: url('../images/growth.png');
+}
+
+.sprite.state-mirrage {
+  background-image: url('../images/mirrage.png');
+}
+
+.sprite.state-flower {
+  background-image: url('../images/flower.png');
+}
+
+.sprite.state-total {
+  background-image: url('../images/total.png');
+}
+
+/* Fallback colors if images don't load */
+.sprite.state-idle.no-image {
+  background-image: none !important;
+  background-color: #f5eee0 !important;
+}
+
+.sprite.state-soil.no-image {
+  background-image: none !important;
+  background-color: #8B735A !important;
+}
+
+.sprite.state-light.no-image {
+  background-image: none !important;
+  background-color: #DFBE5F !important;
+}
+
+.sprite.state-temp.no-image {
+  background-image: none !important;
+  background-color: #D67B54 !important;
+}
+
+.sprite.state-growth.no-image {
+  background-image: none !important;
+  background-color: #9CB380 !important;
+}
+
+.sprite.state-mirrage.no-image {
+  background-image: none !important;
+  background-color: #9A7AA0 !important;
+}
+
+.sprite.state-flower.no-image {
+  background-image: none !important;
+  background-color: #D496B9 !important;
+}
+
+.sprite.state-total.no-image {
+  background-image: none !important;
+  background-color: #7A9CC2 !important;
+}
+
+/* Recording state */
+.container.recording {
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.7);
+  animation: recordingPulse 1s infinite;
+}
+
+@keyframes recordingPulse {
+  0% { box-shadow: 0 0 10px rgba(255, 0, 0, 0.7); }
+  50% { box-shadow: 0 0 20px rgba(255, 0, 0, 0.9); }
+  100% { box-shadow: 0 0 10px rgba(255, 0, 0, 0.7); }
+}
+
+/*==============================================================================*\
+ *  #####  ### #     # ####  #       ### ####### ### ####### ####  
+ * #     #  #  ##   ## #   # #        #  #        #  #       #   # 
+ * #        #  # # # # #   # #        #  #        #  #       #   # 
+ *  #####   #  #  #  # ####  #        #  #####    #  #####   #   # 
+ *       #  #  #     # #     #        #  #        #  #       #   # 
+ * #     #  #  #     # #     #        #  #        #  #       #   # 
+ *  #####  ### #     # #     ####### ### #       ### ####### ####  
+\*==============================================================================*/
+/* Creature sprite styles - simplified */
+.visualizer {
+  position: absolute;
+  top: 15%;
+  left: 0;
+  width: 100%;
+  height: 60%;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.visualizer.hidden {
+  display: none;
+}
+
+.creature {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  background-size: 300% 100%; /* 3 columns, 1 row */
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 0.3s;
+  transform-origin: center;
+}
+
+.creature.pulse {
+  animation: pulse-effect 0.3s ease-in-out;
+}
+
+.creature.fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(80, 80, 80, 0.8);
+  border-radius: 50%;
+  font-size: 120px;
+  font-weight: bold;
+  color: white;
+}
+
+.creature1 { background-image: url('../images/creature1.png'); }
+.creature2 { background-image: url('../images/creature2.png'); }
+.creature3 { background-image: url('../images/creature3.png'); }
+.creature4 { background-image: url('../images/creature4.png'); }
+.creature5 { background-image: url('../images/creature5.png'); }
+.creature6 { background-image: url('../images/creature6.png'); }
+.creature7 { background-image: url('../images/creature7.png'); }
+
+@keyframes pulse-effect {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.synth-status {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  color: white;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.5s;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .creature {
+    width: 200px;
+    height: 200px;
+  }
+  
+  .creature.fallback {
+    font-size: 80px;
+  }
+}
+
+@media (max-width: 480px) {
+  .creature {
+    width: 150px;
+    height: 150px;
+  }
+  
+  .creature.fallback {
+    font-size: 60px;
+  }
+}
+
+/*==============================================================================*\
+ * ######  ######  #     #     #####  #       ### ######  ####### ######  
+ * #     # #     # ##   ##    #     # #        #  #     # #       #     # 
+ * #     # #     # # # # #    #       #        #  #     # #       #     # 
+ * ######  ######  #  #  #     #####  #        #  #     # #####   ######  
+ * #     # #       #     #          # #        #  #     # #       #   #   
+ * #     # #       #     #    #     # #        #  #     # #       #    #  
+ * ######  #       #     #     #####  ####### ### ######  ####### #     # 
+\*==============================================================================*/
+/* BPM slider */
+.bpm-slider-container {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  z-index: 8;
+  pointer-events: auto;
+  text-align: center;
+}
+
+.bpm-value {
+  font-family: 'VT323', monospace;
+  font-size: 3em;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  margin-bottom: 15px;
+  pointer-events: none;
+}
+
+.bpm-slider {
+  width: 100%;
+  height: 20px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.3);
+  outline: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.bpm-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  box-shadow: 0 0 5px rgba(0,0,0,0.3);
+}
+
+.bpm-slider::-moz-range-thumb {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  box-shadow: 0 0 5px rgba(0,0,0,0.3);
+  border: none;
+}
+
+/* Status indicators */
+#espStatusPanel {
+  font-family: 'VT323', monospace;
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+  padding: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  border-radius: 5px;
+  min-width: 200px;
+}
+
+.esp-indicator {
+  margin: 5px 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-left: 5px;
+}
+
+#connectionStatus {
+  font-family: 'VT323', monospace;
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 14px;
+  z-index: 1000;
+}
+
+#debugStateButton {
+  font-family: 'VT323', monospace;
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  z-index: 1000;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: #333;
+  color: white;
+  cursor: pointer;
+  border: none;
+}
+
+#debugStateButton:hover {
+  background-color: #555;
+}
+
+/*==============================================================================*\
+ * ####### #####  ### ####### ### #     #    #        #####  ####### #     # #       ####### 
+ * #     # #     #  #  #        #  ##    #    #       #     # #     # #     # #       #       
+ * #     # #        #  #        #  # #   #    #       #       #     # #     # #       #       
+ * #     # #  ####  #  #####    #  #  #  #    #        #####  #     # #     # #       #####   
+ * #     # #     #  #  #        #  #   # #    #             # #     # #     # #       #       
+ * #     # #     #  #  #        #  #    ##    #       #     # #     # #     # #       #       
+ * ####### #####  ### #       ### #     #    #######  #####  #######  #####  ####### ####### 
+\*==============================================================================*/
+/* Base Styles */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f5eee0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: Arial, sans-serif;
+}
+
+/* Container Layout */
+.container-wrapper {
+  position: relative;
+  width: calc(100% - 60px);
+  max-width: 1200px;
+  margin: 40px;
+  display: flex;
+  justify-content: center;
+}
+
+.container {
+  width: 100%;
+  aspect-ratio: 2340 / 962;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  contain: layout;
+}
+
+/* Top Tab */
+.top-tab {
+  position: absolute;
+  top: -500px;
+  left: -30px;
+  width: calc(100% + 60px);
+  height: 500px;
+  background-color: #f5eee0;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  z-index: 6;
+  display: flex;
+  transition: top 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  background-size: 100% 100%;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  background-image: url('../assets/tab-top.png');
+}
+
+.top-tab * {
+  pointer-events: auto;
+}
+
+.top-tab.dragging {
+  transition: none;
+}
+
+/* Frame Covers */
+.frame-cover-left,
+.frame-cover-right,
+.frame-cover-top {
+  position: absolute;
+  background-color: #f5eee0;
+  z-index: 5;
+  display: none;
+  pointer-events: none;
+}
+
+.frame-cover-left,
+.frame-cover-right {
+  top: 0;
+  bottom: 0;
+  width: 0px;
+}
+
+.frame-cover-left {
+  left: -2px;
+}
+
+.frame-cover-right {
+  right: 0px;
+}
+
+.frame-cover-top {
+  top: 0px;
+  left: 0;
+  right: 0;
+  height: 0px;
+}
+
+/* Sprite - fixed positioning */
+.sprite {
+  width: 100%;
+  height: 100%;
+  background-image: url('../assets/frame-sprite.png');
+  background-size: 300% 400%;
+  background-repeat: no-repeat;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5; /* Keep this higher to ensure sprite is on top */
+  border-radius: 5px;
+  border: 0px solid transparent;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  will-change: background-position;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.container.tab-open .sprite {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* Instructions */
+.instructions {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  color: #333;
+  z-index: 7;
+}
+
+/* Drag Handle */
+.drag-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 7%;
+  cursor: ns-resize;
+  z-index: 11; /* Keep this highest to ensure drag handle is always accessible */
+  background-image: url('../assets/top-bar-image.png');
+  background-size: 100% auto;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: #f5eee0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  margin: 0;
+  padding: 0;
+}
+
+.handle-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.drag-handle.dragging,
+.drag-handle.active {
+  opacity: 1 !important;
+  transition: none;
+}
+
+.container:hover .drag-handle:not(.dragging) {
+  opacity: 0;
+}
