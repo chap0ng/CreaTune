@@ -93,6 +93,8 @@ const wss = new WebSocket.Server({ server });
 const clients = new Map();
 const espDevices = new Map();
 const lastESP32Activities = {}; // Track activity by ESP ID - fixed
+// NEW: Remember ESP32 by name or sensor type
+const knownESP32s = {};
 
 let clientIdCounter = 0;
 let espIdCounter = 0;
@@ -143,12 +145,12 @@ wss.on('connection', (ws, req) => {
         clientInfo.isESP32 = true;
         
         // Update last activity time for this ESP32
-        const sensorName = data.name || `ESP32-${espIdCounter}`;
+        const sensorName = data.name || data.sensor || `ESP32-${espIdCounter}`;
         lastESP32Activities[sensorName] = Date.now();
         
         // Update application state
         let espId = null;
-        if (data.sensor === 'soil' || data.name === 'ESP32-1') {
+        if (data.sensor === 'soil' || data.name === 'ESP32-1' || sensorName === 'MoistureSensor') {
           espId = 'esp1';
         } else if (data.sensor === 'light' || data.name === 'ESP32-2') {
           espId = 'esp2';
@@ -159,14 +161,26 @@ wss.on('connection', (ws, req) => {
         if (espId) {
           // Update ESP status
           appState[espId].connected = true;
-          appState[espId].value = data.value;
+          appState[espId].value = data.value || data.moisture_app_value || data.voltage;
           
           // Validate data range (0.4 to 0.8)
-          appState[espId].valid = data.value !== undefined && 
-                                  data.value !== null && 
-                                  data.value >= 0.4 && 
-                                  data.value <= 0.8;
+          appState[espId].valid = appState[espId].value !== undefined && 
+                                  appState[espId].value !== null && 
+                                  appState[espId].value >= 0.4 && 
+                                  appState[espId].value <= 0.8;
         }
+        
+        // NEW: Check if we've seen this ESP32 before
+        const espKey = data.sensor || data.name || sensorName;
+        let isReconnection = false;
+        
+        if (knownESP32s[espKey] && !espDevices.has(ws)) {
+          console.log(`Recognized reconnecting ESP32: ${espKey}`);
+          isReconnection = true;
+        }
+        
+        // Remember this ESP32 for future reconnections
+        knownESP32s[espKey] = true;
         
         // If not already in espDevices, add it
         if (!espDevices.has(ws)) {
@@ -177,14 +191,25 @@ wss.on('connection', (ws, req) => {
             lastData: data
           });
           
-          console.log(`Identified ESP32 device [${espId}]: ${sensorName}`);
-          
-          // Notify other clients about ESP32 connection
-          broadcastToWebClients({
-            type: 'esp_connected',
-            espId: espId,
-            name: sensorName
-          });
+          if (isReconnection) {
+            console.log(`Reconnected ESP32 device [${espId}]: ${sensorName}`);
+            // Notify other clients about ESP32 reconnection
+            broadcastToWebClients({
+              type: 'esp_connected',
+              espId: espId,
+              name: sensorName,
+              reconnected: true
+            });
+          } else {
+            console.log(`Identified ESP32 device [${espId}]: ${sensorName}`);
+            // Notify other clients about ESP32 connection
+            broadcastToWebClients({
+              type: 'esp_connected',
+              espId: espId,
+              name: sensorName,
+              reconnected: false
+            });
+          }
         } else {
           // Update last data
           const espInfo = espDevices.get(ws);
@@ -248,7 +273,9 @@ wss.on('connection', (ws, req) => {
       
       // Remove from tracking
       espDevices.delete(ws);
-      delete lastESP32Activities[espInfo.name];
+      
+      // Keep lastESP32Activities entry for timeout checking
+      // But don't delete from knownESP32s to remember for reconnection
       
       // Notify other clients
       broadcastToWebClients({
@@ -375,7 +402,8 @@ setInterval(() => {
           
           // Remove from tracking
           espDevices.delete(wsClient);
-          delete lastESP32Activities[espName];
+          // But keep in knownESP32s to remember for reconnection
+          
           timeoutsOccurred = true;
           break;
         }

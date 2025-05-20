@@ -28,9 +28,29 @@ document.addEventListener('DOMContentLoaded', () => {
   // DOM elements
   const container = document.getElementById('spriteContainer');
   const sprite = document.getElementById('sprite');
+  
+  // Remember connections to handle reconnections
+  const connectedESP32s = {
+    'ESP32-1': false,
+    'ESP32-2': false,
+    'ESP32-3': false,
+    'soil': false,
+    'light': false,
+    'temperature': false,
+    'MoistureSensor': false
+  };
 
   // Handle socket events from the server
   function setupWebsocketEvents() {
+    // Close existing connection if it exists
+    if (window.serverSocket) {
+      try {
+        window.serverSocket.close();
+      } catch (err) {
+        console.error('Error closing existing socket:', err);
+      }
+    }
+    
     const socket = new WebSocket(`ws://${window.location.host}`);
     
     socket.onopen = () => {
@@ -56,20 +76,48 @@ document.addEventListener('DOMContentLoaded', () => {
         // Handle ESP32 connection status
         if (data.type === 'esp_connected') {
           console.log(`ESP32 connected: ${data.name}`);
+          
+          // Mark as connected
+          if (data.name) {
+            connectedESP32s[data.name] = true;
+          }
+          
+          // Show notification about reconnection
+          if (data.reconnected && window.UIManager) {
+            window.UIManager.showInfoMessage(`ESP32 ${data.name} reconnected!`, 3000);
+          }
         }
         
         // Handle ESP32 disconnection
         if (data.type === 'esp_disconnected') {
           console.log(`ESP32 disconnected: ${data.name}`);
+          
+          // Mark as disconnected
+          if (data.name) {
+            connectedESP32s[data.name] = false;
+          }
         }
         
         // Handle sensor data - crucial for synth triggering
         if (data.type === 'sensor_data') {
-          console.log(`Sensor data from ${data.name}: ${data.value}`);
+          console.log(`Sensor data from ${data.name || data.sensor}: ${data.value}`);
           
           // Start Tone.js context if not already started
           if (Tone && Tone.context.state !== 'running') {
             Tone.start();
+          }
+          
+          // Mark as connected
+          if (data.name) {
+            connectedESP32s[data.name] = true;
+          }
+          if (data.sensor) {
+            connectedESP32s[data.sensor] = true;
+          }
+          
+          // Update lastESP32ActivityTime for timeout detection
+          if (window.lastESP32ActivityTime !== undefined) {
+            window.lastESP32ActivityTime = Date.now();
           }
           
           // Directly update synth parameters based on sensor data
@@ -84,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Pulse the creature for visual feedback
             let creatureNum = 0;
-            if (data.name === 'ESP32-1' || data.sensor === 'soil') {
+            if (data.name === 'ESP32-1' || data.sensor === 'soil' || data.sensor === 'MoistureSensor') {
               creatureNum = 1;
             } else if (data.name === 'ESP32-2' || data.sensor === 'light') {
               creatureNum = 2;
@@ -268,10 +316,43 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Container interactions setup complete');
   }
   
+  // Check for ESP32 timeout
+  function setupESP32TimeoutCheck() {
+    // Add a global lastESP32ActivityTime for timeout detection
+    window.lastESP32ActivityTime = Date.now();
+    
+    // Check for ESP32 timeouts every 5 seconds
+    setInterval(() => {
+      const now = Date.now();
+      
+      // If no activity for 15 seconds, try to reconnect WebSocket
+      if (now - window.lastESP32ActivityTime > 15000) {
+        console.log('ESP32 timeout detected, reconnecting WebSocket...');
+        
+        // Refresh WebSocket connection
+        if (window.serverSocket) {
+          try {
+            // Only try to reconnect if the socket is closed or closing
+            if (window.serverSocket.readyState === WebSocket.CLOSED || 
+                window.serverSocket.readyState === WebSocket.CLOSING) {
+              setupWebsocketEvents();
+            }
+          } catch (err) {
+            console.error('Error during WebSocket reconnection:', err);
+          }
+        }
+        
+        // Reset the timer
+        window.lastESP32ActivityTime = now;
+      }
+    }, 5000);
+  }
+  
   // Initialize
   function initialize() {
     setupWebsocketEvents();
     setupContainerInteractions();
+    setupESP32TimeoutCheck();
     console.log('State manager initialized');
   }
   
@@ -282,6 +363,8 @@ document.addEventListener('DOMContentLoaded', () => {
   window.StateManager = {
     getState: () => currentState,
     getSubState: () => currentSubState,
-    setSubState: setSubState
+    setSubState: setSubState,
+    reconnectWebSocket: setupWebsocketEvents, // Expose reconnect method
+    getESP32Status: () => ({...connectedESP32s})  // Expose ESP32 status
   };
 });
