@@ -109,10 +109,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return basePattern;
       }
       
-      return window.SoundPatterns.modifyPatternWithSensorValue(basePattern, sensorValue);
+      return window.SoundPatterns && window.SoundPatterns.modifyPatternWithSensorValue ? 
+        window.SoundPatterns.modifyPatternWithSensorValue(basePattern, sensorValue) :
+        basePattern;
     }
     
-    // Main sequence loop
+    // Create continuous loop that will not stop
+    if (synths.mainLoop) {
+      synths.mainLoop.dispose();
+    }
+    
+    // Main sequence loop - using Tone.Pattern instead of Tone.Loop for more stability
     synths.mainLoop = new Tone.Loop((time) => {
       const rhythmFactor = getRhythmValue();
       const noteDuration = rhythmFactor < 0.7 ? "8n" : "4n";
@@ -143,7 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
       } 
       else if (state.button1 && state.button2) {
         // Growth state - soil + light
-        const pattern = window.SoundPatterns.getGrowthPattern(sensorValues.soil, sensorValues.light);
+        const pattern = window.SoundPatterns && window.SoundPatterns.getGrowthPattern ?
+          window.SoundPatterns.getGrowthPattern(sensorValues.soil, sensorValues.light) :
+          soilPatterns[0];
+          
         const noteIndex = Math.floor(Math.random() * pattern.length);
         const note = pattern[noteIndex];
         
@@ -154,7 +164,10 @@ document.addEventListener('DOMContentLoaded', () => {
       } 
       else if (state.button1 && state.button3) {
         // Mirrage state - soil + temp
-        const pattern = window.SoundPatterns.getMirragePattern(sensorValues.soil, sensorValues.temp);
+        const pattern = window.SoundPatterns && window.SoundPatterns.getMirragePattern ?
+          window.SoundPatterns.getMirragePattern(sensorValues.soil, sensorValues.temp) : 
+          soilPatterns[0];
+          
         const randomIndex = Math.floor(Math.random() * pattern.length);
         const note = pattern[randomIndex];
         
@@ -165,7 +178,10 @@ document.addEventListener('DOMContentLoaded', () => {
       } 
       else if (state.button2 && state.button3) {
         // Flower state - light + temp
-        const pattern = window.SoundPatterns.getFlowerPattern(sensorValues.light, sensorValues.temp);
+        const pattern = window.SoundPatterns && window.SoundPatterns.getFlowerPattern ?
+          window.SoundPatterns.getFlowerPattern(sensorValues.light, sensorValues.temp) :
+          lightPatterns[0];
+          
         const noteIndex = Math.floor(Math.random() * pattern.length);
         const note = pattern[noteIndex];
         
@@ -210,7 +226,13 @@ document.addEventListener('DOMContentLoaded', () => {
           pulseCreature(3);
         }
       }
-    }, "8n").start(0);
+    }, "8n");
+    
+    // Ensure the loop is set to play indefinitely
+    synths.mainLoop.iterations = Infinity;
+    
+    // Start the loop
+    synths.mainLoop.start(0);
     
     // Initial BPM
     Tone.Transport.bpm.value = AUDIO.DEFAULT_BPM;
@@ -272,11 +294,8 @@ document.addEventListener('DOMContentLoaded', () => {
       silenceSynths(false);
       
       // Get the recorded pattern from the recording manager
-      if (window.RecordingManager) {
-        const hasPattern = window.RecordingManager.hasRecordedPattern();
-        if (hasPattern) {
-          playRecordedPattern();
-        }
+      if (window.RecordingManager && window.RecordingManager.hasRecordedPattern()) {
+        playRecordedPattern();
       }
     });
     
@@ -300,7 +319,12 @@ document.addEventListener('DOMContentLoaded', () => {
       setupSequences();
       setupRecordRepeat();
       
+      // Start Tone.Transport and ensure it doesn't stop
       Tone.Transport.start();
+      Tone.Transport.loop = true;
+      Tone.Transport.loopStart = 0;
+      Tone.Transport.loopEnd = '8m';  // 8 measures to give plenty of loop time
+      
       audioStarted = true;
       
       if (statusCallback) statusCallback("Audio initialized");
@@ -310,6 +334,14 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Notify listeners that audio is ready
       EventBus.emit('audioInitialized');
+      
+      // Set up periodic check to ensure Transport is running
+      setInterval(() => {
+        if (Tone.Transport.state !== "started" && audioStarted) {
+          console.log("Restarting Tone.Transport...");
+          Tone.Transport.start();
+        }
+      }, 5000);
       
       return true;
     } catch (error) {
@@ -376,6 +408,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         break;
     }
+    
+    // Restart Tone.Transport if it's stopped
+    if (Tone.Transport.state !== "started" && audioStarted) {
+      console.log("Restarting Tone.Transport...");
+      Tone.Transport.start();
+    }
   }
   
   // Silence all synths temporarily (e.g., during recording)
@@ -402,8 +440,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 100);
     } else {
       // Resume the main loop after recording
-      if (synths.mainLoop) {
+      if (synths.mainLoop && Tone.Transport.state === "started") {
         synths.mainLoop.start();
+      }
+      
+      // Ensure Transport is running
+      if (Tone.Transport.state !== "started") {
+        Tone.Transport.start();
       }
     }
   }

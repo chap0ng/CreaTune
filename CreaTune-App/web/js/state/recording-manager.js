@@ -145,8 +145,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Previous peak detection variables
             let lastPeakTime = 0;
+            let consecutiveSignificantValues = 0;
             
-            // Start analyzing audio at regular intervals
+            // Start analyzing audio at regular intervals - higher frequency for better precision
             analyzeInterval = setInterval(() => {
               if (!isRecording) {
                 clearInterval(analyzeInterval);
@@ -173,10 +174,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 max: 150 
               });
               
-              // Detect peaks - adjust threshold based on testing
+              // More precise peak detection with noise filtering
               const now = Date.now();
               
-              if (average > RECORDING.THRESHOLD && (now - lastPeakTime) > RECORDING.PEAK_DELAY) {
+              // Implement hysteresis for noise reduction - 
+              // Need several consecutive readings above threshold to confirm it's a real peak
+              if (average > RECORDING.THRESHOLD) {
+                consecutiveSignificantValues++;
+              } else {
+                consecutiveSignificantValues = 0;
+              }
+              
+              // Only trigger when we have consistent loud sound and enough delay from last peak
+              if (consecutiveSignificantValues >= 2 && (now - lastPeakTime) > RECORDING.PEAK_DELAY) {
                 // Record the timestamp of this pulse
                 recordedPattern.push({
                   time: now,
@@ -184,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
                 lastPeakTime = now;
+                consecutiveSignificantValues = 0;
                 
                 // Visual feedback
                 if (container) {
@@ -192,8 +203,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     container.classList.remove('pulse');
                   }, 100);
                 }
+                
+                console.log(`Recorded beat with intensity: ${Math.min(1, average / 150).toFixed(2)}`);
               }
-            }, 30); // Check every 30ms for more responsiveness
+            }, 15); // Check more frequently (15ms) for better time precision
           })
           .catch(err => {
             console.error('Error accessing microphone:', err);
@@ -283,11 +296,48 @@ document.addEventListener('DOMContentLoaded', () => {
         intensity: pulse.intensity
       }));
       
+      // Quantize timings for more precise rhythm if there are enough beats
+      if (recordedPattern.length >= 3) {
+        quantizePattern(recordedPattern);
+      }
+      
       console.log('Recorded pattern:', recordedPattern);
     } else {
       // No pattern recorded, or empty pattern
       recordedPattern = null;
     }
+  }
+  
+  // Quantize recorded pattern to make timing more precise
+  function quantizePattern(pattern) {
+    if (pattern.length < 2) return pattern;
+    
+    // Find the average time interval between beats
+    let totalInterval = 0;
+    for (let i = 1; i < pattern.length; i++) {
+      totalInterval += pattern[i].time - pattern[i-1].time;
+    }
+    const avgInterval = totalInterval / (pattern.length - 1);
+    
+    // Determine if this is likely a quarter note or eighth note pattern
+    const likelyBeatValue = avgInterval < 400 ? 'eighth' : 'quarter';
+    const beatInterval = likelyBeatValue === 'eighth' ? avgInterval : avgInterval / 2;
+    
+    // Quantize each beat to the nearest multiple of the beat interval
+    for (let i = 0; i < pattern.length; i++) {
+      const beatMultiple = Math.round(pattern[i].time / beatInterval);
+      pattern[i].time = beatMultiple * beatInterval;
+    }
+    
+    // Remove duplicates that may have been created by quantization
+    const uniqueTimes = {};
+    return pattern.filter(beat => {
+      if (uniqueTimes[beat.time]) {
+        return false;
+      }
+      uniqueTimes[beat.time] = true;
+      return true;
+    });
   }
   
   // Start playing recorded pattern as a trigger for synths
@@ -324,8 +374,8 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Find pulses that should trigger now
       recordedPattern.forEach(pulse => {
-        // Check if this pulse is happening now (within 30ms window)
-        if (Math.abs(currentTime - pulse.time) < 30) {
+        // Check if this pulse is happening now (within 15ms window for better precision)
+        if (Math.abs(currentTime - pulse.time) < 15) {
           // Trigger synth note based on current state
           triggerSynthFromPattern(pulse.intensity);
           
@@ -338,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
       });
-    }, 20); // Check every 20ms for accurate timing
+    }, 10); // Check every 10ms for more accurate timing
   }
   
   // Stop playing recorded pattern
