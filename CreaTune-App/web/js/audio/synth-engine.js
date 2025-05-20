@@ -517,6 +517,20 @@ document.addEventListener('DOMContentLoaded', () => {
     return AUDIO.DEFAULT_BPM;
   }
   
+  // Helper function for triggerSynthFromValue
+  function getCMajorNote(value) {
+    // C major scale notes
+    const notes = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"];
+    
+    // Map value (0.4-0.8) to note index (0-7)
+    const normalizedValue = (value - 0.4) / 0.4; // 0.0-1.0
+    const noteIndex = Math.floor(normalizedValue * notes.length);
+    
+    // Ensure index is within bounds
+    const safeIndex = Math.max(0, Math.min(notes.length - 1, noteIndex));
+    return notes[safeIndex];
+  }
+  
   // Add cleanup for page unload
   window.addEventListener('beforeunload', function() {
     // Release all synths and clean up
@@ -556,6 +570,47 @@ document.addEventListener('DOMContentLoaded', () => {
     triggerPatternNote,
     silenceSynths,
     setBPM,
-    getBPM
+    getBPM,
+    
+    triggerSynthFromValue: function(value) {
+      // Select appropriate synth based on current state
+      const currentState = window.StateManager ? window.StateManager.getState() : 'idle';
+      
+      // Get current state to determine which synth to trigger
+      switch(currentState) {
+        case 'soil':
+          synths.synth1.triggerAttackRelease(getCMajorNote(value), "8n");
+          pulseCreature(1);
+          break;
+        case 'light':
+          synths.synth2.triggerAttackRelease(getCMajorNote(value), "8n");
+          pulseCreature(2);
+          break;
+        case 'temp':
+          synths.synth3.triggerAttackRelease(getCMajorNote(value), "8n");
+          pulseCreature(3);
+          break;
+        case 'growth':
+          synths.synth4.triggerAttackRelease(getCMajorNote(value), "8n");
+          pulseCreature(4);
+          break;
+        case 'mirrage':
+          synths.synth5.triggerAttackRelease(getCMajorNote(value), "8n");
+          pulseCreature(5);
+          break;
+        case 'flower':
+          synths.synth6.triggerAttackRelease(getCMajorNote(value), "8n");
+          pulseCreature(6);
+          break;
+        case 'total':
+          synths.synth7.triggerAttackRelease(getCMajorNote(value), "8n");
+          pulseCreature(7);
+          break;
+        default:
+          // Default to synth1 if state not recognized
+          synths.synth1.triggerAttackRelease(getCMajorNote(value), "8n");
+          pulseCreature(1);
+      }
+    }
   };
 });

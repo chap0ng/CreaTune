@@ -1,5 +1,5 @@
 // state-manager.js
-// Simplified state management for CreaTune application
+// Core state management for CreaTune application
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log('StateManager initializing...');
@@ -65,9 +65,52 @@ document.addEventListener('DOMContentLoaded', () => {
           console.log(`ESP32 disconnected: ${data.name}`);
         }
         
-        // Handle sensor data
+        // Handle sensor data - crucial for synth triggering
         if (data.type === 'sensor_data') {
-          console.log(`Received sensor data from ${data.name}: ${data.value}`);
+          console.log(`Sensor data from ${data.name}: ${data.value}`);
+          
+          // Directly update synth parameters based on sensor data
+          if (window.SynthEngine && data.value >= 0.4 && data.value <= 0.8) {
+            // Determine which synth to trigger based on sensor
+            let synthNum = 0;
+            if (data.name === 'ESP32-1' || data.sensor === 'soil') {
+              synthNum = 1;
+            } else if (data.name === 'ESP32-2' || data.sensor === 'light') {
+              synthNum = 2;
+            } else if (data.name === 'ESP32-3' || data.sensor === 'temperature') {
+              synthNum = 3;
+            }
+            
+            // Only trigger if we identified the synth
+            if (synthNum > 0) {
+              // Try to use triggerPatternNote if available
+              if (window.SynthEngine.triggerPatternNote) {
+                window.SynthEngine.triggerPatternNote(data.value);
+              } else {
+                // Direct method to trigger synth
+                const synthMethod = `synth${synthNum}`;
+                if (window.SynthEngine[synthMethod]) {
+                  window.SynthEngine[synthMethod].triggerAttackRelease("C4", "8n");
+                }
+              }
+            }
+          }
+          
+          // Pulse the creature for visual feedback
+          if (window.CreatureManager) {
+            let creatureNum = 0;
+            if (data.name === 'ESP32-1' || data.sensor === 'soil') {
+              creatureNum = 1;
+            } else if (data.name === 'ESP32-2' || data.sensor === 'light') {
+              creatureNum = 2;
+            } else if (data.name === 'ESP32-3' || data.sensor === 'temperature') {
+              creatureNum = 3;
+            }
+            
+            if (creatureNum > 0) {
+              window.CreatureManager.pulseCreature(`creature${creatureNum}`);
+            }
+          }
         }
       } catch (err) {
         console.error('Error processing websocket message:', err);
