@@ -34,13 +34,19 @@
             <div class="instructions"></div>
         </div>
     </div>
+
+    <!-- Random State Button -->
+    <button id="randomStateButton" style="position: fixed; bottom: 10px; right: 10px; z-index: 1000;">Random State</button>
+
+    <!-- Test Audio Button -->
+    <button id="testAudioButton" style="position: fixed; bottom: 50px; right: 10px; z-index: 1000;">Test Audio</button>
    
     <!-- Core modules (load first) -->
     <script src="js/core/config.js"></script>
     <script src="js/utils/event-bus.js"></script>
+    <script src="js/core/websocket-client.js"></script>
 
     <!-- Audio modules -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
     <script src="js/audio/sound-patterns.js"></script>
     <script src="js/audio/synth-engine.js"></script>
 
@@ -50,14 +56,15 @@
 
     <!-- UI modules -->
     <script src="js/ui/ui-manager.js"></script>
+    <script src="js/ui/status-indicators.js"></script>
     <script src="js/frame-anim.js"></script>
     <script src="js/drag-container.js"></script>
 
     <!-- State management (load last) -->
     <script src="js/state/state-manager.js"></script>
+    <script src="js/state/esp-manager.js"></script>
     <script src="js/state/bpm-manager.js"></script>
     <script src="js/state/recording-manager.js"></script>
-    <script src="js/state/esp-manager.js"></script>
 
     <!-- Main app -->
     <script src="js/app.js"></script>
@@ -77,32 +84,47 @@
             });
         }
         
-        // Simple initialization for app startup
+        // Initialize manual buttons
         document.addEventListener('DOMContentLoaded', () => {
-            console.log('CreaTune Application Initializing...');
+            // Random state button
+            const randomStateButton = document.getElementById('randomStateButton');
+            if (randomStateButton) {
+                randomStateButton.addEventListener('click', () => {
+                    if (window.ESP32Simulator && window.ESP32Simulator.activateRandomState) {
+                        window.ESP32Simulator.activateRandomState();
+                    } else {
+                        // Fallback if simulator not available
+                        console.log('Random state button clicked, but simulator not available');
+                    }
+                });
+            }
             
-            // Check if all required components are loaded
-            const requiredComponents = [
-                'EventBus', 'CreaTuneConfig', 'StateManager', 
-                'ESPManager', 'UIManager', 'SynthEngine'
-            ];
-            
-            const missingComponents = requiredComponents.filter(
-                component => !window[component]
-            );
-            
-            if (missingComponents.length > 0) {
-                console.error('Missing components:', missingComponents);
-            } else {
-                console.log('All components loaded successfully');
-                
-                // Send initialization event
-                EventBus.emit('appInitialized');
-                
-                // Show welcome message
-                if (window.UIManager) {
-                    window.UIManager.showInfoMessage('CreaTune initialized. Connect ESP32 devices or use the Random State button to begin.', 4000);
-                }
+            // Test audio button
+            const testAudioButton = document.getElementById('testAudioButton');
+            if (testAudioButton) {
+                testAudioButton.addEventListener('click', async () => {
+                    try {
+                        // Start Tone.js context if needed
+                        if (Tone.context.state !== 'running') {
+                            await Tone.start();
+                        }
+                        
+                        // Initialize SynthEngine if needed
+                        if (window.SynthEngine && !window.SynthEngine.isInitialized()) {
+                            await window.SynthEngine.init();
+                        }
+                        
+                        // Play test sound
+                        if (window.SynthEngine && window.SynthEngine.triggerSynthFromValue) {
+                            window.SynthEngine.triggerSynthFromValue(0.6);
+                            console.log('Test sound triggered');
+                        } else {
+                            console.error("SynthEngine not available or missing triggerSynthFromValue method");
+                        }
+                    } catch (err) {
+                        console.error("Error playing test sound:", err);
+                    }
+                });
             }
         });
     </script>
