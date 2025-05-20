@@ -27,6 +27,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     console.log('Start recording');
     
+    // IMPORTANT: Update ESP32 activity time to prevent timeout during recording
+    if (window.lastESP32ActivityTime) {
+      window.lastESP32ActivityTime = Date.now();
+    }
+    
     // Update UI
     if (container) {
       container.classList.add('recording');
@@ -65,6 +70,16 @@ document.addEventListener('DOMContentLoaded', () => {
         stopRecording();
       }
     }, RECORDING.DURATION);
+    
+    // Keep ESP32 active during recording
+    const refreshEsp32 = setInterval(() => {
+      if (window.lastESP32ActivityTime) {
+        window.lastESP32ActivityTime = Date.now();
+      }
+    }, 5000);
+    
+    // Store the interval to clear it later
+    window._recordingEsp32Interval = refreshEsp32;
   }
   
   // Stop recording
@@ -72,6 +87,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!isRecording) return;
     
     console.log('Stop recording');
+    
+    // IMPORTANT: Update ESP32 activity time
+    if (window.lastESP32ActivityTime) {
+      window.lastESP32ActivityTime = Date.now();
+    }
+    
+    // Clear the ESP32 refresh interval
+    if (window._recordingEsp32Interval) {
+      clearInterval(window._recordingEsp32Interval);
+      window._recordingEsp32Interval = null;
+    }
     
     // Update UI
     if (container) {
@@ -152,6 +178,11 @@ document.addEventListener('DOMContentLoaded', () => {
               if (!isRecording) {
                 clearInterval(analyzeInterval);
                 return;
+              }
+              
+              // Keep ESP32 connection active during analysis
+              if (window.lastESP32ActivityTime) {
+                window.lastESP32ActivityTime = Date.now();
               }
               
               recordingAnalyser.getByteFrequencyData(dataArray);
@@ -261,8 +292,19 @@ document.addEventListener('DOMContentLoaded', () => {
       analyzeInterval = null;
     }
     
+    // Clear ESP32 refresh interval
+    if (window._recordingEsp32Interval) {
+      clearInterval(window._recordingEsp32Interval);
+      window._recordingEsp32Interval = null;
+    }
+    
     // Notify listeners
     EventBus.emit('recordingStopped', { hasPattern: false });
+    
+    // IMPORTANT: Update ESP32 activity time to prevent timeout after recording
+    if (window.lastESP32ActivityTime) {
+      window.lastESP32ActivityTime = Date.now();
+    }
   }
   
   // Stop audio recording
@@ -305,6 +347,11 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       // No pattern recorded, or empty pattern
       recordedPattern = null;
+    }
+    
+    // IMPORTANT: Update ESP32 activity time after processing
+    if (window.lastESP32ActivityTime) {
+      window.lastESP32ActivityTime = Date.now();
     }
   }
   
@@ -350,6 +397,11 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
+    // IMPORTANT: Update ESP32 activity time at the start of playback
+    if (window.lastESP32ActivityTime) {
+      window.lastESP32ActivityTime = Date.now();
+    }
+    
     // Enable synths but use pattern for triggering
     if (window.SynthEngine) {
       window.SynthEngine.silenceSynths(false);
@@ -365,6 +417,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     playbackInterval = setInterval(() => {
       const currentTime = Date.now() - patternStartTime;
+      
+      // IMPORTANT: Periodically refresh ESP32 activity time during playback
+      if (window.lastESP32ActivityTime && currentTime % 3000 < 50) {
+        window.lastESP32ActivityTime = Date.now();
+      }
       
       // Check if we need to restart the pattern
       if (currentTime > patternDuration) {
@@ -399,6 +456,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     isPlayingRecordedPattern = false;
+    
+    // IMPORTANT: Update ESP32 activity time when stopping playback
+    if (window.lastESP32ActivityTime) {
+      window.lastESP32ActivityTime = Date.now();
+    }
   }
   
   // Trigger synth based on pattern pulse
@@ -425,6 +487,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Clean up resources
     stopPlayingRecordedPattern();
+    
+    // Clear ESP32 refresh interval
+    if (window._recordingEsp32Interval) {
+      clearInterval(window._recordingEsp32Interval);
+    }
   });
   
   // Initialize - subscribe to state changes

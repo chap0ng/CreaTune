@@ -1,5 +1,5 @@
-// state-manager-fix.js
-// Core state management for CreaTune application
+// state-manager.js
+// Simplified state management for CreaTune application
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log('StateManager initializing...');
@@ -31,67 +31,82 @@ document.addEventListener('DOMContentLoaded', () => {
   const container = document.getElementById('spriteContainer');
   const sprite = document.getElementById('sprite');
 
-  // Initialize the state manager
-  function initialize() {
-    console.log('Initializing state manager...');
+  // Handle socket events from the server
+  function setupWebsocketEvents() {
+    const socket = new WebSocket(`ws://${window.location.host}`);
     
-    // Set initial state
-    updateState();
-    
-    // Listen for ESP events from WebSocket
-    document.addEventListener('espEvent', (e) => {
-      console.log('Received ESP event:', e.detail);
-      // Delegate to ESP Manager
-      if (window.ESPManager) {
-        window.ESPManager.handleWebSocketMessage(e.detail);
-      }
-    });
-
-    // Subscribe to ESP status changes
-    if (window.EventBus) {
-      window.EventBus.subscribe('espStatusChanged', (status) => {
-        console.log('ESP status changed:', status);
-        updateState();
-      });
+    socket.onopen = () => {
+      console.log('Connected to server');
       
-      // Listen for app initialization
-      window.EventBus.subscribe('appInitialized', () => {
-        console.log('App initialized, updating state');
-        setTimeout(updateState, 300);
-      });
-    } else {
-      console.error('EventBus not available for StateManager');
-    }
+      // Identify as web client
+      socket.send(JSON.stringify({
+        type: 'hello',
+        client: 'WebUI'
+      }));
+    };
     
-    console.log('State Manager initialized');
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        // Handle state update
+        if (data.type === 'state_update') {
+          console.log('Received state update:', data.state);
+          updateStateFromServer(data.state);
+        }
+        
+        // Handle ESP32 connection status
+        if (data.type === 'esp_connected') {
+          console.log(`ESP32 connected: ${data.name}`);
+        }
+        
+        // Handle ESP32 disconnection
+        if (data.type === 'esp_disconnected') {
+          console.log(`ESP32 disconnected: ${data.name}`);
+        }
+        
+        // Handle sensor data
+        if (data.type === 'sensor_data') {
+          console.log(`Received sensor data from ${data.name}: ${data.value}`);
+        }
+      } catch (err) {
+        console.error('Error processing websocket message:', err);
+      }
+    };
+    
+    socket.onclose = () => {
+      console.log('Disconnected from server');
+      
+      // Retry connection after 5 seconds
+      setTimeout(setupWebsocketEvents, 5000);
+    };
+    
+    socket.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+    
+    // Store socket for other components
+    window.serverSocket = socket;
   }
   
-  // Update the application state based on ESP32 connections
-  function updateState() {
-    if (!window.ESPManager) {
-      console.warn('ESPManager not available, cannot update state');
-      return;
-    }
-    
-    const espStatus = window.ESPManager.getESPStatus();
-    console.log('Current ESP status:', espStatus);
-    
+  // Update state based on server data
+  function updateStateFromServer(serverState) {
     // Determine state based on connected ESP32 devices
     let newState;
     
-    if (espStatus.esp1.connected && espStatus.esp2.connected && espStatus.esp3.connected) {
+    if (serverState.esp1.connected && serverState.esp2.connected && serverState.esp3.connected) {
       newState = STATES.TOTAL;
-    } else if (espStatus.esp2.connected && espStatus.esp3.connected) {
+    } else if (serverState.esp2.connected && serverState.esp3.connected) {
       newState = STATES.FLOWER;
-    } else if (espStatus.esp1.connected && espStatus.esp3.connected) {
+    } else if (serverState.esp1.connected && serverState.esp3.connected) {
       newState = STATES.MIRRAGE;
-    } else if (espStatus.esp1.connected && espStatus.esp2.connected) {
+    } else if (serverState.esp1.connected && serverState.esp2.connected) {
       newState = STATES.GROWTH;
-    } else if (espStatus.esp3.connected) {
+    } else if (serverState.esp3.connected) {
       newState = STATES.TEMP;
-    } else if (espStatus.esp2.connected) {
+    } else if (serverState.esp2.connected) {
       newState = STATES.LIGHT;
-    } else if (espStatus.esp1.connected) {
+    } else if (serverState.esp1.connected) {
       newState = STATES.SOIL;
     } else {
       newState = STATES.IDLE;
@@ -103,10 +118,10 @@ document.addEventListener('DOMContentLoaded', () => {
       currentState = newState;
       
       // Update UI elements based on the new state
-      updateUIForState(currentState, espStatus);
+      updateUIForState(currentState, serverState);
     } else {
-      // Update UI elements anyway in case ESP validities changed
-      updateUIForState(currentState, espStatus);
+      // Update UI elements anyway in case validities changed
+      updateUIForState(currentState, serverState);
     }
   }
   
@@ -145,16 +160,6 @@ document.addEventListener('DOMContentLoaded', () => {
         espStatus: espStatus
       });
     }
-    
-    // Also keep the legacy custom event for backward compatibility
-    const event = new CustomEvent('stateChange', { 
-      detail: { 
-        state: currentState, 
-        subState: currentSubState,
-        espStatus: espStatus
-      } 
-    });
-    document.dispatchEvent(event);
   }
   
   // Change the current sub-state
@@ -212,20 +217,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       
-      // Check if any ESP32 is connected and valid
-      if (!window.ESPManager) {
-        console.warn('ESPManager not available, cannot check ESP status');
-        return;
-      }
-      
-      const espStatus = window.ESPManager.getESPStatus();
-      const anySynthActive = Object.values(espStatus).some(esp => esp.connected && esp.valid);
-      
-      if (!anySynthActive) {
-        console.log('No valid ESP32 devices connected, ignoring click');
-        return;
-      }
-      
       // Toggle record state
       if (currentSubState === SUB_STATES.RECORD) {
         // Stop recording
@@ -249,47 +240,20 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Container interactions setup complete');
   }
   
-  // Manually trigger state update
-  function forceStateUpdate() {
-    console.log('Forcing state update');
-    if (window.ESPManager) {
-      const espStatus = window.ESPManager.getESPStatus();
-      updateUIForState(currentState, espStatus);
-    }
+  // Initialize
+  function initialize() {
+    setupWebsocketEvents();
+    setupContainerInteractions();
+    console.log('State manager initialized');
   }
   
-  // Start initialization
+  // Initialize when DOM is ready
   initialize();
-  setupContainerInteractions();
-  
-  // Add cleanup for page unload
-  window.addEventListener('beforeunload', function() {
-    console.log('Cleaning up state manager');
-    
-    // Clean up event listeners if possible
-    const espEventListeners = document.listeners?.filter(l => l.type === 'espEvent');
-    if (espEventListeners) {
-      espEventListeners.forEach(listener => {
-        document.removeEventListener('espEvent', listener.callback);
-      });
-    }
-    
-    // Clear event bus
-    if (window.EventBus) {
-      window.EventBus.clear();
-    }
-    
-    console.log('State manager cleanup completed');
-  });
   
   // Expose API
   window.StateManager = {
     getState: () => currentState,
     getSubState: () => currentSubState,
-    setSubState: setSubState,
-    updateState: updateState,
-    forceStateUpdate: forceStateUpdate
+    setSubState: setSubState
   };
-  
-  console.log('StateManager API exposed to window');
 });
