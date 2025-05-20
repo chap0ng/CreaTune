@@ -13,7 +13,7 @@
 // Sensor configuration
 #define SENSOR_NAME "MoistureSensor"
 #define SENSOR_PIN A1                   // Connect moisture sensor to A1 pin
-#define READING_INTERVAL 5000           // Send data every 5 seconds
+#define READING_INTERVAL 2000           // Send data every 2 seconds (faster than server timeout)
 
 // LED pin
 #define STATUS_LED 15                   // Built-in LED pin

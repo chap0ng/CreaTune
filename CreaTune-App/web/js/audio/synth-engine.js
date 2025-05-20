@@ -411,6 +411,15 @@ document.addEventListener('DOMContentLoaded', () => {
         break;
     }
     
+    // If no buttons are active after update, silence the synths
+    if (!state.button1 && !state.button2 && !state.button3) {
+      console.log("No active ESP32 connections, silencing synths");
+      silenceSynths(true);
+    } else if (audioStarted) {
+      // Reset synths if any were silenced but now should be active
+      silenceSynths(false);
+    }
+    
     // Auto-start audio if any ESP32 is valid and connected
     if (!audioStarted && (isValid.soil || isValid.light || isValid.temp)) {
       console.log("Auto-starting audio due to ESP32 connection");

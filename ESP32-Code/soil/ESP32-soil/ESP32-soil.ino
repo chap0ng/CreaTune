@@ -102,6 +102,28 @@ void loop() {
         delay(500);
         setupWebSocket();
       }
+      // Send heartbeat if it's been too long since last data
+      else if (currentMillis - lastSendTime >= 4000) {
+        // Send a heartbeat to keep connection alive
+        StaticJsonDocument<100> doc;
+        doc["type"] = "heartbeat";
+        doc["client"] = SENSOR_NAME;
+        doc["timestamp"] = currentMillis;
+        
+        String heartbeatMsg;
+        serializeJson(doc, heartbeatMsg);
+        webSocket.sendTXT(heartbeatMsg);
+        
+        Serial.println("Sending heartbeat to prevent timeout");
+        
+        // Update send time
+        lastSendTime = currentMillis;
+        
+        // Quick LED blink for heartbeat
+        digitalWrite(STATUS_LED, HIGH);
+        delay(50);
+        digitalWrite(STATUS_LED, LOW);
+      }
     }
     
     // Send sensor data at the specified interval
@@ -242,6 +264,10 @@ void sendSensorData() {
 }
 
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
+  // Declare variables outside the switch
+  StaticJsonDocument<100> doc;
+  String helloMsg;
+  
   switch (type) {
     case WStype_DISCONNECTED:
       Serial.println("WebSocket Disconnected (；一_一)");
@@ -266,11 +292,9 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
       digitalWrite(STATUS_LED, LOW);
       
       // Send hello message
-      StaticJsonDocument<100> doc;
       doc["type"] = "hello";
       doc["client"] = SENSOR_NAME;
       
-      String helloMsg;
       serializeJson(doc, helloMsg);
       webSocket.sendTXT(helloMsg);
       

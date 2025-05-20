@@ -189,6 +189,15 @@ document.addEventListener('DOMContentLoaded', () => {
     
     console.log(`ESP32 [${espId}] disconnected`);
     
+    // Force immediate creature and synth updates
+    if (window.CreatureManager) {
+      window.CreatureManager.stopAnimation(`creature${espId.charAt(3)}`);
+    }
+    
+    if (window.SynthEngine) {
+      window.SynthEngine.setButtonState(parseInt(espId.charAt(3)), false);
+    }
+    
     // Emit event about the disconnection
     EventBus.emit('espDisconnected', {
       espId: espId,
