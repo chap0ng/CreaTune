@@ -26,17 +26,20 @@ const CreaTuneConfig = {
     ESP1: {
       name: 'ESP32-1',
       sensor: 'soil',
-      description: 'DFrobot Soil Moisture Sensor'
+      description: 'DFrobot Soil Moisture Sensor',
+      validRange: { min: 0.4, max: 0.8 }
     },
     ESP2: {
       name: 'ESP32-2',
       sensor: 'light',
-      description: 'DFrobot Light Sensor'
+      description: 'DFrobot Light Sensor',
+      validRange: { min: 0.4, max: 0.8 }
     },
     ESP3: {
       name: 'ESP32-3',
       sensor: 'temperature',
-      description: 'Basic Temperature Sensor'
+      description: 'Basic Temperature Sensor',
+      validRange: { min: 0.4, max: 0.8 }
     }
   },
 
@@ -73,24 +76,27 @@ const CreaTuneConfig = {
     FRAME_RATE: 12 // Frames per second
   },
 
-  // Get state background URL
+  // Get state background URL - using direct state references to avoid 'this' binding issues
   getStateBackgroundUrl: function(state) {
+    // Use direct references to STATES instead of this.STATES
+    const STATES = CreaTuneConfig.STATES;
+    
     switch(state) {
-      case this.STATES.IDLE:
+      case STATES.IDLE:
         return 'assets/frame-sprite.png'; // Default background
-      case this.STATES.SOIL:
+      case STATES.SOIL:
         return 'images/soil.png';
-      case this.STATES.LIGHT:
+      case STATES.LIGHT:
         return 'images/light.png';
-      case this.STATES.TEMP:
+      case STATES.TEMP:
         return 'images/temp.png';
-      case this.STATES.GROWTH:
+      case STATES.GROWTH:
         return 'images/growth.png';
-      case this.STATES.MIRRAGE:
+      case STATES.MIRRAGE:
         return 'images/mirrage.png';
-      case this.STATES.FLOWER:
+      case STATES.FLOWER:
         return 'images/flower.png';
-      case this.STATES.TOTAL:
+      case STATES.TOTAL:
         return 'images/total.png';
       default:
         return 'assets/frame-sprite.png';
@@ -103,3 +109,6 @@ Object.freeze(CreaTuneConfig);
 
 // Export for use in modules
 window.CreaTuneConfig = CreaTuneConfig;
+
+// Log configuration loaded
+console.log('CreaTune configuration loaded');

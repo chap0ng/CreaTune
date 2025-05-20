@@ -1,32 +1,37 @@
-Project/
-├── README.md                # Project documentation and setup instructions
-├── package.json            # Project metadata and dependencies
-├── websocket-server.js      # WebSocket server for real-time communication
-    web/
-    ├── index.html                # Main HTML file 
-    ├── service-worker.js         # Service worker for caching and offline support
-    ├── websocket-manager.js      # WebSocket manager for handling connections
+project/
+├── package.json
+├── websocket-server.js
+├── web/
+    ├── index.html
+    ├── manifest.json
+    ├── service-worker.js
     ├── css/
-    │   ├── styles.css            # Original styles for the frame
-    │   └── simplified-styles.css # Combined styles for synth and creatures
+    │   ├── combined-styles.css
+    │   ├── state-styles.css
+    │   └── simplified-styles.css
     ├── js/
-    │   ├── frame-anim.js         # Original frame animation
-    │   ├── drag-container.js     # Original drag behavior
-    │   ├── synth-logic.js        # Tone.js synth engine
-    │   └── integrated-creatures.js # Combined creature and UI management
+    │   ├── app.js                           # Main application init
+    │   ├── core/
+    │   │   ├── config.js                    # Centralized configuration
+    │   │   └── websocket-client.js          # WebSocket communication
+    │   ├── utils/
+    │   │   └── event-bus.js                 # Event system
+    │   ├── state/
+    │   │   ├── state-manager.js             # Core state machine
+    │   │   ├── esp-manager.js               # ESP32 device handling
+    │   │   ├── recording-manager.js         # Recording functionality
+    │   │   └── bpm-manager.js               # BPM control
+    │   ├── ui/
+    │   │   ├── ui-manager.js                # UI elements creation
+    │   │   └── status-indicators.js         # Status displays
+    │   ├── audio/
+    │   │   ├── synth-engine.js              # Main Tone.js integration
+    │   │   └── sound-patterns.js            # Sound pattern definitions
+    │   ├── visual/
+    │   │   ├── creature-manager.js          # Creature animations
+    │   │   └── background-manager.js        # Background handling
+    │   ├── frame-anim.js                    # Legacy frame animation
+    │   └── drag-container.js                # Legacy drag behavior
     ├── images/
-    │   ├── creature1.png         # Creature sprite sheets (920×920 px, 3 frames)
-    │   ├── creature2.png
-    │   ├── creature3.png
-    │   ├── creature4.png
-    │   ├── creature5.png
-    │   ├── creature6.png
-    │   └── creature7.png
-    ├── sounds/
     ├── icons/
-    │   ├── icon-192x192.png      
-    │   ├── icon-512x512.png   
     └── assets/
-        ├── frame-sprite.png      # Original frame assets
-        ├── tab-top.png
-        └── top-bar-image.png

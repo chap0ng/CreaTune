@@ -1,139 +1,88 @@
-// app.js
-// Main application initialization for CreaTune
+// app.js - Simplified version for direct script loading
+// Only contains event initialization and application-wide utilities
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log('CreaTune Application Initializing...');
   
-  // Module loading order and dependencies
-  const moduleLoadOrder = [
-    // Core modules
-    'js/core/config.js',
-    'js/utils/event-bus.js',
-    
-    // Base modules
-    'js/core/websocket-client.js',
-    'js/state/esp-manager.js',
-    'js/audio/sound-patterns.js',
-    
-    // UI and visual modules
-    'js/ui/ui-manager.js',
-    'js/visual/background-manager.js',
-    'js/visual/creature-manager.js',
-    
-    // Audio modules
-    'js/audio/synth-engine.js',
-    
-    // State management
-    'js/state/bpm-manager.js',
-    'js/state/recording-manager.js',
-    'js/state/state-manager.js'
-  ];
+  // Initialize ESP32 timeout check
+  let lastESP32ActivityTime = Date.now();
   
-  // Track loaded modules
-  const loadedModules = new Set();
-  let modulesLoading = 0;
-  
-  // Load a script and return a promise
-  function loadScript(src) {
-    return new Promise((resolve, reject) => {
-      // Skip if already loaded
-      if (loadedModules.has(src)) {
-        resolve();
-        return;
+  function setupESP32TimeoutCheck() {
+    // Check every 10 seconds if ESP32 is still active
+    return setInterval(() => {
+      if (!window.ESPManager) return;
+      
+      const espStatus = window.ESPManager.getESPStatus();
+      const anyConnected = Object.values(espStatus).some(esp => esp.connected);
+      
+      // If ESP32 was connected but no data for 15 seconds
+      if (anyConnected && (Date.now() - lastESP32ActivityTime > 15000)) {
+        // Reset all ESP statuses
+        Object.keys(espStatus).forEach(key => {
+          if (espStatus[key].connected) {
+            console.log(`ESP32 ${key} timeout - no data received for 15s`);
+            espStatus[key].connected = false;
+            espStatus[key].valid = false;
+            espStatus[key].value = null;
+          }
+        });
+        
+        // Notify state change
+        EventBus.emit('espStatusChanged', { ...espStatus });
       }
-      
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-      
-      script.onload = () => {
-        loadedModules.add(src);
-        console.log(`Loaded: ${src}`);
-        resolve();
-      };
-      
-      script.onerror = (error) => {
-        console.error(`Failed to load: ${src}`, error);
-        reject(error);
-      };
-      
-      document.head.appendChild(script);
-    });
+    }, 10000);
   }
   
-  // Load modules in sequence
-  async function loadModules() {
-    try {
-      // Load original scripts first to maintain backward compatibility
-      await loadLegacyScripts();
-      
-      // Then load new modular scripts
-      for (const modulePath of moduleLoadOrder) {
-        modulesLoading++;
-        await loadScript(modulePath);
-        modulesLoading--;
-      }
-      
-      initializeApp();
-    } catch (error) {
-      console.error('Error loading modules:', error);
-      showErrorMessage('Failed to load CreaTune modules. Please refresh the page.');
+  // Start ESP32 timeout check
+  const ESP32TimeoutCheck = setupESP32TimeoutCheck();
+  
+  // Listen for ESP32 activity to reset timeout
+  EventBus.subscribe('espStatusChanged', () => {
+    lastESP32ActivityTime = Date.now();
+  });
+  
+  // Set up global error handler for better debugging
+  window.addEventListener('error', (event) => {
+    console.error('Global error:', event.error);
+    
+    // Show error to user if UIManager is available
+    if (window.UIManager) {
+      window.UIManager.showErrorMessage(`Error: ${event.error.message}`);
     }
-  }
+  });
   
-  // Load legacy scripts if needed for backward compatibility
-  async function loadLegacyScripts() {
-    // Nothing to do here - legacy scripts are loaded directly in index.html
-    // This function is a placeholder in case we need to load legacy scripts dynamically
-    return Promise.resolve();
-  }
-  
-  // Display error message
-  function showErrorMessage(message) {
-    const errorEl = document.createElement('div');
-    errorEl.style.position = 'fixed';
-    errorEl.style.top = '50%';
-    errorEl.style.left = '50%';
-    errorEl.style.transform = 'translate(-50%, -50%)';
-    errorEl.style.padding = '20px';
-    errorEl.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
-    errorEl.style.color = 'white';
-    errorEl.style.fontFamily = 'VT323, monospace';
-    errorEl.style.zIndex = '9999';
-    errorEl.style.borderRadius = '10px';
-    errorEl.style.textAlign = 'center';
-    errorEl.textContent = message;
-    
-    document.body.appendChild(errorEl);
-  }
-  
-  // Initialize the application when all modules are loaded
-  function initializeApp() {
-    if (modulesLoading > 0) {
-      // Wait for modules to finish loading
-      setTimeout(initializeApp, 100);
-      return;
-    }
-    
-    console.log('All modules loaded, initializing application...');
-    
-    // Make sure essential modules are available
-    if (!window.EventBus) {
-      console.error('EventBus module not loaded!');
-      return;
-    }
-    
-    // Send initialization event
-    EventBus.emit('appInitialized');
-    
+  // Show ready message when everything is initialized
+  EventBus.subscribe('appInitialized', () => {
     console.log('CreaTune Application Initialized');
     
-    // Show welcome message when app is ready
+    // Show welcome message
     if (window.UIManager) {
-      window.UIManager.showInfoMessage('CreaTune initialized. Connect ESP32 devices or use the Random State button to begin.', 4000);
+      window.UIManager.showInfoMessage('CreaTune ready. Connect ESP32 devices or use Random State button.', 4000);
     }
-  }
+  });
   
-  // Start loading modules
-  loadModules();
+  // Send initialization event after a short delay to ensure all components are ready
+  setTimeout(() => {
+    EventBus.emit('appInitialized');
+  }, 500);
+  
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    // Clear ESP32 timeout check
+    if (ESP32TimeoutCheck) {
+      clearInterval(ESP32TimeoutCheck);
+    }
+    
+    // Stop any recording in progress
+    if (window.RecordingManager && window.RecordingManager.isRecording()) {
+      window.RecordingManager.stopRecording();
+    }
+    
+    // Clean up Tone.js resources if possible
+    if (window.Tone && window.Tone.context) {
+      window.Tone.context.close().catch(err => console.error('Error closing Tone context:', err));
+    }
+    
+    console.log('Application cleanup complete');
+  });
 });

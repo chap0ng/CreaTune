@@ -3,7 +3,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   // Import configuration
-  const { AUDIO } = window.CreaTuneConfig;
+  const { AUDIO, STATES } = window.CreaTuneConfig;
   
   // Audio engine state
   let audioStarted = false;
@@ -78,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
       decay: 4,
       wet: 0.5
     }).toDestination();
+    reverb.generate();
     
     Object.values(synths).forEach(synth => {
       synth.connect(reverb);
@@ -86,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Set up sequences based on the current state
   function setupSequences() {
-    // Get predefined patterns from SoundPatterns if available
+    // Get patterns from SoundPatterns
     const soilPatterns = window.SoundPatterns ? window.SoundPatterns.getSoilPatterns() : getDefaultSoilPatterns();
     const lightPatterns = window.SoundPatterns ? window.SoundPatterns.getLightPatterns() : getDefaultLightPatterns();
     const tempPatterns = window.SoundPatterns ? window.SoundPatterns.getTempPatterns() : getDefaultTempPatterns();
@@ -108,13 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return basePattern;
       }
       
-      // Simple modification: skip some notes based on sensor value
-      return basePattern.map(note => {
-        if (note !== null && Math.random() < sensorValue * 0.3) {
-          return null; // Skip note with probability proportional to sensor value
-        }
-        return note;
-      });
+      return window.SoundPatterns.modifyPatternWithSensorValue(basePattern, sensorValue);
     }
     
     // Main sequence loop
@@ -148,10 +143,9 @@ document.addEventListener('DOMContentLoaded', () => {
       } 
       else if (state.button1 && state.button2) {
         // Growth state - soil + light
-        const patternIndex = Math.floor(Math.random() * soilPatterns.length);
-        const soilPattern = getModifiedPattern(soilPatterns[patternIndex], sensorValues.soil);
-        const noteIndex = Math.floor(Math.random() * soilPattern.length);
-        const note = soilPattern[noteIndex];
+        const pattern = window.SoundPatterns.getGrowthPattern(sensorValues.soil, sensorValues.light);
+        const noteIndex = Math.floor(Math.random() * pattern.length);
+        const note = pattern[noteIndex];
         
         if (note !== null) {
           synths.synth4.triggerAttackRelease(note, noteDuration, time);
@@ -160,22 +154,20 @@ document.addEventListener('DOMContentLoaded', () => {
       } 
       else if (state.button1 && state.button3) {
         // Mirrage state - soil + temp
-        const patternIndex = Math.floor(Math.random() * tempPatterns.length);
-        const tempPattern = getModifiedPattern(tempPatterns[patternIndex], sensorValues.temp);
-        const randomIndex = Math.floor(Math.random() * chords.length);
-        const chord = chords[randomIndex];
+        const pattern = window.SoundPatterns.getMirragePattern(sensorValues.soil, sensorValues.temp);
+        const randomIndex = Math.floor(Math.random() * pattern.length);
+        const note = pattern[randomIndex];
         
-        chord.forEach(note => {
+        if (note !== null) {
           synths.synth5.triggerAttackRelease(note, noteDuration, time);
-        });
-        pulseCreature(5);
+          pulseCreature(5);
+        }
       } 
       else if (state.button2 && state.button3) {
         // Flower state - light + temp
-        const patternIndex = Math.floor(Math.random() * lightPatterns.length);
-        const lightPattern = getModifiedPattern(lightPatterns[patternIndex], sensorValues.light);
-        const noteIndex = Math.floor(Math.random() * lightPattern.length);
-        const note = lightPattern[noteIndex];
+        const pattern = window.SoundPatterns.getFlowerPattern(sensorValues.light, sensorValues.temp);
+        const noteIndex = Math.floor(Math.random() * pattern.length);
+        const note = pattern[noteIndex];
         
         if (note !== null) {
           synths.synth6.triggerAttackRelease(note, noteDuration, time);
@@ -226,11 +218,8 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Pulse a creature visual effect
   function pulseCreature(creatureNumber) {
-    // Try both old and new APIs
     if (window.CreatureManager && window.CreatureManager.pulseCreature) {
       window.CreatureManager.pulseCreature(`creature${creatureNumber}`);
-    } else if (window.synthUI && window.synthUI.pulseShape) {
-      window.synthUI.pulseShape(`shape${creatureNumber}`);
     }
   }
   
@@ -267,107 +256,36 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
   }
   
-  // Create simple record and repeat functionality
+  // Set up record and repeat functionality
   function setupRecordRepeat() {
-    let isRecording = false;
-    let recordedNotes = [];
-    let recordStartTime = 0;
+    let recordedPattern = null;
     let playbackLoop = null;
     
     // Listen for recording state changes
     EventBus.subscribe('recordingStarted', () => {
-      startRecording();
+      // Stop synths during recording
+      silenceSynths(true);
     });
     
-    EventBus.subscribe('recordingStopped', () => {
-      stopRecording();
-    });
-    
-    function startRecording() {
-      console.log('SynthEngine: Starting to record notes');
-      isRecording = true;
-      recordedNotes = [];
-      recordStartTime = Tone.now();
-    }
-    
-    function stopRecording() {
-      if (!isRecording) return;
+    EventBus.subscribe('recordingStopped', (data) => {
+      // Resume synths after recording
+      silenceSynths(false);
       
-      console.log('SynthEngine: Stopping recording, notes:', recordedNotes);
-      isRecording = false;
-      
-      // If we recorded some notes, set up playback
-      if (recordedNotes.length > 0) {
-        setupPlayback();
-      }
-    }
-    
-    function setupPlayback() {
-      // Calculate total duration of the recording
-      const lastNote = recordedNotes[recordedNotes.length - 1];
-      const recordingDuration = lastNote.time + lastNote.duration - recordStartTime;
-      
-      // Clear any existing playback
-      if (playbackLoop) {
-        playbackLoop.dispose();
-      }
-      
-      // Create a new loop to play back the recorded notes
-      playbackLoop = new Tone.Loop((time) => {
-        // Adjust all note times relative to the current loop start time
-        recordedNotes.forEach((note) => {
-          const adjustedTime = time + (note.time - recordStartTime);
-          const synthToUse = synths[note.synth];
-          
-          if (synthToUse) {
-            synthToUse.triggerAttackRelease(
-              note.note, 
-              note.duration, 
-              adjustedTime
-            );
-            
-            // Also schedule the visual pulse
-            if (note.creature) {
-              Tone.Transport.schedule(() => {
-                pulseCreature(parseInt(note.creature.replace('creature', '')));
-              }, adjustedTime);
-            }
-          }
-        });
-      }, recordingDuration).start(0);
-    }
-    
-    // Hook into the synth trigger functions to record notes
-    function setupSynthRecordHooks() {
-      for (let i = 1; i <= 7; i++) {
-        const synthKey = `synth${i}`;
-        if (synths[synthKey]) {
-          const originalTrigger = synths[synthKey].triggerAttackRelease;
-          
-          synths[synthKey].triggerAttackRelease = function(note, duration, time) {
-            if (isRecording) {
-              recordedNotes.push({
-                synth: synthKey,
-                note: note,
-                duration: duration,
-                time: time || Tone.now(),
-                creature: `creature${i}`
-              });
-            }
-            return originalTrigger.apply(this, arguments);
-          };
+      // Get the recorded pattern from the recording manager
+      if (window.RecordingManager) {
+        const hasPattern = window.RecordingManager.hasRecordedPattern();
+        if (hasPattern) {
+          playRecordedPattern();
         }
       }
-    }
+    });
     
-    // Set up hooks after synths are created
-    setupSynthRecordHooks();
-  }
-  
-  // Test audio with a simple sound
-  function testAudio() {
-    const testSynth = new Tone.Synth().toDestination();
-    testSynth.triggerAttackRelease("C4", "8n");
+    function playRecordedPattern() {
+      if (!window.RecordingManager) return;
+      
+      // Notify SynthEngine to start playing recorded pattern
+      console.log('SynthEngine: Playing recorded pattern');
+    }
   }
   
   // Initialize audio engine
@@ -378,7 +296,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (statusCallback) statusCallback("Starting audio...");
       await Tone.start();
       
-      testAudio();
       createSynths();
       setupSequences();
       setupRecordRepeat();
@@ -418,40 +335,40 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Set button state based on current state and valid data
     switch (currentState) {
-      case 'soil':
+      case STATES.SOIL:
         if (isValid.soil) {
           state.button1 = true;
         }
         break;
-      case 'light':
+      case STATES.LIGHT:
         if (isValid.light) {
           state.button2 = true;
         }
         break;
-      case 'temp':
+      case STATES.TEMP:
         if (isValid.temp) {
           state.button3 = true;
         }
         break;
-      case 'growth':
+      case STATES.GROWTH:
         if (isValid.soil && isValid.light) {
           state.button1 = true;
           state.button2 = true;
         }
         break;
-      case 'mirrage':
+      case STATES.MIRRAGE:
         if (isValid.soil && isValid.temp) {
           state.button1 = true;
           state.button3 = true;
         }
         break;
-      case 'flower':
+      case STATES.FLOWER:
         if (isValid.light && isValid.temp) {
           state.button2 = true;
           state.button3 = true;
         }
         break;
-      case 'total':
+      case STATES.TOTAL:
         if (isValid.soil && isValid.light && isValid.temp) {
           state.button1 = true;
           state.button2 = true;
@@ -466,7 +383,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (silence) {
       // Stop all active synths immediately
       Object.values(synths).forEach(synth => {
-        // Check if it's a Tone.js instrument with releaseAll method
         if (synth && typeof synth.releaseAll === 'function') {
           synth.releaseAll();
         }

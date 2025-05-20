@@ -175,13 +175,6 @@ body {
   opacity: 0;
 }
 
-/* ======== STATE-SPECIFIC BACKGROUNDS ======== */
-/* Import state-specific styles */
-@import url('state-styles.css');
-
-/* ======== CREATURE STYLES ======== */
-/* Import creature styles */
-@import url('simplified-styles.css');
 
 /* ======== BPM CONTROL ======== */
 .bpm-slider-container {

@@ -14,6 +14,9 @@
     <link rel="stylesheet" href="css/combined-styles.css">
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     
+    <!-- ESP32 Simulator (can be removed after testing) -->
+    <link rel="stylesheet" href="js/simulator/esp32-simulator.css">
+    
     <!-- Tone.js from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
 </head>
@@ -32,12 +35,34 @@
         </div>
     </div>
    
-    <!-- Legacy scripts for backward compatibility -->
+    <!-- Core modules (load first) -->
+    <script src="js/core/config.js"></script>
+    <script src="js/utils/event-bus.js"></script>
+    
+    <!-- Base modules -->
+    <script src="js/core/websocket-client.js"></script>
+    <script src="js/state/esp-manager.js"></script>
+    <script src="js/audio/sound-patterns.js"></script>
+    
+    <!-- UI and visual modules -->
+    <script src="js/ui/ui-manager.js"></script>
+    <script src="js/visual/background-manager.js"></script>
+    <script src="js/visual/creature-manager.js"></script>
+    
+    <!-- Core UI components -->
     <script src="js/frame-anim.js"></script>
     <script src="js/drag-container.js"></script>
-   
-    <!-- Application initialization -->
-    <script src="js/app.js"></script>
+    
+    <!-- Audio modules -->
+    <script src="js/audio/synth-engine.js"></script>
+    
+    <!-- State management (load last) -->
+    <script src="js/state/bpm-manager.js"></script>
+    <script src="js/state/recording-manager.js"></script>
+    <script src="js/state/state-manager.js"></script>
+    
+    <!-- ESP32 Simulator (can be removed after testing) -->
+    <script src="js/simulator/esp32-simulator.js"></script>
    
     <!-- Service Worker Registration -->
     <script>
@@ -53,6 +78,35 @@
                     });
             });
         }
+        
+        // Simple initialization for app startup
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('CreaTune Application Initializing...');
+            
+            // Check if all required components are loaded
+            const requiredComponents = [
+                'EventBus', 'CreaTuneConfig', 'StateManager', 
+                'ESPManager', 'UIManager', 'SynthEngine'
+            ];
+            
+            const missingComponents = requiredComponents.filter(
+                component => !window[component]
+            );
+            
+            if (missingComponents.length > 0) {
+                console.error('Missing components:', missingComponents);
+            } else {
+                console.log('All components loaded successfully');
+                
+                // Send initialization event
+                EventBus.emit('appInitialized');
+                
+                // Show welcome message
+                if (window.UIManager) {
+                    window.UIManager.showInfoMessage('CreaTune initialized. Connect ESP32 devices or use the Random State button to begin.', 4000);
+                }
+            }
+        });
     </script>
 </body>
 </html>

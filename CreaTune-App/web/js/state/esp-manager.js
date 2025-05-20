@@ -3,7 +3,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   // Import configuration
-  const { ESP32 } = window.CreaTuneConfig;
+  const { ESP32, STATES } = window.CreaTuneConfig;
   
   // ESP32 device status
   const espStatus = {
@@ -12,8 +12,15 @@ document.addEventListener('DOMContentLoaded', () => {
     esp3: { connected: false, valid: false, value: null, name: ESP32.ESP3.name }
   };
   
+  // Last ESP32 activity timestamp
+  let lastESP32ActivityTime = Date.now();
+  let ESP32TimeoutCheck;
+  
   // Handle WebSocket messages for ESP32 data
   function handleWebSocketMessage(data) {
+    // Update activity timestamp to prevent timeout
+    lastESP32ActivityTime = Date.now();
+    
     // Process ESP32 sensor data
     if (data.sensor) {
       let espId = null;
@@ -32,14 +39,21 @@ document.addEventListener('DOMContentLoaded', () => {
         espStatus[espId].connected = true;
         espStatus[espId].value = data.value;
         
-        // Validate data
-        espStatus[espId].valid = data.value !== undefined && data.value !== null;
+        // Validate data - check if it's in the acceptable range (0.4 to 0.8)
+        const normalizedValue = data.value;
+        espStatus[espId].valid = normalizedValue !== undefined && 
+                                  normalizedValue !== null && 
+                                  normalizedValue >= 0.4 && 
+                                  normalizedValue <= 0.8;
         
         // Initialize audio if not already initialized
         autoInitializeAudio();
         
         // Notify state change
         EventBus.emit('espStatusChanged', { ...espStatus });
+        
+        // Log data received
+        console.log(`ESP32 ${espId} data received:`, normalizedValue);
       }
     }
     
@@ -63,6 +77,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Notify state change
         EventBus.emit('espStatusChanged', { ...espStatus });
+        
+        // Log connection
+        console.log(`ESP32 ${espId} connected`);
       }
     }
     
@@ -84,6 +101,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Notify state change
         EventBus.emit('espStatusChanged', { ...espStatus });
+        
+        // Log disconnection
+        console.log(`ESP32 ${espId} disconnected`);
       }
     }
   }
@@ -157,18 +177,18 @@ document.addEventListener('DOMContentLoaded', () => {
       espStatus.esp2.connected = Math.random() > 0.5;
       espStatus.esp3.connected = Math.random() > 0.5;
       
-      // Set random valid data
+      // Set random valid data within the 0.4 to 0.8 range
       if (espStatus.esp1.connected) {
         espStatus.esp1.valid = Math.random() > 0.3;
-        espStatus.esp1.value = Math.random();
+        espStatus.esp1.value = espStatus.esp1.valid ? (0.4 + Math.random() * 0.4) : (Math.random() * 0.3);
       }
       if (espStatus.esp2.connected) {
         espStatus.esp2.valid = Math.random() > 0.3;
-        espStatus.esp2.value = Math.random();
+        espStatus.esp2.value = espStatus.esp2.valid ? (0.4 + Math.random() * 0.4) : (Math.random() * 0.3);
       }
       if (espStatus.esp3.connected) {
         espStatus.esp3.valid = Math.random() > 0.3;
-        espStatus.esp3.value = Math.random();
+        espStatus.esp3.value = espStatus.esp3.valid ? (0.4 + Math.random() * 0.4) : (Math.random() * 0.3);
       }
       
       // Auto-initialize audio if any ESP is connected
@@ -177,14 +197,60 @@ document.addEventListener('DOMContentLoaded', () => {
       // Notify state change
       EventBus.emit('espStatusChanged', { ...espStatus });
       
+      // Update activity timestamp
+      lastESP32ActivityTime = Date.now();
+      
       console.log('Random state generated:', espStatus);
     });
     
     document.body.appendChild(button);
   }
+
+  // Setup ESP32 timeout check
+  function setupESP32TimeoutCheck() {
+    // Check every 10 seconds if ESP32 is still active
+    ESP32TimeoutCheck = setInterval(() => {
+      // If ESP32 was connected but no data for 15 seconds
+      const anyConnected = Object.values(espStatus).some(esp => esp.connected);
+      
+      if (anyConnected && (Date.now() - lastESP32ActivityTime > 15000)) {
+        // Reset all ESP statuses
+        Object.keys(espStatus).forEach(key => {
+          if (espStatus[key].connected) {
+            console.log(`ESP32 ${key} timeout - no data received for 15s`);
+            espStatus[key].connected = false;
+            espStatus[key].valid = false;
+            espStatus[key].value = null;
+          }
+        });
+        
+        // Notify state change
+        EventBus.emit('espStatusChanged', { ...espStatus });
+      }
+    }, 10000);
+  }
   
   // Initialize
-  createDebugButton();
+  function initialize() {
+    createDebugButton();
+    setupESP32TimeoutCheck();
+    
+    // If WebSocket client is available, try to connect
+    if (window.wsClient && window.wsClient.reconnect) {
+      window.wsClient.reconnect();
+    }
+  }
+  
+  // Initialize the ESP manager
+  initialize();
+  
+  // Cleanup on window unload
+  window.addEventListener('beforeunload', function() {
+    if (ESP32TimeoutCheck) {
+      clearInterval(ESP32TimeoutCheck);
+      ESP32TimeoutCheck = null;
+    }
+  });
   
   // Expose API
   window.ESPManager = {

@@ -87,7 +87,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Notify listeners
-    EventBus.emit('recordingStopped');
+    EventBus.emit('recordingStopped', { 
+      hasPattern: recordedPattern && recordedPattern.length > 0 
+    });
     
     // Stop audio recording and process the data
     stopAudioRecording();
@@ -247,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Notify listeners
-    EventBus.emit('recordingStopped');
+    EventBus.emit('recordingStopped', { hasPattern: false });
   }
   
   // Stop audio recording

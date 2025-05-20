@@ -82,7 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (espStatus[esp].connected) {
           if (espStatus[esp].valid) {
             statusDot.style.backgroundColor = 'lime';
-            statusText.textContent = 'Valid ';
+            const value = espStatus[esp].value !== null ? 
+              ` (${Math.round(espStatus[esp].value * 100)}%)` : '';
+            statusText.textContent = `Valid${value} `;
           } else {
             statusDot.style.backgroundColor = 'orange';
             statusText.textContent = 'Invalid ';
@@ -256,6 +258,117 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
+  // Create BPM Display Overlay
+  function createBPMOverlay(visible = false) {
+    // Check if overlay already exists
+    if (document.getElementById('bpmOverlay')) {
+      document.getElementById('bpmOverlay').style.display = visible ? 'flex' : 'none';
+      return;
+    }
+    
+    const container = document.getElementById('spriteContainer');
+    if (!container) return;
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'bpmOverlay';
+    overlay.style.position = 'absolute';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    overlay.style.display = visible ? 'flex' : 'none';
+    overlay.style.flexDirection = 'column';
+    overlay.style.justifyContent = 'center';
+    overlay.style.alignItems = 'center';
+    overlay.style.color = 'white';
+    overlay.style.fontFamily = 'VT323, monospace';
+    overlay.style.fontSize = '48px';
+    overlay.style.zIndex = '200';
+    
+    const bpmLabel = document.createElement('div');
+    bpmLabel.id = 'bpmLabel';
+    bpmLabel.textContent = 'BPM';
+    bpmLabel.style.marginBottom = '20px';
+    
+    const bpmValue = document.createElement('div');
+    bpmValue.id = 'bpmDisplayValue';
+    bpmValue.textContent = '85';
+    bpmValue.style.fontSize = '72px';
+    
+    const instructions = document.createElement('div');
+    instructions.textContent = 'Drag left/right to adjust';
+    instructions.style.fontSize = '24px';
+    instructions.style.marginTop = '20px';
+    
+    overlay.appendChild(bpmLabel);
+    overlay.appendChild(bpmValue);
+    overlay.appendChild(instructions);
+    container.appendChild(overlay);
+    
+    // Add drag handler for BPM adjustment
+    let startX = 0;
+    let currentBPM = 85;
+    
+    overlay.addEventListener('mousedown', (e) => {
+      startX = e.clientX;
+      currentBPM = window.SynthEngine?.getBPM() || 85;
+      
+      // Add move and up handlers
+      document.addEventListener('mousemove', handleBPMDrag);
+      document.addEventListener('mouseup', stopBPMDrag);
+    });
+    
+    overlay.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX;
+      currentBPM = window.SynthEngine?.getBPM() || 85;
+      
+      // Add move and end handlers
+      document.addEventListener('touchmove', handleBPMTouchDrag);
+      document.addEventListener('touchend', stopBPMTouchDrag);
+    });
+    
+    function handleBPMDrag(e) {
+      const diffX = e.clientX - startX;
+      const newBPM = Math.max(60, Math.min(180, currentBPM + Math.floor(diffX / 2)));
+      updateBPMDisplay(newBPM);
+    }
+    
+    function handleBPMTouchDrag(e) {
+      const diffX = e.touches[0].clientX - startX;
+      const newBPM = Math.max(60, Math.min(180, currentBPM + Math.floor(diffX / 2)));
+      updateBPMDisplay(newBPM);
+    }
+    
+    function stopBPMDrag() {
+      document.removeEventListener('mousemove', handleBPMDrag);
+      document.removeEventListener('mouseup', stopBPMDrag);
+    }
+    
+    function stopBPMTouchDrag() {
+      document.removeEventListener('touchmove', handleBPMTouchDrag);
+      document.removeEventListener('touchend', stopBPMTouchDrag);
+    }
+  }
+  
+  // Update BPM display
+  function updateBPMDisplay(bpm) {
+    const bpmValue = document.getElementById('bpmDisplayValue');
+    if (bpmValue) {
+      bpmValue.textContent = bpm;
+    }
+    
+    // Update actual BPM in SynthEngine
+    if (window.SynthEngine && window.SynthEngine.setBPM) {
+      window.SynthEngine.setBPM(bpm);
+    }
+  }
+  
+  // Show/hide BPM overlay
+  function toggleBPMOverlay(visible) {
+    createBPMOverlay(visible);
+  }
+  
   // Initialize UI elements
   function initialize() {
     // Create status indicators
@@ -287,6 +400,20 @@ document.addEventListener('DOMContentLoaded', () => {
     EventBus.subscribe('volumeLevel', (data) => {
       updateVolumeMeter(data.average, data.max);
     });
+    
+    // Listen for BPM state changes
+    EventBus.subscribe('subStateChanged', (data) => {
+      if (data.subState === 'BPM') {
+        toggleBPMOverlay(true);
+      } else {
+        toggleBPMOverlay(false);
+      }
+    });
+    
+    // Listen for BPM updates
+    EventBus.subscribe('bpmChanged', (bpm) => {
+      updateBPMDisplay(bpm);
+    });
   }
   
   // Initialize when DOM is ready
@@ -301,6 +428,8 @@ document.addEventListener('DOMContentLoaded', () => {
     hideVolumeMeter,
     showErrorMessage,
     showInfoMessage,
-    updateConnectionStatus
+    updateConnectionStatus,
+    toggleBPMOverlay,
+    updateBPMDisplay
   };
 });
