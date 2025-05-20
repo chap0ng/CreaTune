@@ -29,6 +29,120 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('touchstart', initAudioOnTouch);
   document.addEventListener('mousedown', initAudioOnTouch);
   
+  // Add Random State Button in the bottom right corner
+  function addRandomStateButton() {
+    // Check if button already exists
+    if (document.getElementById('randomSynthButton')) return;
+    
+    const randomBtn = document.createElement('button');
+    randomBtn.id = 'randomSynthButton';
+    randomBtn.textContent = '🎲';
+    randomBtn.style.position = 'fixed';
+    randomBtn.style.bottom = '50px';
+    randomBtn.style.right = '10px';
+    randomBtn.style.width = '60px';
+    randomBtn.style.height = '60px';
+    randomBtn.style.borderRadius = '50%';
+    randomBtn.style.backgroundColor = '#4CAF50';
+    randomBtn.style.color = 'white';
+    randomBtn.style.fontSize = '24px';
+    randomBtn.style.cursor = 'pointer';
+    randomBtn.style.zIndex = '1000';
+    randomBtn.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.3)';
+    randomBtn.style.border = 'none';
+    
+    randomBtn.addEventListener('click', () => {
+      // Try to use simulator if available
+      if (window.ESP32Simulator) {
+        window.ESP32Simulator.activateRandomState();
+      } else {
+        // Create a random state ourselves
+        const states = ['SOIL', 'LIGHT', 'TEMP', 'GROWTH', 'MIRRAGE', 'FLOWER', 'TOTAL'];
+        const randomState = states[Math.floor(Math.random() * states.length)];
+        
+        // Simulate corresponding ESP devices connecting
+        simulateRandomState(randomState);
+      }
+    });
+    
+    document.body.appendChild(randomBtn);
+  }
+  
+  // Simulate a random state by dispatching events
+  function simulateRandomState(state) {
+    // Show notification
+    if (window.UIManager) {
+      window.UIManager.showInfoMessage(`Random state: ${state}`, 2000);
+    }
+    
+    // Send events for the appropriate sensors based on state
+    const dispatchSensorEvent = (sensorName, sensorType) => {
+      // First connect the device
+      const connectEvent = new CustomEvent('espEvent', {
+        detail: {
+          type: 'esp_connected',
+          name: sensorName,
+          sensor: sensorType
+        }
+      });
+      document.dispatchEvent(connectEvent);
+      
+      // Then send random data
+      setTimeout(() => {
+        const value = 0.4 + (Math.random() * 0.4); // Valid range 0.4-0.8
+        const dataEvent = new CustomEvent('espEvent', {
+          detail: {
+            type: 'sensor_data',
+            name: sensorName,
+            sensor: sensorType,
+            value: value
+          }
+        });
+        document.dispatchEvent(dataEvent);
+      }, 100);
+    };
+    
+    // Reset all sensors first
+    const disconnectEvent = new CustomEvent('espEvent', {
+      detail: {
+        type: 'state_reset'
+      }
+    });
+    document.dispatchEvent(disconnectEvent);
+    
+    // Connect appropriate sensors based on state
+    setTimeout(() => {
+      switch(state) {
+        case 'SOIL':
+          dispatchSensorEvent('ESP32-1', 'soil');
+          break;
+        case 'LIGHT':
+          dispatchSensorEvent('ESP32-2', 'light');
+          break;
+        case 'TEMP':
+          dispatchSensorEvent('ESP32-3', 'temperature');
+          break;
+        case 'GROWTH':
+          dispatchSensorEvent('ESP32-1', 'soil');
+          dispatchSensorEvent('ESP32-2', 'light');
+          break;
+        case 'MIRRAGE':
+          dispatchSensorEvent('ESP32-1', 'soil');
+          dispatchSensorEvent('ESP32-3', 'temperature');
+          break;
+        case 'FLOWER':
+          dispatchSensorEvent('ESP32-2', 'light');
+          dispatchSensorEvent('ESP32-3', 'temperature');
+          break;
+        case 'TOTAL':
+          dispatchSensorEvent('ESP32-1', 'soil');
+          dispatchSensorEvent('ESP32-2', 'light');
+          dispatchSensorEvent('ESP32-3', 'temperature');
+          break;
+      }
+    }, 200);
+  }
+  
   // Initialize Simulator if available
   function initializeSimulator() {
     // Check if simulator exists every 500ms up to 10 times
@@ -45,6 +159,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     }, 500);
+  }
+  
+  // Auto-initialize audio on first data from ESP32
+  function setupAutoAudio() {
+    // Listen for ESP32 data
+    if (window.EventBus) {
+      window.EventBus.subscribe('webSocketMessage', (data) => {
+        if (data && data.type === 'sensor_data') {
+          console.log('Received sensor data, auto-initializing audio');
+          if (window.SynthEngine && window.SynthEngine.ensureAudioStarted) {
+            window.SynthEngine.ensureAudioStarted();
+          }
+        }
+      });
+    }
   }
   
   // Check WebSocket connection periodically
@@ -65,21 +194,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 15000);
   }
   
-  // Auto-initialize audio on first data from ESP32
-  function setupAutoAudio() {
-    // Listen for ESP32 data
-    if (window.EventBus) {
-      window.EventBus.subscribe('webSocketMessage', (data) => {
-        if (data && data.type === 'sensor_data') {
-          console.log('Received sensor data, auto-initializing audio');
-          if (window.SynthEngine && window.SynthEngine.ensureAudioStarted) {
-            window.SynthEngine.ensureAudioStarted();
-          }
-        }
-      });
-    }
-  }
-  
   // Show ready message when everything is initialized
   function notifyInitialized() {
     console.log('CreaTune Application Initialized');
@@ -97,6 +211,9 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Initialize all
   function initialize() {
+    // Add random state button
+    addRandomStateButton();
+    
     // Setup auto-audio
     setupAutoAudio();
     

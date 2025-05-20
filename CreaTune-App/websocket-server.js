@@ -273,8 +273,6 @@ wss.on('connection', (ws, req) => {
       
       // Remove from tracking
       espDevices.delete(ws);
-      
-      // Keep lastESP32Activities entry for timeout checking
       // But don't delete from knownESP32s to remember for reconnection
       
       // Notify other clients
@@ -402,6 +400,7 @@ setInterval(() => {
           
           // Remove from tracking
           espDevices.delete(wsClient);
+          delete lastESP32Activities[espName];
           // But keep in knownESP32s to remember for reconnection
           
           timeoutsOccurred = true;

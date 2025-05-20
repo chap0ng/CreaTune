@@ -10,19 +10,19 @@ document.addEventListener('DOMContentLoaded', () => {
       ESP1: {
         name: 'ESP32-1',
         sensor: 'soil',
-        description: 'Soil Moisture Sensor',
+        description: 'DFrobot Soil Moisture Sensor',
         validRange: { min: 0.4, max: 0.8 }
       },
       ESP2: {
         name: 'ESP32-2',
         sensor: 'light',
-        description: 'Light Sensor',
+        description: 'DFrobot Light Sensor',
         validRange: { min: 0.4, max: 0.8 }
       },
       ESP3: {
         name: 'ESP32-3',
         sensor: 'temperature',
-        description: 'Temperature Sensor',
+        description: 'Basic Temperature Sensor',
         validRange: { min: 0.4, max: 0.8 }
       }
     }

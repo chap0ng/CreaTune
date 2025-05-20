@@ -67,6 +67,11 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const data = JSON.parse(event.data);
         
+        // Emit event for other components
+        if (window.EventBus) {
+          window.EventBus.emit('webSocketMessage', data);
+        }
+        
         // Handle state update
         if (data.type === 'state_update') {
           console.log('Received state update:', data.state);

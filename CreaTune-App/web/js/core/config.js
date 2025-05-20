@@ -21,27 +21,27 @@ const CreaTuneConfig = {
     BPM: 'bpm'
   },
 
-  // ESP32 device configuration
-  ESP32: {
-    ESP1: {
-      name: 'ESP32-1',
-      sensor: 'soil',
-      description: 'DFrobot Soil Moisture Sensor',
-      validRange: { min: 0.4, max: 0.8 }
-    },
-    ESP2: {
-      name: 'ESP32-2',
-      sensor: 'light',
-      description: 'DFrobot Light Sensor',
-      validRange: { min: 0.4, max: 0.8 }
-    },
-    ESP3: {
-      name: 'ESP32-3',
-      sensor: 'temperature',
-      description: 'Basic Temperature Sensor',
-      validRange: { min: 0.4, max: 0.8 }
-    }
+// ESP32 device configuration
+ESP32: {
+  ESP1: {
+    name: 'ESP32-1',
+    sensor: 'soil',
+    description: 'DFrobot Soil Moisture Sensor',
+    validRange: { min: 0.4, max: 0.8 }
   },
+  ESP2: {
+    name: 'ESP32-2',
+    sensor: 'light',
+    description: 'DFrobot Light Sensor',
+    validRange: { min: 0.4, max: 0.8 }
+  },
+  ESP3: {
+    name: 'ESP32-3',
+    sensor: 'temperature',
+    description: 'Basic Temperature Sensor',
+    validRange: { min: 0.4, max: 0.8 }
+  }
+},
 
   // WebSocket configuration
   WEBSOCKET: {
