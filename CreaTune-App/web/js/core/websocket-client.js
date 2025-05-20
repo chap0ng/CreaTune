@@ -13,8 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function initWebSocket() {
     // Determine WebSocket URL based on current location
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = window.location.hostname || 'localhost';
-    const wsPort = window.location.port || (wsProtocol === 'wss:' ? '443' : '8080');
+    const wsHost = "192.168.160.55"; // Hardcoded IP address
+    const wsPort = 8080;
     const wsUrl = `${wsProtocol}//${wsHost}:${wsPort}`;
     
     console.log(`Connecting to WebSocket server at ${wsUrl}`);
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           console.log('Message from server:', event.data);
           const data = JSON.parse(event.data);
-          handleMessage(data);
+          handleWebSocketMessage(data);
         } catch (error) {
           console.error('Error processing WebSocket message:', error);
         }
@@ -114,11 +114,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // Connection error
       socket.addEventListener('error', (error) => {
         console.error('WebSocket error:', error);
-        
-        // We'll just log the error - the close handler will handle reconnection
-        // Don't set isConnected=false here, as close event will fire after this
-        
-        // Don't update any UI here - wait for close event
       });
       
       // Store socket reference
@@ -164,8 +159,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   // Handle incoming WebSocket messages
-  function handleMessage(data) {
+  function handleWebSocketMessage(data) {
     try {
+      // Update activity timestamp to prevent timeout - CRITICAL FIX
+      window.lastESP32ActivityTime = Date.now();
+      
       // Handle ESP32 related messages
       if (
         data.type === 'esp_connected' || 
