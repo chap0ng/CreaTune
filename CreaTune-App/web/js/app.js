@@ -1,4 +1,4 @@
-// app.js - Main frontend script
+// app.js - Main application script
 document.addEventListener('DOMContentLoaded', () => {
   console.log('CreaTune Application Initializing...');
   
@@ -13,9 +13,56 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   
   // Show ready message when everything is initialized
-  if (window.UIManager) {
-    window.UIManager.showInfoMessage('CreaTune ready. Connect ESP32 devices.', 4000);
-  }
+  EventBus.subscribe('appInitialized', () => {
+    console.log('CreaTune Application Initialized');
+    
+    // Show welcome message
+    if (window.UIManager) {
+      window.UIManager.showInfoMessage('CreaTune ready. Connect ESP32 devices.', 4000);
+    }
+  });
+  
+  // Add test sound button
+  const testButton = document.createElement('button');
+  testButton.innerText = "Test Sound";
+  testButton.style.position = "fixed";
+  testButton.style.bottom = "50px";
+  testButton.style.right = "10px";
+  testButton.style.zIndex = "1000";
+  testButton.style.padding = "8px";
+  testButton.style.background = "#4caf50";
+  testButton.style.color = "white";
+  testButton.style.border = "none";
+  testButton.style.borderRadius = "4px";
+  testButton.style.cursor = "pointer";
+  
+  testButton.onclick = async () => {
+    try {
+      // Start Tone.js context if needed
+      if (Tone.context.state !== 'running') {
+        await Tone.start();
+      }
+      
+      // Initialize SynthEngine if needed
+      if (window.SynthEngine && !window.SynthEngine.isInitialized()) {
+        await window.SynthEngine.init();
+      }
+      
+      // Play test sound
+      if (window.SynthEngine && window.SynthEngine.triggerSynthFromValue) {
+        window.SynthEngine.triggerSynthFromValue(0.6);
+      } else {
+        console.error("SynthEngine not available or missing triggerSynthFromValue method");
+      }
+    } catch (err) {
+      console.error("Error playing test sound:", err);
+    }
+  };
+  
+  document.body.appendChild(testButton);
+  
+  // Emit initialization event
+  EventBus.emit('appInitialized');
   
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => {

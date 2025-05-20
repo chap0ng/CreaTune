@@ -1,6 +1,4 @@
 // state-manager.js
-// Core state management for CreaTune application
-
 document.addEventListener('DOMContentLoaded', () => {
   console.log('StateManager initializing...');
   
@@ -69,35 +67,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.type === 'sensor_data') {
           console.log(`Sensor data from ${data.name}: ${data.value}`);
           
-          // Directly update synth parameters based on sensor data
-          if (window.SynthEngine && data.value >= 0.4 && data.value <= 0.8) {
-            // Determine which synth to trigger based on sensor
-            let synthNum = 0;
-            if (data.name === 'ESP32-1' || data.sensor === 'soil') {
-              synthNum = 1;
-            } else if (data.name === 'ESP32-2' || data.sensor === 'light') {
-              synthNum = 2;
-            } else if (data.name === 'ESP32-3' || data.sensor === 'temperature') {
-              synthNum = 3;
-            }
-            
-            // Only trigger if we identified the synth
-            if (synthNum > 0) {
-              // Try to use triggerPatternNote if available
-              if (window.SynthEngine.triggerPatternNote) {
-                window.SynthEngine.triggerPatternNote(data.value);
-              } else {
-                // Direct method to trigger synth
-                const synthMethod = `synth${synthNum}`;
-                if (window.SynthEngine[synthMethod]) {
-                  window.SynthEngine[synthMethod].triggerAttackRelease("C4", "8n");
-                }
-              }
-            }
+          // Start Tone.js context if not already started
+          if (Tone && Tone.context.state !== 'running') {
+            Tone.start();
           }
           
-          // Pulse the creature for visual feedback
-          if (window.CreatureManager) {
+          // Directly update synth parameters based on sensor data
+          if (window.SynthEngine && data.value >= 0.4 && data.value <= 0.8) {
+            // Ensure audio is initialized
+            if (!window.SynthEngine.isInitialized()) {
+              window.SynthEngine.init();
+            }
+            
+            // Determine which synth to trigger based on sensor
+            window.SynthEngine.triggerSynthFromValue(data.value);
+            
+            // Pulse the creature for visual feedback
             let creatureNum = 0;
             if (data.name === 'ESP32-1' || data.sensor === 'soil') {
               creatureNum = 1;
@@ -107,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
               creatureNum = 3;
             }
             
-            if (creatureNum > 0) {
+            if (creatureNum > 0 && window.CreatureManager) {
               window.CreatureManager.pulseCreature(`creature${creatureNum}`);
             }
           }
@@ -120,8 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.onclose = () => {
       console.log('Disconnected from server');
       
-      // Retry connection after 5 seconds
-      setTimeout(setupWebsocketEvents, 5000);
+      // Retry connection after 2 seconds
+      setTimeout(setupWebsocketEvents, 2000);
     };
     
     socket.onerror = (error) => {

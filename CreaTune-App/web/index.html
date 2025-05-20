@@ -38,32 +38,29 @@
     <!-- Core modules (load first) -->
     <script src="js/core/config.js"></script>
     <script src="js/utils/event-bus.js"></script>
-    
-    <!-- Base modules -->
-    <script src="js/core/websocket-client.js"></script>
-    <script src="js/state/esp-manager.js"></script>
+
+    <!-- Audio modules -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
     <script src="js/audio/sound-patterns.js"></script>
-    
-    <!-- UI and visual modules -->
-    <script src="js/ui/ui-manager.js"></script>
+    <script src="js/audio/synth-engine.js"></script>
+
+    <!-- Visual modules -->
     <script src="js/visual/background-manager.js"></script>
     <script src="js/visual/creature-manager.js"></script>
-    
-    <!-- Core UI components -->
+
+    <!-- UI modules -->
+    <script src="js/ui/ui-manager.js"></script>
     <script src="js/frame-anim.js"></script>
     <script src="js/drag-container.js"></script>
-    
-    <!-- Audio modules -->
-    <script src="js/audio/synth-engine.js"></script>
-    
+
     <!-- State management (load last) -->
+    <script src="js/state/state-manager.js"></script>
     <script src="js/state/bpm-manager.js"></script>
     <script src="js/state/recording-manager.js"></script>
-    <script src="js/state/state-manager.js"></script>
-    
-    <!-- ESP32 Simulator (can be removed after testing) -->
-    <script src="js/simulator/esp32-simulator.js"></script>
-   
+
+    <!-- Main app -->
+    <script src="js/app.js"></script>
+
     <!-- Service Worker Registration -->
     <script>
         // Register the service worker
