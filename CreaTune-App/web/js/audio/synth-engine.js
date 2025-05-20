@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Audio engine state
   let audioStarted = false;
+  let audioReady = false;
   const state = {
     button1: false,
     button2: false,
@@ -326,6 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
       Tone.Transport.loopEnd = '8m';  // 8 measures to give plenty of loop time
       
       audioStarted = true;
+      audioReady = true;
       
       if (statusCallback) statusCallback("Audio initialized");
       setTimeout(() => {
@@ -409,10 +411,51 @@ document.addEventListener('DOMContentLoaded', () => {
         break;
     }
     
+    // Auto-start audio if any ESP32 is valid and connected
+    if (!audioStarted && (isValid.soil || isValid.light || isValid.temp)) {
+      console.log("Auto-starting audio due to ESP32 connection");
+      ensureAudioStarted();
+    }
+    
     // Restart Tone.Transport if it's stopped
     if (Tone.Transport.state !== "started" && audioStarted) {
       console.log("Restarting Tone.Transport...");
       Tone.Transport.start();
+    }
+  }
+  
+  // Ensure audio is started with minimal user interaction
+  function ensureAudioStarted() {
+    if (audioStarted) return true;
+    
+    // Try to start audio
+    if (Tone.context.state === "suspended") {
+      // Add a one-time click handler to the document
+      const clickHandler = async () => {
+        try {
+          console.log("Starting audio from user interaction");
+          await Tone.start();
+          audioReady = true;
+          init();
+          document.removeEventListener('click', clickHandler);
+        } catch (err) {
+          console.error("Error starting audio:", err);
+        }
+      };
+      
+      // Add the click handler
+      document.addEventListener('click', clickHandler, { once: true });
+      
+      // Add a visible notification for the user
+      if (window.UIManager) {
+        window.UIManager.showInfoMessage("Tap anywhere to enable audio", 10000);
+      }
+      
+      return false;
+    } else {
+      // Context is already running, just initialize
+      init();
+      return true;
     }
   }
   
@@ -453,6 +496,14 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Trigger a note based on recorded pattern intensity
   function triggerPatternNote(intensity) {
+    // Auto-start audio if needed before triggering notes
+    if (!audioStarted) {
+      if (!ensureAudioStarted()) {
+        console.log("Can't trigger note, audio not started");
+        return;
+      }
+    }
+    
     // Use intensity to determine volume and note choice
     const normalizedIntensity = Math.min(1, Math.max(0, intensity));
     const noteDuration = normalizedIntensity < 0.5 ? "8n" : "4n";
@@ -555,11 +606,26 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   });
+
+  // Add a document-wide click handler to initialize audio
+  document.addEventListener('click', function initAudioOnFirstClick() {
+    if (!audioReady) {
+      console.log("Initializing audio from user interaction");
+      ensureAudioStarted();
+      
+      // Only need this once
+      document.removeEventListener('click', initAudioOnFirstClick);
+    }
+  });
+  
+  // Initialize on page load
+  ensureAudioStarted();
   
   // Expose API
   window.SynthEngine = {
     init,
     isInitialized: () => audioStarted,
+    isAudioReady: () => audioReady,
     setButtonState: (btnNum, isActive) => {
       if (btnNum >= 1 && btnNum <= 3) {
         state[`button${btnNum}`] = isActive;
@@ -571,8 +637,17 @@ document.addEventListener('DOMContentLoaded', () => {
     silenceSynths,
     setBPM,
     getBPM,
+    ensureAudioStarted,
     
     triggerSynthFromValue: function(value) {
+      // Ensure audio is started first
+      if (!audioStarted) {
+        if (!ensureAudioStarted()) {
+          console.log("Can't trigger synth, audio not started");
+          return;
+        }
+      }
+      
       // Select appropriate synth based on current state
       const currentState = window.StateManager ? window.StateManager.getState() : 'idle';
       
