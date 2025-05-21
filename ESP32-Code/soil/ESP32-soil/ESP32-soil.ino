@@ -1,5 +1,5 @@
 /*
-  CreaSense.ino
+  CreaSense.ino - Optimized version
   ESP32 sensor data sender for CreaTune application
   Modified for DFRobot Moisture Sensor on ESP32 Firebeetle 2 C6
 */
@@ -17,8 +17,12 @@ const unsigned long connectionRetryInterval = 5000; // 5 seconds between connect
 const unsigned long webSocketCheckInterval = 3000;  // Check WebSocket every 3 seconds
 bool webSocketConnected = false;
 
-// For smoothing sensor readings
-const int NUM_READINGS = 5;
+// Pre-allocate JsonDocument to avoid memory fragmentation
+StaticJsonDocument<200> doc;
+char jsonBuffer[256]; // Pre-allocated buffer for JSON string
+
+// For smoothing sensor readings with faster response
+const int NUM_READINGS = 3; // Reduced from 5 for faster response
 int moistureReadings[NUM_READINGS];
 int readIndex = 0;
 int totalMoisture = 0;
@@ -26,7 +30,7 @@ int averageMoisture = 0;
 
 void setup() {
   // Initialize serial for debugging
-  Serial.begin(9600);
+  Serial.begin(115200); // Increased baud rate
   Serial.println("\nCreaSense Moisture Sensor - Starting up... (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧");
 
   // Set up LED pin
@@ -105,14 +109,13 @@ void loop() {
       // Send heartbeat if it's been too long since last data
       else if (currentMillis - lastSendTime >= 4000) {
         // Send a heartbeat to keep connection alive
-        StaticJsonDocument<100> doc;
+        doc.clear();
         doc["type"] = "heartbeat";
         doc["client"] = SENSOR_NAME;
         doc["timestamp"] = currentMillis;
         
-        String heartbeatMsg;
-        serializeJson(doc, heartbeatMsg);
-        webSocket.sendTXT(heartbeatMsg);
+        serializeJson(doc, jsonBuffer);
+        webSocket.sendTXT(jsonBuffer);
         
         Serial.println("Sending heartbeat to prevent timeout");
         
@@ -151,7 +154,7 @@ void loop() {
   }
 }
 
-// Read the moisture sensor and smooth the values
+// Optimized: Read the moisture sensor and smooth the values
 float readSoilMoisture() {
   // Subtract the last reading
   totalMoisture = totalMoisture - moistureReadings[readIndex];
@@ -175,43 +178,52 @@ float readSoilMoisture() {
     return -1.0; // Error code
   }
   
-  // Your custom ranges (◠‿◠)
-  Serial.print("Soil Raw: ");
-  Serial.print(rawValue);
-  Serial.print(" | Status: ");
-  
-  if (rawValue <= MOISTURE_DRY_MAX) {
-    Serial.println("Dry soil ＞﹏＜");
-  } 
-  else if (rawValue <= MOISTURE_HUMID_MAX) {
-    Serial.println("Humid soil (￣ω￣)");
-  }
-  else if (rawValue <= MOISTURE_WET_MAX) {
-    Serial.println("In water 〜(꒪꒳꒪)〜");
-  }
-  else {
-    Serial.println("Sensor out of range! (⊙_⊙)？");
+  // Only print soil status every second reading to reduce serial overhead
+  static int printCounter = 0;
+  if (++printCounter % 2 == 0) {
+    Serial.print("Soil Raw: ");
+    Serial.print(rawValue);
+    Serial.print(" | Status: ");
+    
+    if (rawValue <= MOISTURE_DRY_MAX) {
+      Serial.println("Dry soil ＞﹏＜");
+    } 
+    else if (rawValue <= MOISTURE_HUMID_MAX) {
+      Serial.println("Humid soil (￣ω￣)");
+    }
+    else if (rawValue <= MOISTURE_WET_MAX) {
+      Serial.println("In water 〜(꒪꒳꒪)〜");
+    }
+    else {
+      Serial.println("Sensor out of range! (⊙_⊙)？");
+    }
   }
   
   return (float)averageMoisture;
 }
 
 // Map moisture reading to app-compatible range (0.4-0.8)
+// Optimized with precalculated constants
 float moistureToAppValue(float moistureValue) {
+  // Precalculated constants for mapping
+  static const float dryScale = 50.0 / (MOISTURE_DRY_MAX - MOISTURE_DRY);
+  static const float humidScale = 30.0 / (MOISTURE_HUMID_MAX - MOISTURE_HUMID_MIN);
+  static const float wetScale = 30.0 / (MOISTURE_WET_MAX - MOISTURE_WET_MIN);
+  
   float appValue;
   
   // Determine soil condition and map to appropriate range
   if (moistureValue <= MOISTURE_DRY_MAX) {
-    // Dry soil (0-400) maps to 0.0-0.4
-    appValue = map(moistureValue, MOISTURE_DRY, MOISTURE_DRY_MAX, 0, 50) / 100.0;
+    // Dry soil (0-300) maps to 0.0-0.4
+    appValue = (moistureValue - MOISTURE_DRY) * dryScale / 100.0;
   } 
   else if (moistureValue <= MOISTURE_HUMID_MAX) {
-    // Humid soil (401-700) maps to 0.4-0.7
-    appValue = map(moistureValue, MOISTURE_HUMID_MIN, MOISTURE_HUMID_MAX, 40, 70) / 100.0;
+    // Humid soil (301-700) maps to 0.4-0.7
+    appValue = 0.4 + (moistureValue - MOISTURE_HUMID_MIN) * humidScale / 100.0;
   } 
   else {
     // In water (701-950) maps to 0.7-1.0
-    appValue = map(moistureValue, MOISTURE_WET_MIN, MOISTURE_WET_MAX, 70, 100) / 100.0;
+    appValue = 0.7 + (moistureValue - MOISTURE_WET_MIN) * wetScale / 100.0;
   }
   
   return appValue;
@@ -230,8 +242,8 @@ void sendSensorData() {
   // Map to app-compatible value (0.4-0.8)
   float appValue = moistureToAppValue(moistureValue);
   
-  // Create JSON document
-  StaticJsonDocument<200> doc;
+  // Create JSON document - use the pre-allocated doc
+  doc.clear();
   doc["sensor"] = SENSOR_NAME;
   doc["name"] = SENSOR_NAME;  // Add name field for better identification
   doc["raw_value"] = (int)moistureValue;
@@ -250,24 +262,22 @@ void sendSensorData() {
     doc["soil_condition"] = "wet";
   }
   
-  // Serialize JSON to string
-  String jsonString;
-  serializeJson(doc, jsonString);
+  // Serialize JSON to pre-allocated buffer
+  serializeJson(doc, jsonBuffer);
   
-  // Log the data
-  Serial.print("Sending data: ");
-  Serial.println(jsonString);
-  Serial.println("ヾ(^▽^*)))");
+  // Log the data (every other time to reduce overhead)
+  static int logCounter = 0;
+  if (++logCounter % 2 == 0) {
+    Serial.print("Sending data: ");
+    Serial.println(jsonBuffer);
+    Serial.println("ヾ(^▽^*)))");
+  }
   
   // Send through WebSocket
-  webSocket.sendTXT(jsonString);
+  webSocket.sendTXT(jsonBuffer);
 }
 
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
-  // Declare variables outside the switch
-  StaticJsonDocument<100> doc;
-  String helloMsg;
-  
   switch (type) {
     case WStype_DISCONNECTED:
       Serial.println("WebSocket Disconnected (；一_一)");
@@ -291,20 +301,21 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
       delay(500);
       digitalWrite(STATUS_LED, LOW);
       
-      // Send hello message
+      // Send hello message with pre-allocated doc
+      doc.clear();
       doc["type"] = "hello";
       doc["client"] = SENSOR_NAME;
       
-      serializeJson(doc, helloMsg);
-      webSocket.sendTXT(helloMsg);
+      serializeJson(doc, jsonBuffer);
+      webSocket.sendTXT(jsonBuffer);
       
       // Send initial data immediately after connection
       sendSensorData();
       break;
       
     case WStype_TEXT:
-      Serial.printf("Received text: %s\n", payload);
-      Serial.println("(^-^)v");
+      // Reduced serial output to improve performance
+      Serial.println("Received text data (^-^)v");
       break;
       
     case WStype_ERROR:
@@ -319,6 +330,16 @@ void connectToWiFi() {
   Serial.println("Connecting to WiFi... (｀・ω・´)");
   WiFi.disconnect();
   delay(500);
+  
+  // Set WiFi to station mode and disconnect from AP if it was previously connected
+  WiFi.mode(WIFI_STA);
+  
+  // Configure static IP to avoid DHCP delays (optional)
+  // IPAddress ip(192, 168, 160, 201);
+  // IPAddress gateway(192, 168, 160, 1);
+  // IPAddress subnet(255, 255, 255, 0);
+  // WiFi.config(ip, gateway, subnet);
+  
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
   int retries = 0;

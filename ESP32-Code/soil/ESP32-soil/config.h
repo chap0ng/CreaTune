@@ -1,5 +1,5 @@
 // config.h
-// Configuration for CreaSense ESP32
+// Optimized Configuration for CreaSense ESP32
 
 // WiFi configuration
 #define WIFI_SSID "CreaTone"        // Use your WiFi SSID

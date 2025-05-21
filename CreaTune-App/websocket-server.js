@@ -1,5 +1,5 @@
 // websocket-server.js
-// WebSocket server for CreaTune
+// WebSocket server for CreaTune - Optimized version
 // Structure: Webapp is the server, ESP32 devices are clients
 
 const WebSocket = require('ws');
@@ -13,6 +13,7 @@ const WEB_ROOT = path.join(__dirname, 'web');
 
 // ESP32 configuration
 const ESP32_TIMEOUT = 10000; // 10 seconds timeout for more stable connections
+const ESP32_GRACE_PERIOD = 3000; // Grace period before fully disconnecting
 
 // Create HTTP server
 const server = http.createServer((req, res) => {
@@ -92,7 +93,10 @@ const wss = new WebSocket.Server({ server });
 // Connected clients and ESP32 devices
 const clients = new Map();
 const espDevices = new Map();
-const lastESP32Activities = {}; // Track activity by ESP ID - fixed
+const lastESP32Activities = {}; // Track activity by ESP ID
+
+// Track disconnection timers to avoid duplicate disconnect messages
+const espDisconnectionTimers = new Map();
 
 let clientIdCounter = 0;
 let espIdCounter = 0;
@@ -103,6 +107,19 @@ const appState = {
   esp2: { connected: false, valid: false, value: null },
   esp3: { connected: false, valid: false, value: null }
 };
+
+// Map ESP name to app state key
+function getEspIdForSensor(sensorName, sensorType) {
+  // Try to determine ESP ID from name or sensor type
+  if (sensorName === 'ESP32-1' || sensorType === 'soil') {
+    return 'esp1';
+  } else if (sensorName === 'ESP32-2' || sensorType === 'light') {
+    return 'esp2';
+  } else if (sensorName === 'ESP32-3' || sensorType === 'temperature') {
+    return 'esp3';
+  }
+  return null;
+}
 
 // Handle new WebSocket connections
 wss.on('connection', (ws, req) => {
@@ -129,9 +146,14 @@ wss.on('connection', (ws, req) => {
   // Handle messages from clients
   ws.on('message', (message) => {
     const clientInfo = clients.get(ws);
+    if (!clientInfo) return; // Client not registered
+    
     clientInfo.lastMessage = Date.now();
     
-    console.log(`Message from [${clientInfo.id}]: ${message}`);
+    // Log less frequently for better performance
+    if (clientInfo.id % 10 === 0) {
+      console.log(`Message from [${clientInfo.id}]: ${message}`);
+    }
     
     try {
       // Parse as JSON
@@ -142,22 +164,25 @@ wss.on('connection', (ws, req) => {
         // Mark this client as an ESP32
         clientInfo.isESP32 = true;
         
-        // Update last activity time for this ESP32
+        // Get the sensor name
         const sensorName = data.name || `ESP32-${espIdCounter}`;
+        
+        // Update last activity time for this ESP32
         lastESP32Activities[sensorName] = Date.now();
         
-        // Update application state
-        let espId = null;
-        if (data.sensor === 'soil' || data.name === 'ESP32-1') {
-          espId = 'esp1';
-        } else if (data.sensor === 'light' || data.name === 'ESP32-2') {
-          espId = 'esp2';
-        } else if (data.sensor === 'temperature' || data.name === 'ESP32-3') {
-          espId = 'esp3';
+        // Determine which ESP this is
+        const espId = getEspIdForSensor(sensorName, data.sensor);
+        
+        // Clear any pending disconnection timer for this ESP
+        if (espId && espDisconnectionTimers.has(espId)) {
+          clearTimeout(espDisconnectionTimers.get(espId));
+          espDisconnectionTimers.delete(espId);
+          console.log(`Cancelled disconnection timer for ${sensorName}`);
         }
         
         if (espId) {
           // Update ESP status
+          const wasConnected = appState[espId].connected;
           appState[espId].connected = true;
           appState[espId].value = data.value;
           
@@ -166,6 +191,19 @@ wss.on('connection', (ws, req) => {
                                   data.value !== null && 
                                   data.value >= 0.4 && 
                                   data.value <= 0.8;
+          
+          // If this is a reconnection, notify clients
+          if (!wasConnected) {
+            console.log(`ESP32 ${sensorName} reconnected`);
+            
+            // Don't broadcast immediately on every reconnect to reduce state thrashing
+            setTimeout(() => {
+              // Only broadcast if still connected after a short delay
+              if (appState[espId].connected) {
+                broadcastState();
+              }
+            }, 200);
+          }
         }
         
         // If not already in espDevices, add it
@@ -174,12 +212,13 @@ wss.on('connection', (ws, req) => {
           espDevices.set(ws, {
             id: espId,
             name: sensorName,
-            lastData: data
+            lastData: data,
+            sensorType: data.sensor
           });
           
           console.log(`Identified ESP32 device [${espId}]: ${sensorName}`);
           
-          // Notify other clients about ESP32 connection
+          // Notify web clients about ESP32 connection
           broadcastToWebClients({
             type: 'esp_connected',
             espId: espId,
@@ -192,25 +231,52 @@ wss.on('connection', (ws, req) => {
         }
         
         // Map data to animation frame without reassigning to 'data'
-        const mappedData = mapSensorDataToAnimation({...data}); // Fixed: Create a copy to modify
+        const mappedData = mapSensorDataToAnimation({...data});
         
         // Broadcast sensor data to web clients
         broadcastToWebClients(mappedData);
         
-        // Broadcast updated application state
-        broadcastState();
-      } else if (data.type === 'hello') {
+        // Only broadcast state updates when significant changes occur
+        // or every 5th message to reduce network traffic
+        if (!wasConnected || clientInfo.id % 5 === 0) {
+          broadcastState();
+        }
+      } 
+      else if (data.type === 'heartbeat') {
+        // Handle heartbeat from ESP32
+        const sensorName = data.client || `Unknown`;
+        lastESP32Activities[sensorName] = Date.now();
+        
+        // No need to respond or broadcast
+      }
+      else if (data.type === 'hello') {
         // Client identifying itself
         console.log(`Client [${clientInfo.id}] identified as: ${data.client || 'Web Client'}`);
         
-        // Send current ESP32 status
-        sendESP32Status(ws);
-        
-        // Send current application state
-        ws.send(JSON.stringify({
-          type: 'state_update',
-          state: appState
-        }));
+        // If it's an ESP32 client, update tracking
+        if (data.client && data.client.startsWith('ESP32')) {
+          clientInfo.isESP32 = true;
+          lastESP32Activities[data.client] = Date.now();
+          
+          // Update the connection state after a slight delay
+          // This ensures we don't broadcast too early before receiving sensor data
+          setTimeout(() => {
+            // Send current ESP32 status to this client
+            sendESP32Status(ws);
+            
+            // Broadcast updated state to all web clients
+            broadcastState();
+          }, 300);
+        } else {
+          // For web clients, send current status immediately
+          sendESP32Status(ws);
+          
+          // Send current application state
+          ws.send(JSON.stringify({
+            type: 'state_update',
+            state: appState
+          }));
+        }
       }
     } catch (err) {
       console.error(`Error processing message: ${err.message}`);
@@ -229,36 +295,53 @@ wss.on('connection', (ws, req) => {
       const espInfo = espDevices.get(ws);
       console.log(`ESP32 device [${espInfo.id}] disconnected: ${espInfo.name}`);
       
-      // Update application state
-      let espId = null;
-      if (espInfo.name === 'ESP32-1' || espInfo.lastData?.sensor === 'soil') {
-        espId = 'esp1';
-      } else if (espInfo.name === 'ESP32-2' || espInfo.lastData?.sensor === 'light') {
-        espId = 'esp2';
-      } else if (espInfo.name === 'ESP32-3' || espInfo.lastData?.sensor === 'temperature') {
-        espId = 'esp3';
+      // Determine which ESP ID this corresponds to
+      const espStateId = getEspIdForSensor(espInfo.name, espInfo.sensorType || espInfo.lastData?.sensor);
+      
+      if (espStateId) {
+        // Don't immediately mark as disconnected - start a grace period
+        // This prevents state thrashing if the ESP32 reconnects quickly
+        if (!espDisconnectionTimers.has(espStateId)) {
+          console.log(`Starting grace period for ${espInfo.name}`);
+          
+          const disconnectTimer = setTimeout(() => {
+            // Only proceed if we still don't have activity
+            const lastActivity = lastESP32Activities[espInfo.name] || 0;
+            const elapsed = Date.now() - lastActivity;
+            
+            if (elapsed >= ESP32_GRACE_PERIOD) {
+              console.log(`Grace period ended: ${espInfo.name} officially disconnected`);
+              
+              // Mark as disconnected
+              appState[espStateId].connected = false;
+              appState[espStateId].valid = false;
+              appState[espStateId].value = null;
+              
+              // Notify other clients
+              broadcastToWebClients({
+                type: 'esp_disconnected',
+                espId: espInfo.id,
+                name: espInfo.name
+              });
+              
+              // Broadcast updated state
+              broadcastState();
+              
+              // Remove from tracking fully
+              delete lastESP32Activities[espInfo.name];
+            }
+            
+            // Clean up timer
+            espDisconnectionTimers.delete(espStateId);
+          }, ESP32_GRACE_PERIOD);
+          
+          // Store the timer
+          espDisconnectionTimers.set(espStateId, disconnectTimer);
+        }
       }
       
-      if (espId) {
-        // Mark as disconnected
-        appState[espId].connected = false;
-        appState[espId].valid = false;
-        appState[espId].value = null;
-      }
-      
-      // Remove from tracking
+      // Remove from espDevices map
       espDevices.delete(ws);
-      delete lastESP32Activities[espInfo.name];
-      
-      // Notify other clients
-      broadcastToWebClients({
-        type: 'esp_disconnected',
-        espId: espInfo.id,
-        name: espInfo.name
-      });
-      
-      // Broadcast updated state
-      broadcastState();
     }
     
     // Remove from clients map
@@ -303,11 +386,16 @@ function sendESP32Status(ws) {
   
   // Collect status from all ESP32 devices
   for (const [espWs, espInfo] of espDevices.entries()) {
+    // Find corresponding state ID
+    const stateId = getEspIdForSensor(espInfo.name, espInfo.sensorType || espInfo.lastData?.sensor);
+    const isValid = stateId ? appState[stateId].valid : false;
+    
     espStatus.push({
       id: espInfo.id,
       name: espInfo.name,
       lastData: espInfo.lastData,
-      connected: espWs.readyState === WebSocket.OPEN
+      connected: espWs.readyState === WebSocket.OPEN,
+      valid: isValid
     });
   }
   
@@ -333,57 +421,77 @@ function mapSensorDataToAnimation(data) {
     // Add frame index to data
     result.frameIndex = frameIndex;
     
-    console.log(`Mapped sensor value ${result.value} to frame ${frameIndex}`);
+    // Log less frequently for better performance
+    if (Math.random() < 0.05) {
+      console.log(`Mapped sensor value ${result.value} to frame ${frameIndex}`);
+    }
   }
   
   return result;
 }
 
-// Check for ESP32 timeouts periodically
+// Consolidated ESP32 activity check (less frequent)
 setInterval(() => {
   const now = Date.now();
-  let timeoutsOccurred = false;
   
-  // Check each ESP32 device for timeout
+  // Check each ESP32 device for timeout, only if not already in grace period
   for (const [espName, lastActivity] of Object.entries(lastESP32Activities)) {
-    if (now - lastActivity > ESP32_TIMEOUT) {
-      console.log(`ESP32 ${espName} timed out - no data for ${ESP32_TIMEOUT}ms`);
+    const elapsed = now - lastActivity;
+    
+    if (elapsed > ESP32_TIMEOUT) {
+      // Determine which ESP this is
+      let espStateId = null;
+      let espInstance = null;
       
-      // Find and remove the ESP connection
+      // Find the matching ESP device
       for (const [wsClient, espInfo] of espDevices.entries()) {
         if (espInfo.name === espName) {
-          // Update application state
-          let espId = null;
-          if (espName === 'ESP32-1' || espInfo.lastData?.sensor === 'soil') {
-            espId = 'esp1';
-          } else if (espName === 'ESP32-2' || espInfo.lastData?.sensor === 'light') {
-            espId = 'esp2';
-          } else if (espName === 'ESP32-3' || espInfo.lastData?.sensor === 'temperature') {
-            espId = 'esp3';
-          }
+          espStateId = getEspIdForSensor(espName, espInfo.sensorType || espInfo.lastData?.sensor);
+          espInstance = espInfo;
           
-          if (espId) {
-            // Mark as disconnected
-            appState[espId].connected = false;
-            appState[espId].valid = false;
-            appState[espId].value = null;
-          }
-          
-          // Only consider a timeout if the client isn't actually connected
-          if (wsClient.readyState !== WebSocket.OPEN) {
-            // Notify clients about disconnection
-            broadcastToWebClients({
-              type: 'esp_disconnected',
-              espId: espInfo.id,
-              name: espName
-            });
+          // Check if we're already in a grace period
+          if (espStateId && !espDisconnectionTimers.has(espStateId)) {
+            console.log(`ESP32 ${espName} timed out - no data for ${elapsed}ms`);
             
-            // Remove from tracking
-            espDevices.delete(wsClient);
-            delete lastESP32Activities[espName];
-            timeoutsOccurred = true;
-          } else {
-            console.log(`ESP32 ${espName} timeout ignored - client still connected`);
+            // Start grace period timer
+            const disconnectTimer = setTimeout(() => {
+              // Double-check time since last activity
+              const currentLastActivity = lastESP32Activities[espName] || 0;
+              const currentElapsed = Date.now() - currentLastActivity;
+              
+              if (currentElapsed >= ESP32_TIMEOUT) {
+                console.log(`ESP32 ${espName} officially disconnected after timeout`);
+                
+                // Mark as disconnected
+                if (espStateId) {
+                  appState[espStateId].connected = false;
+                  appState[espStateId].valid = false;
+                  appState[espStateId].value = null;
+                }
+                
+                // Notify clients (only once)
+                broadcastToWebClients({
+                  type: 'esp_disconnected',
+                  espId: espInstance.id,
+                  name: espName
+                });
+                
+                // Broadcast updated state
+                broadcastState();
+                
+                // Remove from tracking if webSocket is closed
+                if (wsClient.readyState !== WebSocket.OPEN) {
+                  espDevices.delete(wsClient);
+                  delete lastESP32Activities[espName];
+                }
+              }
+              
+              // Clean up timer
+              espDisconnectionTimers.delete(espStateId);
+            }, ESP32_GRACE_PERIOD);
+            
+            // Store timer
+            espDisconnectionTimers.set(espStateId, disconnectTimer);
           }
           
           break;
@@ -391,14 +499,9 @@ setInterval(() => {
       }
     }
   }
-  
-  // If any timeouts occurred, broadcast updated state
-  if (timeoutsOccurred) {
-    broadcastState();
-  }
-}, 1000); // Check every 1 second for faster response
+}, 2000); // Check every 2 seconds - less frequent for stability
 
-// Cleanup inactive clients periodically
+// Cleanup inactive clients periodically (less frequent)
 setInterval(() => {
   const now = Date.now();
   
@@ -415,7 +518,7 @@ setInterval(() => {
   const clientCount = clients.size - espCount;
   
   console.log(`Status: ${espCount} ESP32 devices, ${clientCount} web clients connected`);
-}, 30000);
+}, 60000); // Once per minute - less frequent
 
 // Start the server
 server.listen(PORT, '0.0.0.0', () => {
