@@ -1,440 +1,237 @@
-// app.js - Main application script
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('CreaTune Application Initializing...');
+// Add this to app.js to provide a debug console:
+
+// Add debug button for state inspection
+function setupDebugButton() {
+  const debugButton = document.createElement('button');
+  debugButton.id = 'debugButton';
+  debugButton.textContent = '🔍';
+  debugButton.title = 'Debug State';
+  debugButton.style.position = 'fixed';
+  debugButton.style.bottom = '150px';
+  debugButton.style.right = '10px';
+  debugButton.style.width = '40px';
+  debugButton.style.height = '40px';
+  debugButton.style.borderRadius = '50%';
+  debugButton.style.backgroundColor = '#666';
+  debugButton.style.color = 'white';
+  debugButton.style.fontSize = '20px';
+  debugButton.style.border = 'none';
+  debugButton.style.cursor = 'pointer';
+  debugButton.style.zIndex = '1000';
+  debugButton.style.boxShadow = '0 2px 5px rgba(0,0,0,0.3)';
+  debugButton.style.webkitTapHighlightColor = 'transparent';
   
-  // Set up global error handler for better debugging
-  window.addEventListener('error', (event) => {
-    console.error('Global error:', event);
-    
-    // Show error to user if UIManager is available
-    if (window.UIManager) {
-      // Check if error exists and has message property
-      const errorMessage = event.error && event.error.message 
-        ? event.error.message 
-        : (event.message || 'Unknown error occurred');
-      
-      window.UIManager.showErrorMessage(`Error: ${errorMessage}`);
-    }
+  debugButton.addEventListener('click', () => {
+    showDebugConsole();
   });
   
-  // Initialize Tone.js safely
-  function initializeToneJS() {
-    if (typeof Tone === 'undefined') {
-      console.error('Tone.js library not loaded!');
-      if (window.UIManager) {
-        window.UIManager.showInfoMessage('Tone.js library not loaded. Audio features may not work properly.');
-      }
-      return false;
-    }
+  document.body.appendChild(debugButton);
+}
+
+// Show debug console with current state info
+function showDebugConsole() {
+  // Create or get debug console
+  let debugConsole = document.getElementById('debugConsole');
+  
+  if (!debugConsole) {
+    debugConsole = document.createElement('div');
+    debugConsole.id = 'debugConsole';
+    debugConsole.style.position = 'fixed';
+    debugConsole.style.top = '50%';
+    debugConsole.style.left = '50%';
+    debugConsole.style.transform = 'translate(-50%, -50%)';
+    debugConsole.style.width = '80%';
+    debugConsole.style.maxWidth = '600px';
+    debugConsole.style.maxHeight = '80%';
+    debugConsole.style.overflowY = 'auto';
+    debugConsole.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+    debugConsole.style.color = '#0f0';
+    debugConsole.style.padding = '20px';
+    debugConsole.style.borderRadius = '10px';
+    debugConsole.style.fontFamily = 'monospace';
+    debugConsole.style.fontSize = '14px';
+    debugConsole.style.zIndex = '2000';
+    debugConsole.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
     
-    try {
-      // Set up Tone.js error handling
-      Tone.context.onerror = function(e) {
-        console.error('Tone.js AudioContext error:', e);
-      };
-      
-      // Check if AudioContext is supported
-      if (!window.AudioContext && !window.webkitAudioContext) {
-        console.error('AudioContext not supported in this browser');
-        if (window.UIManager) {
-          window.UIManager.showInfoMessage('Audio features not supported in this browser');
-        }
-        return false;
+    // Add close button
+    const closeButton = document.createElement('button');
+    closeButton.textContent = '×';
+    closeButton.style.position = 'absolute';
+    closeButton.style.top = '10px';
+    closeButton.style.right = '10px';
+    closeButton.style.background = 'none';
+    closeButton.style.border = 'none';
+    closeButton.style.color = 'white';
+    closeButton.style.fontSize = '24px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.padding = '0';
+    closeButton.style.lineHeight = '1';
+    closeButton.style.webkitTapHighlightColor = 'transparent';
+    closeButton.addEventListener('click', () => {
+      document.body.removeChild(debugConsole);
+    });
+    
+    debugConsole.appendChild(closeButton);
+    
+    // Add content container
+    const content = document.createElement('pre');
+    content.id = 'debugContent';
+    content.style.margin = '0';
+    content.style.whiteSpace = 'pre-wrap';
+    debugConsole.appendChild(content);
+    
+    // Add refresh button
+    const refreshButton = document.createElement('button');
+    refreshButton.textContent = 'Refresh';
+    refreshButton.style.marginTop = '20px';
+    refreshButton.style.padding = '5px 10px';
+    refreshButton.style.backgroundColor = '#333';
+    refreshButton.style.color = 'white';
+    refreshButton.style.border = 'none';
+    refreshButton.style.borderRadius = '4px';
+    refreshButton.style.cursor = 'pointer';
+    refreshButton.style.webkitTapHighlightColor = 'transparent';
+    refreshButton.addEventListener('click', () => {
+      updateDebugContent();
+    });
+    
+    debugConsole.appendChild(refreshButton);
+    
+    // Add send test data button
+    const testDataButton = document.createElement('button');
+    testDataButton.textContent = 'Send Test Data';
+    testDataButton.style.marginTop = '20px';
+    testDataButton.style.marginLeft = '10px';
+    testDataButton.style.padding = '5px 10px';
+    testDataButton.style.backgroundColor = '#336699';
+    testDataButton.style.color = 'white';
+    testDataButton.style.border = 'none';
+    testDataButton.style.borderRadius = '4px';
+    testDataButton.style.cursor = 'pointer';
+    testDataButton.style.webkitTapHighlightColor = 'transparent';
+    testDataButton.addEventListener('click', () => {
+      sendTestData();
+    });
+    
+    debugConsole.appendChild(testDataButton);
+    
+    document.body.appendChild(debugConsole);
+  }
+  
+  updateDebugContent();
+}
+
+// Update debug console content
+function updateDebugContent() {
+  const content = document.getElementById('debugContent');
+  if (!content) return;
+  
+  let debugInfo = '';
+  
+  // Get state information
+  if (window.StateManager) {
+    if (window.StateManager.getStateDisplay) {
+      debugInfo += window.StateManager.getStateDisplay();
+    } else {
+      debugInfo += `Current State: ${window.StateManager.getState()}\n`;
+      debugInfo += `Sub-State: ${window.StateManager.getSubState()}\n\n`;
+    }
+  } else {
+    debugInfo += 'StateManager not available\n\n';
+  }
+  
+  // ESP Manager info
+  if (window.ESPManager) {
+    debugInfo += 'ESP Manager Status:\n';
+    const espStatus = window.ESPManager.getESPStatus();
+    debugInfo += JSON.stringify(espStatus, null, 2) + '\n\n';
+  } else {
+    debugInfo += 'ESPManager not available\n\n';
+  }
+  
+  // Audio info
+  if (window.SynthEngine) {
+    debugInfo += 'Synth Engine Status:\n';
+    debugInfo += `Initialized: ${window.SynthEngine.isInitialized()}\n`;
+    debugInfo += `Active State: ${JSON.stringify(window.SynthEngine.getState())}\n`;
+    debugInfo += `BPM: ${window.SynthEngine.getBPM()}\n\n`;
+  } else {
+    debugInfo += 'SynthEngine not available\n\n';
+  }
+  
+  // WebSocket status
+  if (window.serverSocket) {
+    debugInfo += 'WebSocket Status:\n';
+    const states = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'];
+    debugInfo += `State: ${states[window.serverSocket.readyState]}\n\n`;
+  } else {
+    debugInfo += 'WebSocket not available\n\n';
+  }
+  
+  // Audio context status
+  if (window.Tone && window.Tone.context) {
+    debugInfo += 'Audio Context Status:\n';
+    debugInfo += `State: ${window.Tone.context.state}\n`;
+    debugInfo += `Sample Rate: ${window.Tone.context.sampleRate}\n`;
+  } else {
+    debugInfo += 'Tone.js not available\n\n';
+  }
+  
+  // Last activity time
+  if (window.lastESP32ActivityTime) {
+    const timeSince = Date.now() - window.lastESP32ActivityTime;
+    debugInfo += `\nLast ESP32 Activity: ${timeSince}ms ago\n`;
+  }
+  
+  if (window.lastESPActivityTimes) {
+    debugInfo += 'Individual ESP Activity Times:\n';
+    for (const [espId, time] of Object.entries(window.lastESPActivityTimes)) {
+      if (time) {
+        const timeSince = Date.now() - time;
+        debugInfo += `${espId}: ${timeSince}ms ago\n`;
       }
-      
-      // Retry Tone.js initialization if there are issues with the context
-      if (Tone.context.state === 'suspended' || Tone.context.state === 'interrupted') {
-        console.log('Tone.js context is suspended, trying to resume...');
-        // Try to resume on user interaction
-        document.body.addEventListener('click', function resumeToneContext() {
-          Tone.context.resume().then(() => {
-            console.log('Tone.js context resumed successfully');
-            document.body.removeEventListener('click', resumeToneContext);
-          }).catch(err => {
-            console.error('Failed to resume Tone.js context:', err);
-          });
-        }, { once: false });
-      }
-      
-      console.log('Tone.js initialized successfully');
-      return true;
-    } catch (err) {
-      console.error('Error initializing Tone.js:', err);
-      if (window.UIManager) {
-        window.UIManager.showInfoMessage(`Audio initialization error: ${err.message}`);
-      }
-      return false;
     }
   }
   
-  // Initialize Tone.js
-  initializeToneJS();
-  
-  // Show ready message when everything is initialized
-  EventBus.subscribe('appInitialized', () => {
-    console.log('CreaTune Application Initialized');
+  content.textContent = debugInfo;
+}
+
+// Send test data to all ESPs
+function sendTestData() {
+  if (window.ESPManager && window.ESPManager.processESPEvent) {
+    // Send valid data for all ESPs
+    window.ESPManager.processESPEvent({ 
+      type: 'sensor_data', 
+      name: 'ESP32-1', 
+      sensor: 'soil', 
+      value: 0.6 
+    });
     
-    // Show welcome message
-    if (window.UIManager) {
-      window.UIManager.showInfoMessage('CreaTune ready. Connect ESP32 devices.', 4000);
-    }
-  });
-  
-  // Add test sound button
-  const testButton = document.createElement('button');
-  testButton.innerText = "Test Sound";
-  testButton.style.position = "fixed";
-  testButton.style.bottom = "100px"; // Changed to 100px to avoid overlap with random state button
-  testButton.style.right = "10px";
-  testButton.style.zIndex = "1000";
-  testButton.style.padding = "8px";
-  testButton.style.background = "#4caf50";
-  testButton.style.color = "white";
-  testButton.style.border = "none";
-  testButton.style.borderRadius = "4px";
-  testButton.style.cursor = "pointer";
-  
-  testButton.onclick = async () => {
-    try {
-      // Start Tone.js context if needed
-      if (Tone && Tone.context && Tone.context.state !== 'running') {
-        try {
-          await Tone.start();
-          console.log('Tone.js context started successfully');
-        } catch (err) {
-          console.error('Error starting Tone.js context:', err);
-          if (window.UIManager) {
-            window.UIManager.showInfoMessage('Could not start audio. Try clicking again.');
-          }
-          return;
-        }
-      }
-      
-      // Initialize SynthEngine if needed
-      if (window.SynthEngine && !window.SynthEngine.isInitialized()) {
-        try {
-          await window.SynthEngine.init();
-          console.log('SynthEngine initialized successfully');
-        } catch (err) {
-          console.error('Error initializing SynthEngine:', err);
-          if (window.UIManager) {
-            window.UIManager.showInfoMessage('Could not initialize synth engine.');
-          }
-          return;
-        }
-      }
-      
-      // Play test sound
-      if (window.SynthEngine && window.SynthEngine.triggerSynthFromValue) {
-        try {
-          window.SynthEngine.triggerSynthFromValue(0.6);
-          console.log('Test sound triggered successfully');
-        } catch (err) {
-          console.error('Error triggering test sound:', err);
-          if (window.UIManager) {
-            window.UIManager.showInfoMessage('Error playing test sound.');
-          }
-        }
-      } else {
-        console.error("SynthEngine not available or missing triggerSynthFromValue method");
-        if (window.UIManager) {
-          window.UIManager.showInfoMessage('Sound engine not ready.');
-        }
-      }
-    } catch (err) {
-      console.error("Error playing test sound:", err);
-      if (window.UIManager) {
-        window.UIManager.showInfoMessage(`Sound error: ${err.message}`);
-      }
-    }
-  };
-  
-  document.body.appendChild(testButton);
-  
-  // Ensure ESPManager is available
-  function ensureESPManager() {
-    if (!window.ESPManager) {
-      console.log('ESPManager not found, creating a minimal version');
-      
-      // Create a minimal ESPManager if it's not available
-      window.ESPManager = {
-        espStatus: {
-          esp1: { connected: false, valid: false, value: null, name: 'ESP32-1' },
-          esp2: { connected: false, valid: false, value: null, name: 'ESP32-2' },
-          esp3: { connected: false, valid: false, value: null, name: 'ESP32-3' }
-        },
-        
-        getESPStatus: function() {
-          return {...this.espStatus};
-        },
-        
-        processESPEvent: function(data) {
-          console.log('Processing ESP event:', data);
-          
-          // Find which ESP this event is for
-          let espId = null;
-          
-          if (data.name === 'ESP32-1' || data.sensor === 'soil') {
-            espId = 'esp1';
-          } else if (data.name === 'ESP32-2' || data.sensor === 'light') {
-            espId = 'esp2';
-          } else if (data.name === 'ESP32-3' || data.sensor === 'temperature') {
-            espId = 'esp3';
-          }
-          
-          if (!espId) {
-            console.warn('Unknown ESP device:', data.name, data.sensor);
-            return;
-          }
-          
-          // Process based on event type
-          if (data.type === 'esp_connected') {
-            // ESP connected
-            this.espStatus[espId].connected = true;
-            this.espStatus[espId].valid = false; // Wait for valid data
-            console.log(`ESP ${espId} connected`);
-          } 
-          else if (data.type === 'esp_disconnected') {
-            // ESP disconnected
-            this.espStatus[espId].connected = false;
-            this.espStatus[espId].valid = false;
-            this.espStatus[espId].value = null;
-            console.log(`ESP ${espId} disconnected`);
-          } 
-          else if (data.type === 'sensor_data') {
-            // Sensor data received
-            if (data.value !== undefined && data.value !== null) {
-              this.espStatus[espId].connected = true;
-              
-              // Check if value is in valid range (0.4 to 0.8)
-              const validRange = { min: 0.4, max: 0.8 };
-              this.espStatus[espId].valid = data.value >= validRange.min && data.value <= validRange.max;
-              this.espStatus[espId].value = data.value;
-              
-              console.log(`ESP ${espId} data: ${data.value.toFixed(2)} (${this.espStatus[espId].valid ? 'valid' : 'invalid'})`);
-            } else {
-              // Invalid data
-              this.espStatus[espId].valid = false;
-              this.espStatus[espId].value = null;
-              
-              console.log(`ESP ${espId} invalid data`);
-            }
-          }
-          
-          // Notify state change if StateManager exists
-          if (window.StateManager && typeof window.StateManager.stateFromESPStatus === 'function') {
-            window.StateManager.stateFromESPStatus(this.espStatus);
-          }
-          
-          // Emit ESP status change event
-          if (window.EventBus) {
-            window.EventBus.emit('espStatusChanged', this.espStatus);
-          }
-          
-          // Forward to WebSocket server if connected
-          if (window.serverSocket && window.serverSocket.readyState === WebSocket.OPEN) {
-            console.log('Forwarding ESP event to server:', data);
-            window.serverSocket.send(JSON.stringify(data));
-          }
-        }
-      };
-      
-      // Set up window.lastESP32ActivityTime
-      window.lastESP32ActivityTime = Date.now();
-      
-      return true;
-    }
-    return false;
-  }
-  
-  // Call to ensure ESPManager is available
-  ensureESPManager();
-  
-  // Add simulator controls
-  function setupSimulatorControls() {
-    // Create Random State button if it doesn't exist
-    if (!document.getElementById('randomStateButton')) {
-      const randomStateButton = document.createElement('button');
-      randomStateButton.id = 'randomStateButton';
-      randomStateButton.textContent = '🔄';
-      randomStateButton.title = 'Random State';
-      randomStateButton.style.position = 'fixed';
-      randomStateButton.style.bottom = '50px';
-      randomStateButton.style.right = '10px';
-      randomStateButton.style.width = '60px';
-      randomStateButton.style.height = '60px';
-      randomStateButton.style.borderRadius = '50%';
-      randomStateButton.style.backgroundColor = '#4CAF50';
-      randomStateButton.style.color = 'white';
-      randomStateButton.style.fontSize = '24px';
-      randomStateButton.style.border = 'none';
-      randomStateButton.style.cursor = 'pointer';
-      randomStateButton.style.zIndex = '1000';
-      randomStateButton.style.boxShadow = '0 2px 5px rgba(0,0,0,0.3)';
-      
-      randomStateButton.addEventListener('click', () => {
-        // Use simulator to generate random state if available
-        if (window.ESP32Simulator && window.ESP32Simulator.activateRandomState) {
-          window.ESP32Simulator.activateRandomState();
-        } else {
-          console.warn('ESP32Simulator not available');
-          
-          // Fallback: generate random state through ESPManager
-          if (window.ESPManager) {
-            generateRandomState();
-          }
-        }
-      });
-      
-      document.body.appendChild(randomStateButton);
-    }
-  }
-  
-  // Generate a random state using ESPManager
-  function generateRandomState() {
-    // Random selection of state (0-7)
-    const stateOptions = [
-      // Idle - no ESP connected
-      () => {
-        window.ESPManager.processESPEvent({ type: 'esp_disconnected', name: 'ESP32-1', sensor: 'soil' });
-        window.ESPManager.processESPEvent({ type: 'esp_disconnected', name: 'ESP32-2', sensor: 'light' });
-        window.ESPManager.processESPEvent({ type: 'esp_disconnected', name: 'ESP32-3', sensor: 'temperature' });
-      },
-      // Soil only
-      () => {
-        window.ESPManager.processESPEvent({ type: 'esp_connected', name: 'ESP32-1', sensor: 'soil' });
-        window.ESPManager.processESPEvent({ type: 'esp_disconnected', name: 'ESP32-2', sensor: 'light' });
-        window.ESPManager.processESPEvent({ type: 'esp_disconnected', name: 'ESP32-3', sensor: 'temperature' });
-        window.ESPManager.processESPEvent({ type: 'sensor_data', name: 'ESP32-1', sensor: 'soil', value: 0.6 });
-      },
-      // Light only
-      () => {
-        window.ESPManager.processESPEvent({ type: 'esp_disconnected', name: 'ESP32-1', sensor: 'soil' });
-        window.ESPManager.processESPEvent({ type: 'esp_connected', name: 'ESP32-2', sensor: 'light' });
-        window.ESPManager.processESPEvent({ type: 'esp_disconnected', name: 'ESP32-3', sensor: 'temperature' });
-        window.ESPManager.processESPEvent({ type: 'sensor_data', name: 'ESP32-2', sensor: 'light', value: 0.6 });
-      },
-      // Temperature only
-      () => {
-        window.ESPManager.processESPEvent({ type: 'esp_disconnected', name: 'ESP32-1', sensor: 'soil' });
-        window.ESPManager.processESPEvent({ type: 'esp_disconnected', name: 'ESP32-2', sensor: 'light' });
-        window.ESPManager.processESPEvent({ type: 'esp_connected', name: 'ESP32-3', sensor: 'temperature' });
-        window.ESPManager.processESPEvent({ type: 'sensor_data', name: 'ESP32-3', sensor: 'temperature', value: 0.6 });
-      },
-      // Growth (soil + light)
-      () => {
-        window.ESPManager.processESPEvent({ type: 'esp_connected', name: 'ESP32-1', sensor: 'soil' });
-        window.ESPManager.processESPEvent({ type: 'esp_connected', name: 'ESP32-2', sensor: 'light' });
-        window.ESPManager.processESPEvent({ type: 'esp_disconnected', name: 'ESP32-3', sensor: 'temperature' });
-        window.ESPManager.processESPEvent({ type: 'sensor_data', name: 'ESP32-1', sensor: 'soil', value: 0.6 });
-        window.ESPManager.processESPEvent({ type: 'sensor_data', name: 'ESP32-2', sensor: 'light', value: 0.6 });
-      },
-      // Mirrage (soil + temp)
-      () => {
-        window.ESPManager.processESPEvent({ type: 'esp_connected', name: 'ESP32-1', sensor: 'soil' });
-        window.ESPManager.processESPEvent({ type: 'esp_disconnected', name: 'ESP32-2', sensor: 'light' });
-        window.ESPManager.processESPEvent({ type: 'esp_connected', name: 'ESP32-3', sensor: 'temperature' });
-        window.ESPManager.processESPEvent({ type: 'sensor_data', name: 'ESP32-1', sensor: 'soil', value: 0.6 });
-        window.ESPManager.processESPEvent({ type: 'sensor_data', name: 'ESP32-3', sensor: 'temperature', value: 0.6 });
-      },
-      // Flower (light + temp)
-      () => {
-        window.ESPManager.processESPEvent({ type: 'esp_disconnected', name: 'ESP32-1', sensor: 'soil' });
-        window.ESPManager.processESPEvent({ type: 'esp_connected', name: 'ESP32-2', sensor: 'light' });
-        window.ESPManager.processESPEvent({ type: 'esp_connected', name: 'ESP32-3', sensor: 'temperature' });
-        window.ESPManager.processESPEvent({ type: 'sensor_data', name: 'ESP32-2', sensor: 'light', value: 0.6 });
-        window.ESPManager.processESPEvent({ type: 'sensor_data', name: 'ESP32-3', sensor: 'temperature', value: 0.6 });
-      },
-      // Total (all 3)
-      () => {
-        window.ESPManager.processESPEvent({ type: 'esp_connected', name: 'ESP32-1', sensor: 'soil' });
-        window.ESPManager.processESPEvent({ type: 'esp_connected', name: 'ESP32-2', sensor: 'light' });
-        window.ESPManager.processESPEvent({ type: 'esp_connected', name: 'ESP32-3', sensor: 'temperature' });
-        window.ESPManager.processESPEvent({ type: 'sensor_data', name: 'ESP32-1', sensor: 'soil', value: 0.6 });
-        window.ESPManager.processESPEvent({ type: 'sensor_data', name: 'ESP32-2', sensor: 'light', value: 0.6 });
-        window.ESPManager.processESPEvent({ type: 'sensor_data', name: 'ESP32-3', sensor: 'temperature', value: 0.6 });
-      }
-    ];
+    window.ESPManager.processESPEvent({ 
+      type: 'sensor_data', 
+      name: 'ESP32-2', 
+      sensor: 'light', 
+      value: 0.6 
+    });
     
-    // Choose a random state
-    const randomState = Math.floor(Math.random() * stateOptions.length);
-    stateOptions[randomState]();
+    window.ESPManager.processESPEvent({ 
+      type: 'sensor_data', 
+      name: 'ESP32-3', 
+      sensor: 'temperature', 
+      value: 0.6 
+    });
+    
+    // Update debug view
+    updateDebugContent();
     
     // Show notification
     if (window.UIManager) {
-      const stateNames = ['Idle', 'Soil', 'Light', 'Temperature', 'Growth', 'Mirrage', 'Flower', 'Total'];
-      window.UIManager.showInfoMessage(`Random state: ${stateNames[randomState]}`);
+      window.UIManager.showInfoMessage('Test data sent to all ESPs');
     }
+  } else {
+    console.error('ESPManager not available to send test data');
   }
-  
-  // Initialize simulator components
-  function initializeSimulator() {
-    // Set up simulator controls immediately
-    setupSimulatorControls();
-    
-    // Try to load ESP32 simulator if not already available
-    let checkCount = 0;
-    const maxChecks = 10;
-    
-    function checkForSimulator() {
-      if (window.ESP32Simulator) {
-        console.log('ESP32 Simulator found, ready for testing');
-        return true;
-      } else if (checkCount < maxChecks) {
-        checkCount++;
-        console.log(`Waiting for ESP32 Simulator... (attempt ${checkCount}/${maxChecks})`);
-        setTimeout(checkForSimulator, 500);
-        return false;
-      } else {
-        console.warn('ESP32 Simulator not available after multiple attempts');
-        // Create a fallback if the simulator isn't available
-        createFallbackSimulator();
-        return false;
-      }
-    }
-    
-    // Create a minimal fallback simulator if the real one isn't available
-    function createFallbackSimulator() {
-      if (!window.ESP32Simulator) {
-        console.log('Creating fallback ESP32 Simulator');
-        window.ESP32Simulator = {
-          activateRandomState: function() {
-            if (window.ESPManager && window.ESPManager.processESPEvent) {
-              console.log('Using fallback simulator to generate random state');
-              generateRandomState();
-            } else {
-              console.error('ESPManager not available for fallback simulator');
-            }
-          },
-          generateRandomValues: function() {
-            console.log('Fallback simulator generating random values');
-            generateRandomState();
-          }
-        };
-      }
-    }
-    
-    // Start checking for simulator
-    setTimeout(checkForSimulator, 500);
-  }
-  
-  // Call simulator initialization
-  initializeSimulator();
-  
-  // Emit initialization event
-  EventBus.emit('appInitialized');
-  
-  // Cleanup on page unload
-  window.addEventListener('beforeunload', () => {
-    // Clean up Tone.js resources if possible
-    if (window.Tone && window.Tone.context) {
-      try {
-        window.Tone.context.close().catch(err => console.error('Error closing Tone context:', err));
-      } catch (err) {
-        console.error('Error during Tone cleanup:', err);
-      }
-    }
-    
-    console.log('Application cleanup complete');
-  });
-});
+}
+
+// Call this in your app.js initialization
+setupDebugButton();

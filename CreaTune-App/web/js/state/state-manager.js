@@ -91,20 +91,48 @@ document.addEventListener('DOMContentLoaded', () => {
             window.lastESP32ActivityTime = Date.now();
           }
           
+          // Update individual ESP activity time
+          if (window.lastESPActivityTimes) {
+            let espId = null;
+            if (data.name === 'ESP32-1' || data.sensor === 'soil') {
+              espId = 'esp1';
+            } else if (data.name === 'ESP32-2' || data.sensor === 'light') {
+              espId = 'esp2';
+            } else if (data.name === 'ESP32-3' || data.sensor === 'temperature') {
+              espId = 'esp3';
+            }
+            
+            if (espId) {
+              window.lastESPActivityTimes[espId] = Date.now();
+            }
+          }
+          
           // Start Tone.js context if not already started
-          if (Tone && Tone.context.state !== 'running') {
-            Tone.start();
+          if (Tone && Tone.context && Tone.context.state !== 'running') {
+            try {
+              Tone.start();
+            } catch (err) {
+              console.error('Error starting Tone.js context:', err);
+            }
           }
           
           // Only trigger synth if data is valid
           if (window.SynthEngine && data.value >= 0.4 && data.value <= 0.8) {
             // Ensure audio is initialized
             if (!window.SynthEngine.isInitialized()) {
-              window.SynthEngine.init();
+              try {
+                window.SynthEngine.init();
+              } catch (err) {
+                console.error('Error initializing SynthEngine:', err);
+              }
             }
             
             // Determine which synth to trigger based on sensor
-            window.SynthEngine.triggerSynthFromValue(data.value);
+            try {
+              window.SynthEngine.triggerSynthFromValue(data.value);
+            } catch (err) {
+              console.error('Error triggering synth:', err);
+            }
             
             // Pulse the creature for visual feedback
             let creatureNum = 0;
@@ -117,7 +145,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (creatureNum > 0 && window.CreatureManager) {
-              window.CreatureManager.pulseCreature(`creature${creatureNum}`);
+              try {
+                window.CreatureManager.pulseCreature(`creature${creatureNum}`);
+              } catch (err) {
+                console.error('Error pulsing creature:', err);
+              }
             }
           }
         }
@@ -236,55 +268,47 @@ document.addEventListener('DOMContentLoaded', () => {
       updateUIForState(currentState, espStatus);
     }
   }
-
-  // Also add this function to improve state debugging
-  function getStateDisplay() {
-    let result = `Current State: ${currentState.toUpperCase()}\n`;
-    result += `Sub-State: ${currentSubState}\n\n`;
-    
-    // Add ESP status if available
-    if (window.ESPManager) {
-      const espStatus = window.ESPManager.getESPStatus();
-      
-      result += 'ESP Status:\n';
-      
-      for (const [espId, status] of Object.entries(espStatus)) {
-        const connected = status.connected ? '✓' : '✗';
-        const valid = status.valid ? '✓' : '✗';
-        const value = status.value !== null ? status.value.toFixed(2) : 'null';
-        
-        result += `${espId}: Connected: ${connected}, Valid: ${valid}, Value: ${value}\n`;
-      }
-    }
-    
-    return result;
-  }
-
   
   // Update UI elements based on current state
   function updateUIForState(state, espStatus) {
     // Update background if manager exists
     if (window.BackgroundManager) {
       console.log('Updating background for state:', state);
-      window.BackgroundManager.updateBackground(state);
+      try {
+        window.BackgroundManager.updateBackground(state);
+      } catch (err) {
+        console.error('Error updating background:', err);
+      }
     }
     
     // Update creatures if manager exists
     if (window.CreatureManager) {
       console.log('Updating creatures for state:', state);
-      window.CreatureManager.updateCreatures(state, espStatus);
+      try {
+        window.CreatureManager.updateCreatures(state, espStatus);
+      } catch (err) {
+        console.error('Error updating creatures:', err);
+      }
     }
     
     // Update synths if engine exists
     if (window.SynthEngine) {
       console.log('Updating synths for state:', state);
-      window.SynthEngine.updateSynths(state, espStatus);
+      try {
+        window.SynthEngine.updateSynths(state, espStatus);
+      } catch (err) {
+        console.error('Error updating synths:', err);
+      }
     }
     
     // Update status indicators if UI manager exists
     if (window.UIManager) {
       console.log('Updating UI for state:', state);
-      window.UIManager.updateStatusIndicators(state, espStatus);
+      try {
+        window.UIManager.updateStatusIndicators(state, espStatus);
+      } catch (err) {
+        console.error('Error updating UI:', err);
+      }
     }
     
     // Dispatch state change event
@@ -317,6 +341,29 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   }
   
+  // Get state display for debugging
+  function getStateDisplay() {
+    let result = `Current State: ${currentState.toUpperCase()}\n`;
+    result += `Sub-State: ${currentSubState}\n\n`;
+    
+    // Add ESP status if available
+    if (window.ESPManager) {
+      const espStatus = window.ESPManager.getESPStatus();
+      
+      result += 'ESP Status:\n';
+      
+      for (const [espId, status] of Object.entries(espStatus)) {
+        const connected = status.connected ? '✓' : '✗';
+        const valid = status.valid ? '✓' : '✗';
+        const value = status.value !== null ? status.value.toFixed(2) : 'null';
+        
+        result += `${espId}: Connected: ${connected}, Valid: ${valid}, Value: ${value}\n`;
+      }
+    }
+    
+    return result;
+  }
+  
   // Handle container clicks for recording
   function setupContainerInteractions() {
     // Don't set up if container doesn't exist or handlers already set
@@ -343,6 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('frameCoverRight'),
         document.getElementById('frameCoverTop'),
         document.getElementById('debugStateButton'),
+        document.getElementById('debugButton'),
         document.getElementById('espStatusPanel'),
         document.getElementById('randomSynthButton'),
         document.getElementById('randomStateButton'),

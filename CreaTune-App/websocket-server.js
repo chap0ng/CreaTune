@@ -191,11 +191,11 @@ wss.on('connection', (ws, req) => {
           espInfo.lastData = data;
         }
         
-        // Map data to animation frame
-        data = mapSensorDataToAnimation(data);
+        // Map data to animation frame without reassigning to 'data'
+        const mappedData = mapSensorDataToAnimation({...data}); // Fixed: Create a copy to modify
         
         // Broadcast sensor data to web clients
-        broadcastToWebClients(data);
+        broadcastToWebClients(mappedData);
         
         // Broadcast updated application state
         broadcastState();
@@ -320,20 +320,23 @@ function sendESP32Status(ws) {
 
 // Map sensor data to animation frames
 function mapSensorDataToAnimation(data) {
-  if (data.type === 'sensor_data' && data.value !== undefined) {
+  // Create a copy to avoid modifying the original
+  const result = {...data};
+  
+  if (result.type === 'sensor_data' && result.value !== undefined) {
     // Normalize value between 0 and 1
-    const normalizedValue = Math.min(1, Math.max(0, data.value));
+    const normalizedValue = Math.min(1, Math.max(0, result.value));
     
     // Map to frame index (1-11)
     const frameIndex = Math.ceil(normalizedValue * 11);
     
     // Add frame index to data
-    data.frameIndex = frameIndex;
+    result.frameIndex = frameIndex;
     
-    console.log(`Mapped sensor value ${data.value} to frame ${frameIndex}`);
+    console.log(`Mapped sensor value ${result.value} to frame ${frameIndex}`);
   }
   
-  return data;
+  return result;
 }
 
 // Check for ESP32 timeouts periodically
