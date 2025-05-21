@@ -181,8 +181,10 @@ wss.on('connection', (ws, req) => {
         }
         
         if (espId) {
+          // Store previous connection state before updating
+          const wasConnectedBefore = appState[espId].connected;
+          
           // Update ESP status
-          const wasConnected = appState[espId].connected;
           appState[espId].connected = true;
           appState[espId].value = data.value;
           
@@ -193,7 +195,7 @@ wss.on('connection', (ws, req) => {
                                   data.value <= 0.8;
           
           // If this is a reconnection, notify clients
-          if (!wasConnected) {
+          if (!wasConnectedBefore) {
             console.log(`ESP32 ${sensorName} reconnected`);
             
             // Don't broadcast immediately on every reconnect to reduce state thrashing
@@ -238,7 +240,7 @@ wss.on('connection', (ws, req) => {
         
         // Only broadcast state updates when significant changes occur
         // or every 5th message to reduce network traffic
-        if (!wasConnected || clientInfo.id % 5 === 0) {
+        if (!wasConnectedBefore || clientInfo.id % 5 === 0) {
           broadcastState();
         }
       } 
