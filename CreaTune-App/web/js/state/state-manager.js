@@ -199,6 +199,9 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Determine state based on ESP status
   function stateFromESPStatus(espStatus) {
+    // Store previous state for comparison
+    const previousState = currentState;
+    
     // Determine state based on connected ESP32 devices
     let newState;
     
@@ -221,17 +224,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Only update if state has changed
-    if (newState !== currentState) {
-      console.log(`State changing from ${currentState} to ${newState}`);
+    if (newState !== previousState) {
+      console.log(`State changing from ${previousState} to ${newState}`);
       currentState = newState;
       
       // Update UI elements based on the new state
       updateUIForState(currentState, espStatus);
-    } else {
-      // Update UI elements anyway in case validities changed
+    } else if (previousState !== STATES.IDLE) {
+      // Update UI elements even if the state hasn't changed
+      // but only if we're not in IDLE state, to ensure all visual updates happen
       updateUIForState(currentState, espStatus);
     }
   }
+
+  // Also add this function to improve state debugging
+  function getStateDisplay() {
+    let result = `Current State: ${currentState.toUpperCase()}\n`;
+    result += `Sub-State: ${currentSubState}\n\n`;
+    
+    // Add ESP status if available
+    if (window.ESPManager) {
+      const espStatus = window.ESPManager.getESPStatus();
+      
+      result += 'ESP Status:\n';
+      
+      for (const [espId, status] of Object.entries(espStatus)) {
+        const connected = status.connected ? '✓' : '✗';
+        const valid = status.valid ? '✓' : '✗';
+        const value = status.value !== null ? status.value.toFixed(2) : 'null';
+        
+        result += `${espId}: Connected: ${connected}, Valid: ${valid}, Value: ${value}\n`;
+      }
+    }
+    
+    return result;
+  }
+
   
   // Update UI elements based on current state
   function updateUIForState(state, espStatus) {
@@ -373,6 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
     getSubState: () => currentSubState,
     setSubState: setSubState,
     updateUIForState: updateUIForState,
-    stateFromESPStatus: stateFromESPStatus
+    stateFromESPStatus: stateFromESPStatus,
+    getStateDisplay: getStateDisplay // Add the new function
   };
 });
