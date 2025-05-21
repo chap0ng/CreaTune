@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 8080;
 const WEB_ROOT = path.join(__dirname, 'web');
 
 // ESP32 configuration
-const ESP32_TIMEOUT = 5000; // 5 seconds timeout - faster state changes
+const ESP32_TIMEOUT = 10000; // 10 seconds timeout - faster state changes
 
 // Create HTTP server
 const server = http.createServer((req, res) => {
