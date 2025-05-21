@@ -14,6 +14,19 @@ body {
   align-items: center;
   min-height: 100vh;
   font-family: Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight on entire body */
+}
+
+/* Remove tap highlight on all buttons and interactive elements globally */
+button, 
+a, 
+input, 
+.drag-handle, 
+.sprite, 
+.container,
+[role="button"],
+[tabindex="0"] {
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Container Layout */
@@ -35,6 +48,7 @@ body {
   overflow: hidden;
   contain: layout;
   z-index: 10;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight on container */
 }
 
 /* ======== FRAME UI ELEMENTS ======== */
@@ -56,10 +70,12 @@ body {
   background-repeat: no-repeat;
   pointer-events: none;
   background-image: url('../assets/tab-top.png');
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
 }
 
 .top-tab * {
   pointer-events: auto;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight on all top tab children */
 }
 
 .top-tab.dragging {
@@ -118,6 +134,7 @@ body {
   will-change: background-position;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
 }
 
 .container.tab-open .sprite {
@@ -154,6 +171,8 @@ body {
   transition: opacity 0.3s ease;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
+  touch-action: none; /* Improve touch handling */
 }
 
 .handle-overlay {
@@ -163,6 +182,7 @@ body {
   width: 100%;
   height: 100%;
   pointer-events: none;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
 }
 
 .drag-handle.dragging,
@@ -190,6 +210,7 @@ body {
   border-radius: 10px;
   color: white;
   font-family: 'VT323', monospace;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
 }
 
 .bpm-value {
@@ -204,6 +225,7 @@ body {
   border-radius: 5px;
   background: #555;
   outline: none;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
 }
 
 .bpm-slider::-webkit-slider-thumb {
@@ -259,6 +281,7 @@ body {
   color: white;
   border-radius: 5px;
   min-width: 200px;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
 }
 
 .esp-indicator {
@@ -284,13 +307,15 @@ body {
   border-radius: 5px;
   font-size: 14px;
   z-index: 1000;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
 }
 
-#debugStateButton {
+#debugStateButton, 
+#randomStateButton, 
+.simulator-button, 
+.synth-button {
   font-family: 'VT323', monospace;
   position: fixed;
-  bottom: 10px;
-  right: 10px;
   z-index: 1000;
   padding: 8px;
   border-radius: 4px;
@@ -298,6 +323,13 @@ body {
   color: white;
   cursor: pointer;
   border: none;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
+  user-select: none; /* Prevent text selection on buttons */
+}
+
+#debugStateButton {
+  bottom: 10px;
+  right: 10px;
 }
 
 #debugStateButton:hover {
@@ -338,6 +370,7 @@ body {
   font-family: 'VT323', monospace;
   z-index: 1000;
   display: none;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
 }
 
 #autoInitStatus {
@@ -351,6 +384,23 @@ body {
   padding: 10px;
   z-index: 1000;
   font-family: 'VT323', monospace;
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
+}
+
+/* ESP32 Simulator elements */
+.esp32-simulator, 
+.simulator-toggle, 
+.simulator-notification {
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
+}
+
+/* Apply to all simulator buttons */
+.simulator-button, 
+.connect-button, 
+.valid-button, 
+.random-button, 
+.random-state-button {
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
 }
 
 /* ======== RESPONSIVE ADJUSTMENTS ======== */

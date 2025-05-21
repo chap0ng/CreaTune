@@ -28,29 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // DOM elements
   const container = document.getElementById('spriteContainer');
   const sprite = document.getElementById('sprite');
-  
-  // Remember connections to handle reconnections
-  const connectedESP32s = {
-    'ESP32-1': false,
-    'ESP32-2': false,
-    'ESP32-3': false,
-    'soil': false,
-    'light': false,
-    'temperature': false,
-    'MoistureSensor': false
-  };
 
   // Handle socket events from the server
   function setupWebsocketEvents() {
-    // Close existing connection if it exists
-    if (window.serverSocket) {
-      try {
-        window.serverSocket.close();
-      } catch (err) {
-        console.error('Error closing existing socket:', err);
-      }
-    }
-    
     const socket = new WebSocket(`ws://${window.location.host}`);
     
     socket.onopen = () => {
@@ -61,71 +41,62 @@ document.addEventListener('DOMContentLoaded', () => {
         type: 'hello',
         client: 'WebUI'
       }));
+      
+      // Update connection status UI if available
+      if (window.UIManager && window.UIManager.updateConnectionStatus) {
+        window.UIManager.updateConnectionStatus(true);
+      }
+      
+      // Notify listeners
+      if (window.EventBus) {
+        window.EventBus.emit('websocketConnected', true);
+      }
     };
     
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         
-        // Emit event for other components
-        if (window.EventBus) {
-          window.EventBus.emit('webSocketMessage', data);
-        }
-        
         // Handle state update
         if (data.type === 'state_update') {
           console.log('Received state update:', data.state);
+          
+          // Emit event for ESPManager to process
+          if (window.EventBus) {
+            window.EventBus.emit('serverStateUpdate', { state: data.state });
+          }
+          
+          // Update state based on server data
           updateStateFromServer(data.state);
         }
         
         // Handle ESP32 connection status
         if (data.type === 'esp_connected') {
           console.log(`ESP32 connected: ${data.name}`);
-          
-          // Mark as connected
-          if (data.name) {
-            connectedESP32s[data.name] = true;
-          }
-          
-          // Show notification about reconnection
-          if (data.reconnected && window.UIManager) {
-            window.UIManager.showInfoMessage(`ESP32 ${data.name} reconnected!`, 3000);
-          }
+          // No need to do anything here, the state update will handle this
         }
         
         // Handle ESP32 disconnection
         if (data.type === 'esp_disconnected') {
           console.log(`ESP32 disconnected: ${data.name}`);
-          
-          // Mark as disconnected
-          if (data.name) {
-            connectedESP32s[data.name] = false;
-          }
+          // No need to do anything here, the state update will handle this
         }
         
         // Handle sensor data - crucial for synth triggering
         if (data.type === 'sensor_data') {
-          console.log(`Sensor data from ${data.name || data.sensor}: ${data.value}`);
+          console.log(`Sensor data from ${data.name}: ${data.value}`);
+          
+          // Update last activity time
+          if (window.lastESP32ActivityTime) {
+            window.lastESP32ActivityTime = Date.now();
+          }
           
           // Start Tone.js context if not already started
           if (Tone && Tone.context.state !== 'running') {
             Tone.start();
           }
           
-          // Mark as connected
-          if (data.name) {
-            connectedESP32s[data.name] = true;
-          }
-          if (data.sensor) {
-            connectedESP32s[data.sensor] = true;
-          }
-          
-          // Update lastESP32ActivityTime for timeout detection
-          if (window.lastESP32ActivityTime !== undefined) {
-            window.lastESP32ActivityTime = Date.now();
-          }
-          
-          // Directly update synth parameters based on sensor data
+          // Only trigger synth if data is valid
           if (window.SynthEngine && data.value >= 0.4 && data.value <= 0.8) {
             // Ensure audio is initialized
             if (!window.SynthEngine.isInitialized()) {
@@ -137,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Pulse the creature for visual feedback
             let creatureNum = 0;
-            if (data.name === 'ESP32-1' || data.sensor === 'soil' || data.sensor === 'MoistureSensor') {
+            if (data.name === 'ESP32-1' || data.sensor === 'soil') {
               creatureNum = 1;
             } else if (data.name === 'ESP32-2' || data.sensor === 'light') {
               creatureNum = 2;
@@ -158,12 +129,32 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.onclose = () => {
       console.log('Disconnected from server');
       
+      // Update connection status UI if available
+      if (window.UIManager && window.UIManager.updateConnectionStatus) {
+        window.UIManager.updateConnectionStatus(false);
+      }
+      
+      // Notify listeners
+      if (window.EventBus) {
+        window.EventBus.emit('websocketConnected', false);
+      }
+      
       // Retry connection after 2 seconds
       setTimeout(setupWebsocketEvents, 2000);
     };
     
     socket.onerror = (error) => {
       console.error('WebSocket error:', error);
+      
+      // Update connection status UI if available
+      if (window.UIManager && window.UIManager.updateConnectionStatus) {
+        window.UIManager.updateConnectionStatus(false);
+      }
+      
+      // Notify listeners
+      if (window.EventBus) {
+        window.EventBus.emit('websocketConnected', false);
+      }
     };
     
     // Store socket for other components
@@ -203,6 +194,42 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       // Update UI elements anyway in case validities changed
       updateUIForState(currentState, serverState);
+    }
+  }
+  
+  // Determine state based on ESP status
+  function stateFromESPStatus(espStatus) {
+    // Determine state based on connected ESP32 devices
+    let newState;
+    
+    if (espStatus.esp1.connected && espStatus.esp2.connected && espStatus.esp3.connected) {
+      newState = STATES.TOTAL;
+    } else if (espStatus.esp2.connected && espStatus.esp3.connected) {
+      newState = STATES.FLOWER;
+    } else if (espStatus.esp1.connected && espStatus.esp3.connected) {
+      newState = STATES.MIRRAGE;
+    } else if (espStatus.esp1.connected && espStatus.esp2.connected) {
+      newState = STATES.GROWTH;
+    } else if (espStatus.esp3.connected) {
+      newState = STATES.TEMP;
+    } else if (espStatus.esp2.connected) {
+      newState = STATES.LIGHT;
+    } else if (espStatus.esp1.connected) {
+      newState = STATES.SOIL;
+    } else {
+      newState = STATES.IDLE;
+    }
+    
+    // Only update if state has changed
+    if (newState !== currentState) {
+      console.log(`State changing from ${currentState} to ${newState}`);
+      currentState = newState;
+      
+      // Update UI elements based on the new state
+      updateUIForState(currentState, espStatus);
+    } else {
+      // Update UI elements anyway in case validities changed
+      updateUIForState(currentState, espStatus);
     }
   }
   
@@ -290,6 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('debugStateButton'),
         document.getElementById('espStatusPanel'),
         document.getElementById('randomSynthButton'),
+        document.getElementById('randomStateButton'),
         document.getElementById('bpmSliderContainer')
       ];
       
@@ -321,43 +349,18 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Container interactions setup complete');
   }
   
-  // Check for ESP32 timeout
-  function setupESP32TimeoutCheck() {
-    // Add a global lastESP32ActivityTime for timeout detection
-    window.lastESP32ActivityTime = Date.now();
-    
-    // Check for ESP32 timeouts every 5 seconds
-    setInterval(() => {
-      const now = Date.now();
-      
-      // If no activity for 15 seconds, try to reconnect WebSocket
-      if (now - window.lastESP32ActivityTime > 15000) {
-        console.log('ESP32 timeout detected, reconnecting WebSocket...');
-        
-        // Refresh WebSocket connection
-        if (window.serverSocket) {
-          try {
-            // Only try to reconnect if the socket is closed or closing
-            if (window.serverSocket.readyState === WebSocket.CLOSED || 
-                window.serverSocket.readyState === WebSocket.CLOSING) {
-              setupWebsocketEvents();
-            }
-          } catch (err) {
-            console.error('Error during WebSocket reconnection:', err);
-          }
-        }
-        
-        // Reset the timer
-        window.lastESP32ActivityTime = now;
-      }
-    }, 5000);
-  }
-  
   // Initialize
   function initialize() {
     setupWebsocketEvents();
     setupContainerInteractions();
-    setupESP32TimeoutCheck();
+    
+    // Add an event listener for ESP status changes
+    if (window.EventBus) {
+      window.EventBus.subscribe('espStatusChanged', (status) => {
+        stateFromESPStatus(status);
+      });
+    }
+    
     console.log('State manager initialized');
   }
   
@@ -369,7 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
     getState: () => currentState,
     getSubState: () => currentSubState,
     setSubState: setSubState,
-    reconnectWebSocket: setupWebsocketEvents, // Expose reconnect method
-    getESP32Status: () => ({...connectedESP32s})  // Expose ESP32 status
+    updateUIForState: updateUIForState,
+    stateFromESPStatus: stateFromESPStatus
   };
 });
