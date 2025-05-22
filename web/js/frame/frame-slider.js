@@ -8,12 +8,17 @@ document.addEventListener('DOMContentLoaded', () => {
     let isDragging = false;
     let startY = 0;
     let currentOffset = 0;
+    let isOpen = false;
+    
+    // Make state available globally
+    window.frameSliderState = { isOpen: false };
     
     // Set body overflow to crop
     document.body.style.overflow = 'hidden';
     
     function updateDrag(offset) {
-        const maxOffset = window.innerHeight * 0.5;
+        const frameHeight = frameidle.offsetHeight;
+        const maxOffset = frameHeight * 0.5;
         const clampedOffset = Math.max(0, Math.min(maxOffset, offset));
         
         // Move top row as one unit
@@ -34,9 +39,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function snap() {
-        const maxOffset = window.innerHeight * 0.7;
+        const frameHeight = frameidle.offsetHeight;
+        const maxOffset = frameHeight * 0.7;
         const threshold = maxOffset * 0.4;
         const target = currentOffset > threshold ? maxOffset : 0;
+        
+        isOpen = target > 0; // Track open state
+        window.frameSliderState.isOpen = isOpen; // Update global state
         
         const elements = [frametop, document.querySelector('.corner1'), document.querySelector('.corner2')];
         elements.forEach(el => el.style.transition = 'transform 0.3s ease-out');
@@ -49,6 +58,16 @@ document.addEventListener('DOMContentLoaded', () => {
             [framebackground, frameleft, frameright].forEach(el => el.style.transition = '');
         }, 300);
     }
+    
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        if (isOpen) {
+            const frameHeight = frameidle.offsetHeight;
+            const newOffset = frameHeight * 0.7;
+            updateDrag(newOffset);
+            currentOffset = newOffset;
+        }
+    });
     
     frametop.addEventListener('mousedown', (e) => {
         isDragging = true;

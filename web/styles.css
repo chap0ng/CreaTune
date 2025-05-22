@@ -1,37 +1,46 @@
-/* Google Fonts Import */
+/* ==========================================================================
+   IMPORTS & VARIABLES
+   ========================================================================== */
+
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
-/* Color Palette */
 :root {
+  /* Primary Colors */
   --warm-yellow: #f6c052;
   --steel-blue: #699bc8;
   --sage-green: #8ea47d;
   --warm-beige: #f5eee0;
   --dark-slate: #2d3142;
-  --coral-red: #e6695a; /* Accent */
+  --coral-red: #e6695a;
 
   /* Blended Colors */
-  --yellow-blue: #a0ab8d; /* Warm Yellow + Steel Blue */
-  --blue-green: #79a397; /* Steel Blue + Sage Green */
-  --yellow-green: #bea867; /* Warm Yellow + Sage Green */
-  --all-three: #8fa082; /* All three combined */
+  --yellow-blue: #a0ab8d;
+  --blue-green: #79a397;
+  --yellow-green: #bea867;
+  --all-three: #8fa082;
 }
 
-/* CSS Reset */
+/* ==========================================================================
+   BASE STYLES
+   ========================================================================== */
+
 * {
-  margin: 1px; /* frame margins */
+  margin: 1px;
   padding: 0;
   box-sizing: border-box;
 }
 
-/* Basic styling - Mobile First (Nothing Phone 2a base) */
 body {
   font-family: 'VT323', monospace;
   line-height: 1.6;
   color: var(--dark-slate);
   background-color: var(--warm-beige);
-  font-size: 20px; /* Increased for VT323 readability on Nothing Phone 2a */
+  font-size: 20px;
 }
+
+/* ==========================================================================
+   MAIN LAYOUT
+   ========================================================================== */
 
 .frameidle {
   display: grid;
@@ -43,54 +52,38 @@ body {
     "corner3 framebottom corner4";
   width: 100vw;
   height: 100vh;
-  max-width: calc(100vh * 1.5); /* 3:2 aspect ratio */
-  max-height: calc(100vw / 1.5);
+  max-width: min(100vw, calc(100vh * 1.6));
+  max-height: min(100vh, calc(100vw / 1.6));
   margin: 0 auto;
-  padding: 80px 60px 100px 60px;
-  position: relative; 
+  padding: min(80px, 8vw) min(60px, 6vw) min(100px, 10vw) min(60px, 6vw);
+  position: relative;
 }
 
+/* ==========================================================================
+   FRAME COMPONENTS
+   ========================================================================== */
+
+/* Corners */
+.corner1, .corner2, .corner3, .corner4 {
+  background-color: var(--coral-red);
+}
 
 .corner1 {
   grid-area: corner1;
-  background-color: var(--coral-red);
   transition: transform;
   will-change: transform;
 }
+
 .corner2 {
   grid-area: corner2;
-  background-color: var(--coral-red);
   transition: transform;
   will-change: transform;
 }
-.corner3 {
-  grid-area: corner3;
-  background-color: var(--coral-red);
-}
-.corner4 {
-  grid-area: corner4;
-  background-color: var(--coral-red);
-}
 
-.frametop, .corner1, .corner2 {
-    will-change: transform;
-    transform: translateZ(0);
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-}
+.corner3 { grid-area: corner3; }
+.corner4 { grid-area: corner4; }
 
-/* Force same rendering layer */
-.corner1, .corner2 {
-    position: relative;
-    z-index: 0;
-}
-
-.framebackground, .frameleft, .frameright {
-  will-change: margin-top;
-}
-
-/* Frame */
-/* Top, Left, Right, Bottom */
+/* Top bar */
 .frametop {
   grid-area: frametop;
   background-color: var(--steel-blue);
@@ -102,65 +95,117 @@ body {
   height: 100%;
 }
 
-@keyframes frametop {
-  0% { background-position: 0 0; }
-  25% { background-position: -256px 0; }
-  50% { background-position: -512px 0; }
-  75% { background-position: 0 -64px; }
-  100% { background-position: -256px -64px; }
-}
-
+/* Side frames */
 .frameleft {
   grid-area: frameleft;
   background-color: var(--steel-blue);
   will-change: height;
 }
+
 .frameright {
   grid-area: frameright;
   background-color: var(--steel-blue);
   will-change: height;
 }
+
 .framebottom {
   grid-area: framebottom;
   background-color: var(--steel-blue);
 }
 
-/* Frame Backgrounds */
-/* Background change when ESP32 are Connected */
-/* Vary depending on the connection combinations */
+/* Performance optimizations */
 
-/* Idle background */
+.frametop, .corner1, .corner2 {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.corner1, .corner2 {
+  position: relative;
+  z-index: 0;
+}
+
+.framebackground, .frameleft, .frameright {
+  will-change: margin-top;
+}
+
+/* ==========================================================================
+   FRAME BACKGROUNDS & STATES
+   ========================================================================== */
+
+/*no esp32 connected background*/
 .framebackground {
   grid-area: framebackground;
   background-color: var(--warm-beige);
   border: none;
-  will-change: height;
+  will-change: margin-top;
   position: relative;
-  overflow: hidden; /* Ensure clean edges */
+  overflow: hidden;
+  animation: idlebackground 2s steps(4) 5s;
 }
 
-/* Esp32 specific backgrounds */
-
-.framebackground.soil {
-  position: relative;
-  background-image: url('images/soil-background.jpg');
-}
-.framebackground.temp {
-  background-color: var(--coral-red);
-}
-.framebackground.light {
-  background-color: var(--coral-red);
-}
-
+/* Background if esp32 soil */
 .framebackground.soil-background {
   width: 64px;
   height: 64px;
   background-image: url('sprite/soil-background.png');
-  animation: grid-animation 2s steps(4) 5s;
+  background-size: 64px 64px;
+  animation: soilbackground 2s steps(4) 5s;
+  z-index: 1;
+}
+/* Background if esp32 temp */
+.framebackground.temp-background {
+  width: 64px;
+  height: 64px;
+  background-image: url('sprite/soil-background.png');
+  background-size: 64px 64px;
+  animation: tempbackground 2s steps(4) 5s;
+  z-index: 1;
+}
+/* Background if esp32 light */
+.framebackground.light-background {
+  width: 64px;
+  height: 64px;
+  background-image: url('sprite/soil-background.png');
+  background-size: 64px 64px;
+  animation: lightbackground 2s steps(4) 5s;
   z-index: 1;
 }
 
-@keyframes grid-animation {
+/* ==========================================================================
+   CREATURES
+   ========================================================================== */
+
+.idle-creature, .soil-creature {
+  position: absolute;
+  top: calc(50% + 0px);
+  width: 60%;
+  height: 60%;
+  transform: translate(-50%, -50%);
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  display: none;
+  z-index: 5;
+}
+
+.soil-creature {
+  background-image: url('sprites/creatures/soil-creature.png');
+  background-color: transparent;
+  animation: soilcreature 2s steps(4) infinite;
+}
+
+.soil-creature.active {
+  display: block;
+}
+
+/* ==========================================================================
+   ANIMATIONS
+   ========================================================================== */
+
+@keyframes soilcreature {
   0% { background-position: 0 0; }
   25% { background-position: -256px 0; }
   50% { background-position: -512px 0; }
@@ -168,35 +213,18 @@ body {
   100% { background-position: -256px -64px; }
 }
 
-
-/* Creatures */
-
-.idle-creature {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 80px;
-  height: 80px;
-  z-index: 10;
-  display: none;
+@keyframes idlebackground {
+  0% { background-position: 0 0; }
+  25% { background-position: -256px 0; }
+  50% { background-position: -512px 0; }
+  75% { background-position: 0 -64px; }
+  100% { background-position: -256px -64px; }
 }
 
-.soil-creature {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 70%;
-  height: 70%;
-  background-color: transparent;
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-image: url('sprites/creatures/soil-creature.png');
-  display: none;
-}
-
-.soil-creature.active {
-  display: block;
+@keyframes soilbackground {
+  0% { background-position: 0 0; }
+  25% { background-position: -256px 0; }
+  50% { background-position: -512px 0; }
+  75% { background-position: 0 -64px; }
+  100% { background-position: -256px -64px; }
 }

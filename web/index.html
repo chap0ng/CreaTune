@@ -19,15 +19,22 @@
     <div class="framebottom"></div>
     <div class="corner4"></div>
     <div class="framebackground">
-      <div class="idle-creature"></div>
-        <div class="soil-creature"></div>
-      <!-- Your other content -->
+      <!-- Background content -->
     </div>
+    <div class="idle-creature"></div>
   </div>
 </body>
 
+<!-- Core system scripts -->
 <script src="js/creatones/esp32-status.js"></script>
+<script src="js/client/websocket-client.js"></script>
+
+<!-- Frame and UI scripts -->
 <script src="js/frame/background-manager.js"></script>
 <script src="js/frame/frame-slider.js"></script>
+<script src="js/creatures/creature-hidder.js"></script>
+
+<!-- Sensor handlers -->
+<script src="js/soil.js"></script>
 
 </html>
