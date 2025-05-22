@@ -41,15 +41,15 @@ body {
     "corner1 frametop corner2"
     "frameleft framebackground frameright"
     "corner3 framebottom corner4";
-  min-height: 100vh;
-  max-height: 100vh;
-  padding-top: 80px;
-  padding-bottom: 80px;
-  padding-left: 60px;
-  padding-right: 60px;
-  gap: 0;
-  position: flex;
+  width: 100vw;
+  height: 100vh;
+  max-width: calc(100vh * 1.5); /* 3:2 aspect ratio */
+  max-height: calc(100vw / 1.5);
+  margin: 0 auto;
+  padding: 80px 60px 100px 60px;
+  position: relative; 
 }
+
 
 .corner1 {
   grid-area: corner1;
@@ -125,6 +125,9 @@ body {
   background-color: var(--steel-blue);
 }
 
+/* Frame Backgrounds */
+/* Background change when ESP32 are Connected */
+/* Vary depending on the connection combinations */
 
 /* Idle background */
 .framebackground {
@@ -132,13 +135,14 @@ body {
   background-color: var(--warm-beige);
   border: none;
   will-change: height;
+  position: relative;
+  overflow: hidden; /* Ensure clean edges */
 }
 
-/* Frame Backgrounds */
-/* Background change when ESP32 are Connected */
-/* Vary depending on the connection combinations */
+/* Esp32 specific backgrounds */
 
 .framebackground.soil {
+  position: relative;
   background-image: url('images/soil-background.jpg');
 }
 .framebackground.temp {
@@ -153,6 +157,7 @@ body {
   height: 64px;
   background-image: url('sprite/soil-background.png');
   animation: grid-animation 2s steps(4) 5s;
+  z-index: 1;
 }
 
 @keyframes grid-animation {
@@ -161,4 +166,37 @@ body {
   50% { background-position: -512px 0; }
   75% { background-position: 0 -64px; }
   100% { background-position: -256px -64px; }
+}
+
+
+/* Creatures */
+
+.idle-creature {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  z-index: 10;
+  display: none;
+}
+
+.soil-creature {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 70%;
+  height: 70%;
+  background-color: transparent;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-image: url('sprites/creatures/soil-creature.png');
+  display: none;
+}
+
+.soil-creature.active {
+  display: block;
 }
