@@ -1,4 +1,4 @@
-// soil.js - Soil sensor audio and visual handler
+// soil.js - Soil sensor audio handler
 
 class SoilHandler {
     constructor() {
@@ -12,7 +12,7 @@ class SoilHandler {
     }
     
     async initializeTone() {
-        // Create soil-specific synth with woody/earthy tones
+        // Create soil-specific synth
         this.soilSynth = new Tone.PolySynth(Tone.FMSynth, {
             harmonicity: 2.5,
             modulationIndex: 20,
@@ -32,7 +32,7 @@ class SoilHandler {
             }
         });
         
-        // Create reverb for soil synth
+        // Create reverb
         const soilReverb = new Tone.Reverb({
             decay: 2.5,
             wet: 0.3,
@@ -43,41 +43,33 @@ class SoilHandler {
         this.soilSynth.connect(soilReverb);
         this.soilSynth.volume.value = -8;
         
-        console.log('Soil synth initialized');
+        console.log('🌱 Soil synth initialized');
     }
     
     initializeEventListeners() {
-        // Listen for soil sensor activation
+        // Listen for soil audio triggers
         document.addEventListener('soilAudioTrigger', (e) => {
+            console.log('🎵 Soil audio trigger received, isActive:', this.isActive);
             if (this.isActive) {
                 this.triggerSoilSound(e.detail.value);
+                this.animateCreature();
             }
         });
         
-        // Listen for mode changes
+        // Listen for mode changes from ESP32 status
         document.addEventListener('modeEnter_soil', () => {
+            console.log('🌱 Soil mode entering');
             this.activateSoilMode();
         });
         
         document.addEventListener('modeExit_soil', () => {
+            console.log('🌱 Soil mode exiting');
             this.deactivateSoilMode();
-        });
-        
-        // Listen for multi-sensor modes that include soil
-        document.addEventListener('modeEnter_growth', () => {
-            this.activateSoilMode();
-        });
-        
-        document.addEventListener('modeEnter_mirrage', () => {
-            this.activateSoilMode();
-        });
-        
-        document.addEventListener('modeEnter_total', () => {
-            this.activateSoilMode();
         });
         
         // Deactivate on websocket disconnect
         document.addEventListener('websocketDisconnected', () => {
+            console.log('🌱 Websocket disconnected, deactivating soil');
             this.deactivateSoilMode();
         });
     }
@@ -87,11 +79,9 @@ class SoilHandler {
         
         await Tone.start();
         this.isActive = true;
-        
-        // Start ambient soil loop
         this.startSoilLoop();
         
-        console.log('Soil mode activated');
+        console.log('🌱 Soil mode activated');
     }
     
     deactivateSoilMode() {
@@ -100,17 +90,14 @@ class SoilHandler {
         this.isActive = false;
         this.stopSoilLoop();
         
-        console.log('Soil mode deactivated');
+        console.log('🌱 Soil mode deactivated');
     }
     
     startSoilLoop() {
         if (this.soilLoop) return;
         
-        // Create ambient soil rhythm pattern using Part instead of Loop
+        // Create soil pattern
         const soilNotes = ["C3", "Eb3", "G3", "Bb3", "D4", "F4"];
-        let noteIndex = 0;
-        
-        // Create timed events for soil pattern
         const soilPattern = [];
         for (let i = 0; i < 8; i++) {
             soilPattern.push([i * 0.5, soilNotes[i % soilNotes.length]]);
@@ -123,13 +110,11 @@ class SoilHandler {
         }, soilPattern);
         
         this.soilLoop.loop = true;
-        this.soilLoop.loopEnd = "4m"; // 4 measures
+        this.soilLoop.loopEnd = "4m";
         this.soilLoop.start(0);
         
-        // Set tempo based on current value
-        Tone.Transport.bpm.value = 40 + (this.currentValue * 30); // 40-70 BPM
+        Tone.Transport.bpm.value = 40 + (this.currentValue * 30);
         
-        // Start transport only if not already running
         if (Tone.Transport.state !== "started") {
             Tone.Transport.start();
         }
@@ -152,7 +137,7 @@ class SoilHandler {
     triggerSoilSound(value) {
         this.currentValue = value;
         
-        // Update synth parameters based on moisture level
+        // Update synth parameters
         this.soilSynth.set({
             harmonicity: 1.5 + (value * 2),
             modulationIndex: 10 + (value * 15),
@@ -162,7 +147,7 @@ class SoilHandler {
         // Update tempo
         Tone.Transport.bpm.value = 40 + (value * 30);
         
-        // Trigger reactive note based on value range
+        // Trigger note based on value
         let note;
         if (value < 0.5) note = "C3";
         else if (value < 0.6) note = "Eb3";
@@ -170,25 +155,17 @@ class SoilHandler {
         else note = "Bb3";
         
         this.soilSynth.triggerAttackRelease(note, "8n");
-        
-        // Enhanced creature animation
-        this.animateCreature();
     }
     
     animateCreature() {
         const soilCreature = document.querySelector('.soil-creature');
         if (!soilCreature) return;
         
-        // Add reaction class
+        // Simple CSS class toggle - let CSS handle animation
         soilCreature.classList.add('creature-reacting');
-        
-        // Add moisture-based glow effect
-        const intensity = Math.min(1, this.currentValue * 1.5);
-        soilCreature.style.filter = `brightness(${1 + intensity * 0.3}) saturate(${1 + intensity * 0.5})`;
         
         setTimeout(() => {
             soilCreature.classList.remove('creature-reacting');
-            soilCreature.style.filter = '';
         }, 600);
     }
 }
@@ -201,7 +178,5 @@ document.addEventListener('DOMContentLoaded', () => {
 // Global API
 window.SoilHandler = {
     isActive: () => window.soilHandler?.isActive || false,
-    getCurrentValue: () => window.soilHandler?.currentValue || 0,
-    activate: () => window.soilHandler?.activateSoilMode(),
-    deactivate: () => window.soilHandler?.deactivateSoilMode()
+    getCurrentValue: () => window.soilHandler?.currentValue || 0
 };

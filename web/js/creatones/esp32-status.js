@@ -1,18 +1,14 @@
 // esp32-status.js
-// Multi-sensor mode management for CreaTune
+// ESP32 status management for CreaTune
 
 class ESP32Status {
     constructor() {
         this.connections = {
-            esp1: false, // soil
-            esp2: false, // light  
-            esp3: false  // temp
+            esp1: false // soil (MoistureSensor)
         };
         this.currentMode = 'idle';
         this.lastUpdate = {
-            esp1: null,
-            esp2: null,
-            esp3: null
+            esp1: null
         };
         
         this.initializeEventListeners();
@@ -22,11 +18,10 @@ class ESP32Status {
         // Listen for processed sensor values from websocket client
         document.addEventListener('sensorValueProcessed', (e) => {
             const { sensorType, isInRange } = e.detail;
-            const espId = { soil: 'esp1', light: 'esp2', temp: 'esp3' }[sensorType];
             
-            if (espId) {
-                this.setConnection(espId, isInRange);
-                if (isInRange) this.lastUpdate[espId] = Date.now();
+            if (sensorType === 'soil') {
+                this.setConnection('esp1', isInRange);
+                if (isInRange) this.lastUpdate.esp1 = Date.now();
             }
         });
         
@@ -35,15 +30,11 @@ class ESP32Status {
             this.resetAllConnections();
         });
         
-        // Reset specific sensor on ESP disconnect
+        // Reset on ESP disconnect
         document.addEventListener('espDisconnected', (e) => {
-            const deviceMap = {
-                'MoistureSensor': 'esp1',
-                'LightSensor': 'esp2', 
-                'TempSensor': 'esp3'
-            };
-            const espId = deviceMap[e.detail.name];
-            if (espId) this.setConnection(espId, false);
+            if (e.detail.name === 'MoistureSensor') {
+                this.setConnection('esp1', false);
+            }
         });
     }
     
@@ -56,18 +47,14 @@ class ESP32Status {
     }
     
     updateMode() {
-        const { esp1, esp2, esp3 } = this.connections;
         const previousMode = this.currentMode;
         
-        // Multi-sensor combinations
-        if (esp1 && esp2 && esp3) this.currentMode = 'total';
-        else if (esp1 && esp2) this.currentMode = 'growth';
-        else if (esp1 && esp3) this.currentMode = 'mirrage';
-        else if (esp2 && esp3) this.currentMode = 'flower';
-        else if (esp1) this.currentMode = 'soil';
-        else if (esp2) this.currentMode = 'light';
-        else if (esp3) this.currentMode = 'temp';
-        else this.currentMode = 'idle';
+        // Simple mode logic
+        if (this.connections.esp1) {
+            this.currentMode = 'soil';
+        } else {
+            this.currentMode = 'idle';
+        }
         
         if (previousMode !== this.currentMode) {
             console.log(`Mode: ${previousMode} → ${this.currentMode}`);
@@ -90,24 +77,20 @@ class ESP32Status {
     }
     
     resetAllConnections() {
-        Object.keys(this.connections).forEach(espId => {
-            this.connections[espId] = false;
-            this.lastUpdate[espId] = null;
-        });
+        this.connections.esp1 = false;
+        this.lastUpdate.esp1 = null;
         this.updateMode();
     }
     
-    // Health monitoring - mark stale connections as disconnected
+    // Health monitoring
     startHealthMonitoring() {
         setInterval(() => {
             const now = Date.now();
-            Object.keys(this.connections).forEach(espId => {
-                if (this.connections[espId] && this.lastUpdate[espId]) {
-                    if (now - this.lastUpdate[espId] > 45000) {
-                        this.setConnection(espId, false);
-                    }
+            if (this.connections.esp1 && this.lastUpdate.esp1) {
+                if (now - this.lastUpdate.esp1 > 15000) { // 15 seconds timeout
+                    this.setConnection('esp1', false);
                 }
-            });
+            }
         }, 5000);
     }
     
@@ -115,7 +98,7 @@ class ESP32Status {
         return {
             mode: this.currentMode,
             connections: { ...this.connections },
-            connectedCount: Object.values(this.connections).filter(Boolean).length
+            connectedCount: this.connections.esp1 ? 1 : 0
         };
     }
 }
