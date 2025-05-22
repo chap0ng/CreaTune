@@ -234,13 +234,13 @@ function sendESP32Status(ws) {
 setInterval(() => {
   const now = Date.now();
   
-  // Check for inactive clients (no message in 5 minutes)
-  for (const [ws, info] of clients.entries()) {
-    if (now - info.lastMessage > 5 * 60 * 1000) {
-      console.log(`Closing inactive connection [${info.id}]`);
-      ws.terminate();
-    }
+// Check for inactive clients (no message in 30 seconds)
+for (const [ws, info] of clients.entries()) {
+  if (now - info.lastMessage > 30 * 1000) {
+    console.log(`Closing inactive connection [${info.id}]`);
+    ws.terminate();
   }
+}
   
   // Broadcast ESP32 status every 10 seconds
   if (now % 10000 < 1000) {
