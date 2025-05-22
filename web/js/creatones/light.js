@@ -1,4 +1,4 @@
-/* esp32 soil state: soilsynth Tone.js, soil-background & soil-creature */
+// esp32 soil state: soilsynth Tone.js, soil-background & soil-creature //
 /* -------------------------------------------------------------------- */
 
 /* get current esp32-status */
@@ -15,10 +15,14 @@
 
 /* playing random scale loop soilsynth using tone.js */
 
-/* displaying soil-creature in css */
+/* displaying soil-creature in css if frame close*/
 
+/*hiding soil-creature in css if frame close*/
 
 /* if current esp32 not soil - deactivate soil state */
 /* log : "soil not active" */
 
+/* -------------------------------------*/
 
+/* soil.js - ESP32 Soil State Handler */
+/* Handles soilsynth Tone.js, soil-background & soil-creature */
