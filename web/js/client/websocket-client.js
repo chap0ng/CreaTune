@@ -1,16 +1,5 @@
-// making sure app receives messages from the server
-// receiving messages from 1: esp32soil, 2: esp32light, 3: esp32temp
-
-//comunicating with esp32 for websocket status
-
-//handle esp32 combinaison for activating corresponding javescript 
-// 4: soil+light, 5: light+temp, 6: soil+temp, 7: soil+light+temp
-// naming them soil, light, temp, growth, mirrage, flower, total
-
 // websocket-client.js
 // WebSocket client for CreaTune - Handles ESP32 sensor data
-
-// ---------------------------------------------------------------------
 
 class CreaTuneWebSocketClient {
   constructor() {
@@ -73,7 +62,7 @@ class CreaTuneWebSocketClient {
         this.reconnectAttempts = 0;
         
         // Update ESP32 status if available
-        if (window.ESP32Status) {
+        if (window.ESP32Status && window.ESP32Status.updateConnectionStatus) {
           window.ESP32Status.updateConnectionStatus(true);
         }
       };
@@ -94,7 +83,7 @@ class CreaTuneWebSocketClient {
         this.isConnected = false;
         
         // Update ESP32 status if available
-        if (window.ESP32Status) {
+        if (window.ESP32Status && window.ESP32Status.updateConnectionStatus) {
           window.ESP32Status.updateConnectionStatus(false);
         }
       };
@@ -121,7 +110,7 @@ class CreaTuneWebSocketClient {
       this.processSensorData(sensorData);
       
       // Update ESP32 status if available
-      if (window.ESP32Status) {
+      if (window.ESP32Status && window.ESP32Status.updateSensorData) {
         window.ESP32Status.updateSensorData(sensorData);
       }
       
@@ -271,7 +260,7 @@ class CreaTuneWebSocketClient {
     this.deactivateSoilMode();
     
     // Update ESP32 status if available
-    if (window.ESP32Status) {
+    if (window.ESP32Status && window.ESP32Status.updateConnectionStatus) {
       window.ESP32Status.updateConnectionStatus(false);
     }
   }
