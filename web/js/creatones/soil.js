@@ -1,321 +1,207 @@
-/* soil.js - ESP32 soil sensor synth and creature controller */
+// soil.js - Soil sensor audio and visual handler
 
-class SoilSynth {
+class SoilHandler {
     constructor() {
         this.isActive = false;
-        this.synth = null;
-        this.sequence = null;
-        this.currentSoilData = null;
-        this.backgroundElement = null;
-        this.creatureElement = null;
+        this.soilSynth = null;
+        this.soilLoop = null;
+        this.currentValue = 0.5;
         
-        // Musical scales based on moisture levels
-        this.scales = {
-            dry: ['C4', 'D4', 'E4', 'G4', 'A4'], // Pentatonic - sparse, dry
-            humid: ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'], // Major scale - balanced
-            wet: ['C4', 'Eb4', 'F4', 'G4', 'Bb4', 'C5'] // Blues scale - rich, flowing
-        };
-        
-        this.initializeToneJS();
+        this.initializeTone();
         this.initializeEventListeners();
-        this.findDOMElements();
     }
     
-    async initializeToneJS() {
-        try {
-            // Create soil-specific synth with organic sound
-            this.synth = new Tone.PolySynth(Tone.Synth, {
-                oscillator: {
-                    type: "sawtooth"
-                },
-                envelope: {
-                    attack: 0.1,
-                    decay: 0.3,
-                    sustain: 0.4,
-                    release: 0.8
-                },
-                filter: {
-                    frequency: 1000,
-                    rolloff: -12
-                }
-            }).toDestination();
-            
-            // Add some reverb for organic feel
-            const reverb = new Tone.Reverb(2).toDestination();
-            this.synth.connect(reverb);
-            
-            console.log("🎵 Soil synth initialized");
-            
-        } catch (error) {
-            console.error("Failed to initialize Tone.js:", error);
-        }
+    async initializeTone() {
+        // Create soil-specific synth with woody/earthy tones
+        this.soilSynth = new Tone.PolySynth(Tone.FMSynth, {
+            harmonicity: 2.5,
+            modulationIndex: 20,
+            oscillator: { type: "triangle" },
+            envelope: {
+                attack: 0.05,
+                decay: 0.6,
+                sustain: 0.2,
+                release: 1.2
+            },
+            modulation: { type: "square" },
+            modulationEnvelope: {
+                attack: 0.01,
+                decay: 0.2,
+                sustain: 0.1,
+                release: 0.6
+            }
+        });
+        
+        // Create reverb for soil synth
+        const soilReverb = new Tone.Reverb({
+            decay: 2.5,
+            wet: 0.3,
+            preDelay: 0.2
+        }).toDestination();
+        
+        await soilReverb.generate();
+        this.soilSynth.connect(soilReverb);
+        this.soilSynth.volume.value = -8;
+        
+        console.log('Soil synth initialized');
     }
     
     initializeEventListeners() {
-        // Listen for ESP32 status changes
-        document.addEventListener('esp32StatusChange', (e) => {
-            this.handleStatusChange(e.detail);
-        });
-        
-        // Listen for soil sensor data
-        document.addEventListener('soilDataProcessed', (e) => {
-            this.handleSoilData(e.detail);
-        });
-        
-        // Listen for mode changes specifically to soil mode
-        document.addEventListener('modeChange_soil', (e) => {
-            console.log("🌱 Soil mode activated");
-            this.activateSoilMode();
-        });
-        
-        // Listen for mode changes away from soil
-        document.addEventListener('esp32StatusChange', (e) => {
-            if (e.detail.mode !== 'soil' && this.isActive) {
-                console.log("🌱 Soil mode deactivated");
-                this.deactivateSoilMode();
+        // Listen for soil sensor activation
+        document.addEventListener('soilAudioTrigger', (e) => {
+            if (this.isActive) {
+                this.triggerSoilSound(e.detail.value);
             }
         });
-    }
-    
-    findDOMElements() {
-        this.backgroundElement = document.querySelector('.framebackground');
         
-        // Create soil creature element if it doesn't exist
-        this.creatureElement = document.querySelector('.soil-creature');
-        if (!this.creatureElement) {
-            this.creatureElement = document.createElement('div');
-            this.creatureElement.className = 'soil-creature';
-            document.querySelector('.frameidle').appendChild(this.creatureElement);
-        }
-    }
-    
-    handleStatusChange(status) {
-        if (status.mode === 'soil' && status.connections.esp1) {
+        // Listen for mode changes
+        document.addEventListener('modeEnter_soil', () => {
             this.activateSoilMode();
-        } else if (status.mode !== 'soil') {
-            this.deactivateSoilMode();
-        }
-    }
-    
-    handleSoilData(data) {
-        this.currentSoilData = data;
-        console.log("🌱 Soil data received:", data);
+        });
         
-        if (this.isActive) {
-            this.updateSynthParameters(data);
-            this.updateCreatureState(data);
-        }
+        document.addEventListener('modeExit_soil', () => {
+            this.deactivateSoilMode();
+        });
+        
+        // Listen for multi-sensor modes that include soil
+        document.addEventListener('modeEnter_growth', () => {
+            this.activateSoilMode();
+        });
+        
+        document.addEventListener('modeEnter_mirrage', () => {
+            this.activateSoilMode();
+        });
+        
+        document.addEventListener('modeEnter_total', () => {
+            this.activateSoilMode();
+        });
+        
+        // Deactivate on websocket disconnect
+        document.addEventListener('websocketDisconnected', () => {
+            this.deactivateSoilMode();
+        });
     }
     
-    activateSoilMode() {
+    async activateSoilMode() {
         if (this.isActive) return;
         
-        console.log("🌱 Soil active");
+        await Tone.start();
         this.isActive = true;
         
-        // Activate soil background
-        if (this.backgroundElement) {
-            this.backgroundElement.classList.add('soil-background');
-        }
+        // Start ambient soil loop
+        this.startSoilLoop();
         
-        // Start audio context if needed
-        if (Tone.context.state !== 'running') {
-            document.addEventListener('click', this.startAudioContext.bind(this), { once: true });
-            document.addEventListener('touchstart', this.startAudioContext.bind(this), { once: true });
-        } else {
-            this.startSoilSynth();
-        }
-    }
-    
-    async startAudioContext() {
-        try {
-            await Tone.start();
-            console.log("🎵 Audio context started");
-            this.startSoilSynth();
-        } catch (error) {
-            console.error("Failed to start audio context:", error);
-        }
-    }
-    
-    startSoilSynth() {
-        if (!this.synth || this.sequence) return;
-        
-        console.log("🎵 Starting soil synth");
-        
-        // Create sequence that plays based on soil data
-        this.sequence = new Tone.Sequence((time, note) => {
-            if (this.currentSoilData) {
-                this.playNote(time, note);
-            }
-        }, this.getCurrentScale(), "8n").start(0);
-        
-        // Start transport
-        Tone.Transport.start();
-        
-        // Update sequence every few seconds
-        this.updateInterval = setInterval(() => {
-            this.updateSequence();
-        }, 3000);
-    }
-    
-    updateSequence() {
-        if (!this.sequence || !this.currentSoilData) return;
-        
-        const scale = this.getCurrentScale();
-        const pattern = this.generatePattern(this.currentSoilData);
-        
-        this.sequence.events = pattern;
-    }
-    
-    getCurrentScale() {
-        if (!this.currentSoilData) return this.scales.dry;
-        
-        const condition = this.currentSoilData.soil_condition;
-        return this.scales[condition] || this.scales.dry;
-    }
-    
-    generatePattern(data) {
-        const scale = this.getCurrentScale();
-        const moisture = data.moisture_percent || 0;
-        
-        // Generate pattern based on moisture level
-        const patternLength = Math.max(3, Math.floor(moisture / 20) + 2);
-        const pattern = [];
-        
-        for (let i = 0; i < patternLength; i++) {
-            const noteIndex = Math.floor((moisture + i * 10) % scale.length);
-            pattern.push(scale[noteIndex]);
-        }
-        
-        return pattern;
-    }
-    
-    playNote(time, note) {
-        if (!this.synth || !this.currentSoilData) return;
-        
-        // Modulate volume based on moisture
-        const moisture = this.currentSoilData.moisture_percent || 0;
-        const volume = -20 + (moisture / 100) * 15; // -20dB to -5dB
-        
-        this.synth.volume.value = volume;
-        
-        // Play note with slight randomization
-        const duration = Math.random() * 0.3 + 0.2; // 0.2-0.5 seconds
-        this.synth.triggerAttackRelease(note, duration, time);
-    }
-    
-    updateSynthParameters(data) {
-        if (!this.synth) return;
-        
-        const moisture = data.moisture_percent || 0;
-        
-        // Update filter frequency based on moisture
-        const filterFreq = 300 + (moisture / 100) * 1700; // 300Hz to 2000Hz
-        this.synth.filter.frequency.value = filterFreq;
-        
-        // Update tempo based on soil condition
-        const bpm = this.getBPMForCondition(data.soil_condition);
-        Tone.Transport.bpm.value = bpm;
-    }
-    
-    getBPMForCondition(condition) {
-        switch (condition) {
-            case 'dry': return 60; // Slow, struggling
-            case 'humid': return 90; // Moderate, healthy
-            case 'wet': return 120; // Fast, flowing
-            default: return 75;
-        }
-    }
-    
-    updateCreatureState(data) {
-        if (!this.creatureElement) return;
-        
-        const moisture = data.moisture_percent || 0;
-        
-        // Show creature when moisture is in good range
-        if (moisture > 20 && moisture < 80) {
-            console.log("🌱 Soil creature found");
-            this.creatureElement.classList.add('active');
-        } else {
-            this.creatureElement.classList.remove('active');
-        }
-        
-        // Adjust animation speed based on moisture
-        const animationDuration = Math.max(1, 3 - (moisture / 50)); // 1-3 seconds
-        this.creatureElement.style.animationDuration = `${animationDuration}s`;
+        console.log('Soil mode activated');
     }
     
     deactivateSoilMode() {
         if (!this.isActive) return;
         
-        console.log("🌱 Soil not active");
         this.isActive = false;
+        this.stopSoilLoop();
         
-        // Remove soil background
-        if (this.backgroundElement) {
-            this.backgroundElement.classList.remove('soil-background');
-        }
-        
-        // Hide creature
-        if (this.creatureElement) {
-            this.creatureElement.classList.remove('active');
-        }
-        
-        // Stop synth
-        this.stopSoilSynth();
+        console.log('Soil mode deactivated');
     }
     
-    stopSoilSynth() {
-        if (this.sequence) {
-            this.sequence.stop();
-            this.sequence.dispose();
-            this.sequence = null;
+    startSoilLoop() {
+        if (this.soilLoop) return;
+        
+        // Create ambient soil rhythm pattern using Part instead of Loop
+        const soilNotes = ["C3", "Eb3", "G3", "Bb3", "D4", "F4"];
+        let noteIndex = 0;
+        
+        // Create timed events for soil pattern
+        const soilPattern = [];
+        for (let i = 0; i < 8; i++) {
+            soilPattern.push([i * 0.5, soilNotes[i % soilNotes.length]]);
         }
         
-        if (this.updateInterval) {
-            clearInterval(this.updateInterval);
-            this.updateInterval = null;
+        this.soilLoop = new Tone.Part((time, note) => {
+            if (this.isActive) {
+                this.soilSynth.triggerAttackRelease(note, "4n", time);
+            }
+        }, soilPattern);
+        
+        this.soilLoop.loop = true;
+        this.soilLoop.loopEnd = "4m"; // 4 measures
+        this.soilLoop.start(0);
+        
+        // Set tempo based on current value
+        Tone.Transport.bpm.value = 40 + (this.currentValue * 30); // 40-70 BPM
+        
+        // Start transport only if not already running
+        if (Tone.Transport.state !== "started") {
+            Tone.Transport.start();
         }
-        
-        // Stop transport if no other sequences are running
-        Tone.Transport.stop();
-        
-        console.log("🎵 Soil synth stopped");
     }
     
-    // Public methods for testing
-    test() {
-        console.log("🧪 Testing soil synth");
+    stopSoilLoop() {
+        if (this.soilLoop) {
+            this.soilLoop.stop();
+            this.soilLoop.dispose();
+            this.soilLoop = null;
+        }
         
-        // Simulate soil data
-        const testData = {
-            moisture_percent: 45,
-            soil_condition: 'humid',
-            raw_value: 500,
-            moisture_app_value: 0.45
-        };
+        // Only stop transport if no other modes are active
+        const status = window.ESP32Status?.getStatus();
+        if (status?.connectedCount <= 1) {
+            Tone.Transport.stop();
+        }
+    }
+    
+    triggerSoilSound(value) {
+        this.currentValue = value;
         
-        this.handleSoilData(testData);
-        this.activateSoilMode();
+        // Update synth parameters based on moisture level
+        this.soilSynth.set({
+            harmonicity: 1.5 + (value * 2),
+            modulationIndex: 10 + (value * 15),
+            volume: -12 + (value * 4)
+        });
+        
+        // Update tempo
+        Tone.Transport.bpm.value = 40 + (value * 30);
+        
+        // Trigger reactive note based on value range
+        let note;
+        if (value < 0.5) note = "C3";
+        else if (value < 0.6) note = "Eb3";
+        else if (value < 0.7) note = "G3";
+        else note = "Bb3";
+        
+        this.soilSynth.triggerAttackRelease(note, "8n");
+        
+        // Enhanced creature animation
+        this.animateCreature();
+    }
+    
+    animateCreature() {
+        const soilCreature = document.querySelector('.soil-creature');
+        if (!soilCreature) return;
+        
+        // Add reaction class
+        soilCreature.classList.add('creature-reacting');
+        
+        // Add moisture-based glow effect
+        const intensity = Math.min(1, this.currentValue * 1.5);
+        soilCreature.style.filter = `brightness(${1 + intensity * 0.3}) saturate(${1 + intensity * 0.5})`;
+        
+        setTimeout(() => {
+            soilCreature.classList.remove('creature-reacting');
+            soilCreature.style.filter = '';
+        }, 600);
     }
 }
 
-// Initialize when DOM is loaded
+// Initialize soil handler
 document.addEventListener('DOMContentLoaded', () => {
-    // Load Tone.js if not already loaded
-    if (typeof Tone === 'undefined') {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js';
-        script.onload = () => {
-            window.soilSynth = new SoilSynth();
-            console.log("🌱 Soil synth ready");
-        };
-        document.head.appendChild(script);
-    } else {
-        window.soilSynth = new SoilSynth();
-        console.log("🌱 Soil synth ready");
-    }
-    
-    // Make test function available globally
-    window.testSoil = () => window.soilSynth?.test();
+    window.soilHandler = new SoilHandler();
 });
+
+// Global API
+window.SoilHandler = {
+    isActive: () => window.soilHandler?.isActive || false,
+    getCurrentValue: () => window.soilHandler?.currentValue || 0,
+    activate: () => window.soilHandler?.activateSoilMode(),
+    deactivate: () => window.soilHandler?.deactivateSoilMode()
+};
