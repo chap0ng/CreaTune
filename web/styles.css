@@ -167,14 +167,14 @@ body {
   background-size: 256px 128px;
   background-repeat: no-repeat;
   background-position: 0 0;
-  display: none;
   z-index: 5;
   transition: all 0.3s ease;
+  background-color: turquoise;
+  display: none;
 }
 
 .soil-creature {
   background-image: url('sprites/creatures/soil-creature.png');
-  animation: soilcreature 2s steps(4) infinite;
 }
 
 /* Creature reaction animation */
