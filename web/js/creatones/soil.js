@@ -5,6 +5,7 @@ class SoilHandler {
     constructor() {
         this.isActive = false;
         this.lastCondition = null;
+        this.isConnected = false; // Track connection state
         this.synth = null;
         this.reverb = null;
         this.filter = null;
@@ -110,48 +111,58 @@ class SoilHandler {
     handleSoilData(data) {
         console.log('🌱 Soil data received:', data);
         
-        // Show soil background when soil device is active
-        this.showSoilBackground();
-        
-        // Check soil condition from Arduino data
-        let condition = null;
-        if (data.soil_condition) {
-            condition = data.soil_condition;
-        } else if (data.moisture_app_value !== undefined) {
-            // Fallback: determine condition from app value
-            if (data.moisture_app_value <= 0.4) {
-                condition = 'dry';
-            } else if (data.moisture_app_value <= 0.7) {
-                condition = 'humid';
-            } else {
-                condition = 'wet';
+        // Only show background if we're actually connected
+        // (this prevents spam when receiving data)
+        if (this.isConnected) {
+            // Check soil condition from Arduino data
+            let condition = null;
+            if (data.soil_condition) {
+                condition = data.soil_condition;
+            } else if (data.moisture_app_value !== undefined) {
+                // Fallback: determine condition from app value
+                if (data.moisture_app_value <= 0.4) {
+                    condition = 'dry';
+                } else if (data.moisture_app_value <= 0.7) {
+                    condition = 'humid';
+                } else {
+                    condition = 'wet';
+                }
             }
+            
+            console.log(`🌱 Soil condition: ${condition}`);
+            
+            // Handle humid or wet conditions
+            if (condition === 'humid' || condition === 'wet') {
+                this.activateSoilResponse();
+            } else {
+                this.deactivateSoilResponse();
+            }
+            
+            this.lastCondition = condition;
         }
-        
-        console.log(`🌱 Soil condition: ${condition}`);
-        
-        // Handle humid or wet conditions
-        if (condition === 'humid' || condition === 'wet') {
-            this.activateSoilResponse();
-        } else {
-            this.deactivateSoilResponse();
-        }
-        
-        this.lastCondition = condition;
     }
     
     handleStatusChange(soilDevice) {
-        if (soilDevice && soilDevice.connected) {
-            console.log('🌱 Soil device connected');
-            this.showSoilBackground();
-        } else {
-            console.log('🌱 Soil device disconnected');
-            this.handleSoilDisconnect();
+        const newConnectionState = soilDevice && soilDevice.connected;
+        
+        // Only act on actual state transitions
+        if (newConnectionState !== this.isConnected) {
+            this.isConnected = newConnectionState;
+            
+            if (this.isConnected) {
+                console.log('🌱 Soil device connected (state change)');
+                this.showSoilBackground();
+            } else {
+                console.log('🌱 Soil device disconnected (state change)');
+                this.handleSoilDisconnect();
+            }
         }
+        // If state hasn't changed, don't do anything (prevents spam)
     }
     
     handleSoilDisconnect() {
         console.log('🌱❌ Soil disconnected');
+        this.isConnected = false; // Ensure state is updated
         this.hideSoilBackground();
         this.deactivateSoilResponse();
     }
