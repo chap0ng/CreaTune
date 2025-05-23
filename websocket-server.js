@@ -8,7 +8,7 @@ const path = require('path');
 
 // Web server configuration
 const PORT = process.env.PORT || 8080;
-const WEB_ROOT = __dirname; // Changed from path.join(__dirname, 'web') to __dirname
+const WEB_ROOT = path.join(__dirname, 'web'); // FIXED: Serve from web/ directory
 
 // Create HTTP server
 const server = http.createServer((req, res) => {
@@ -28,6 +28,7 @@ const server = http.createServer((req, res) => {
             // Still doesn't exist, return 404
             res.writeHead(404, { 'Content-Type': 'text/plain' });
             res.end('404 Not Found');
+            console.log(`404 - File not found: ${req.url}`);
             return;
           }
           
@@ -40,6 +41,7 @@ const server = http.createServer((req, res) => {
       // File doesn't exist, return 404
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('404 Not Found');
+      console.log(`404 - File not found: ${req.url}`);
       return;
     }
     
@@ -78,6 +80,7 @@ function serveFile(filePath, res) {
     } else {
       res.writeHead(200, { 'Content-Type': contentType });
       res.end(content, 'utf-8');
+      console.log(`✅ Served: ${path.relative(WEB_ROOT, filePath)}`);
     }
   });
 }
@@ -140,7 +143,7 @@ wss.on('connection', (ws, req) => {
             lastData: data
           });
           
-          console.log(`Identified ESP32 device [${espId}]: ${data.sensor}`);
+          console.log(`🔌 ESP32 device [${espId}]: ${data.sensor}`);
         }
         
         // Update last data
@@ -175,7 +178,7 @@ wss.on('connection', (ws, req) => {
     // Remove from ESP32 list if it was an ESP32
     if (espDevices.has(ws)) {
       const espInfo = espDevices.get(ws);
-      console.log(`ESP32 device [${espInfo.id}] disconnected: ${espInfo.name}`);
+      console.log(`🔌 ESP32 device [${espInfo.id}] disconnected: ${espInfo.name}`);
       espDevices.delete(ws);
       
       // Notify web clients about ESP32 disconnection
@@ -255,10 +258,11 @@ setInterval(() => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`
   ╔════════════════════════════════════════════════╗
-  ║  CreaTune WebSocket Server                     ║
+  ║  🎵 CreaTune WebSocket Server                  ║
   ║  Server running on port ${PORT.toString().padEnd(20, ' ')} ║
   ║  Serving files from ${WEB_ROOT.padEnd(25, ' ')} ║
   ╚════════════════════════════════════════════════╝
   `);
-  console.log(`Point your browser to http://localhost:${PORT}`);
+  console.log(`📱 Point your Nothing Phone to: http://YOUR_SERVER_IP:${PORT}`);
+  console.log(`💻 Local access: http://localhost:${PORT}`);
 });

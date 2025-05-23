@@ -1,16 +1,16 @@
 // service-worker.js
-const CACHE_NAME = 'CreaTune-cache-v3';
+const CACHE_NAME = 'CreaTune-cache-v4';
 const urlsToCache = [
   './',
   './index.html',
   './styles.css',
   './manifest.json',
-  // Core scripts
+  // Core scripts with correct paths
   './js/client/websocket-client.js',
   './js/creatones/soil.js',
-  './js/frame/background-manager.js',
+  './js/creatones/light.js',
+  './js/creatones/creature-hidder.js',
   './js/frame/frame-slider.js',
-  './js/creatures/creature-hidder.js',
   // Images and sprites
   './images/soil-background.jpg',
   './sprite/soil-background.png',
@@ -24,11 +24,16 @@ const urlsToCache = [
 
 // Install event - cache assets
 self.addEventListener('install', event => {
+  console.log('Service Worker installing...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('CreaTune cache opened');
         return cache.addAll(urlsToCache);
+      })
+      .then(() => {
+        console.log('All files cached successfully');
+        self.skipWaiting(); // Force activate immediately
       })
       .catch(error => {
         console.error('Cache install failed:', error);
@@ -38,6 +43,7 @@ self.addEventListener('install', event => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
+  console.log('Service Worker activating...');
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
@@ -48,6 +54,9 @@ self.addEventListener('activate', event => {
           }
         })
       );
+    }).then(() => {
+      console.log('Service Worker activated');
+      self.clients.claim(); // Take control immediately
     })
   );
 });
@@ -59,11 +68,17 @@ self.addEventListener('fetch', event => {
     return;
   }
   
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') {
+    return;
+  }
+  
   event.respondWith(
     caches.match(event.request)
       .then(response => {
         // Cache hit - return the response
         if (response) {
+          console.log('Serving from cache:', event.request.url);
           return response;
         }
         
@@ -82,19 +97,26 @@ self.addEventListener('fetch', event => {
 
             caches.open(CACHE_NAME)
               .then(cache => {
+                console.log('Caching new resource:', event.request.url);
                 cache.put(event.request, responseToCache);
               });
 
             return response;
           }
-        ).catch(() => {
+        ).catch(error => {
+          console.error('Fetch failed:', error);
+          
           // Fallback for offline use
           if (event.request.url.endsWith('.html')) {
             return caches.match('./index.html');
           }
-          // Fallback for JS files
+          
+          // For missing JS files, try to serve from cache or return a helpful error
           if (event.request.url.endsWith('.js')) {
-            return caches.match('./index.html');
+            return new Response(
+              `console.error('Failed to load ${event.request.url}');`,
+              { headers: { 'Content-Type': 'application/javascript' } }
+            );
           }
         });
       })

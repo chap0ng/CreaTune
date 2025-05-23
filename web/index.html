@@ -47,16 +47,15 @@
   <script src="js/client/websocket-client.js"></script>
 
   <!-- Frame and UI scripts -->
-  <script src="js/frame/background-manager.js"></script>
   <script src="js/frame/frame-slider.js"></script>
-  <script src="js/creatures/creature-hidder.js"></script>
+  <script src="js/creatones/creature-hidder.js"></script>
 
   <!-- Sensor handlers -->
   <script src="js/creatones/soil.js"></script>
 
   <!-- Service Worker Registration -->
   <script>
-    // Register your existing service worker
+    // Register service worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./service-worker.js')

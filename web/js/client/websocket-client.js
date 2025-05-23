@@ -16,8 +16,15 @@ class CreaTuneWebSocketClient {
     
     connect() {
         try {
-            // Change to your server IP for production
-            const wsUrl = 'ws://localhost:8080';
+            // IMPORTANT: Replace 'localhost' with your server's IP address
+            // To find your server IP:
+            // Windows: Open Command Prompt, type: ipconfig
+            // Mac/Linux: Open Terminal, type: ifconfig
+            // Look for your WiFi adapter IP (usually 192.168.x.x)
+            // Example: const wsUrl = 'ws://192.168.1.100:8080';
+            const wsUrl = 'ws://localhost:8080'; // CHANGE THIS TO YOUR SERVER IP
+            
+            console.log(`Connecting to WebSocket: ${wsUrl}`);
             this.socket = new WebSocket(wsUrl);
             
             this.socket.onopen = (event) => {
