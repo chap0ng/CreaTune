@@ -1,221 +1,284 @@
 // websocket-client.js
-// Clean WebSocket client for ESP32 sensor communication
-// Handles connection and routes data to sensor handlers
+// Simple WebSocket client for ESP32 data and status tracking
 
-class CreaTuneWebSocketClient {
+class CreaTuneClient {
     constructor() {
-        this.socket = null;
+        this.ws = null;
         this.isConnected = false;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 3;
-        this.reconnectDelay = 7000;
-        this.eventHandlers = new Map();
+        this.maxReconnectAttempts = 10;
+        this.reconnectDelay = 1000;
+        this.clientId = null;
         
+        // ESP32 device tracking - just data, no UI
+        this.espDevices = {
+            soil: { connected: false, lastData: null, id: null },
+            light: { connected: false, lastData: null, id: null },
+            temp: { connected: false, lastData: null, id: null }
+        };
+        
+        this.combinedName = 'idle';
+        this.callbacks = [];
+        
+        this.init();
+    }
+    
+    init() {
+        console.log('🔌 Initializing CreaTune WebSocket Client...');
         this.connect();
+        
+        // Make available globally for other scripts
+        window.creatune = this;
     }
     
     connect() {
         try {
-            // WebSocket connection options:
-            // 1. Testing on same computer: use localhost
-            // 2. Testing on phone/other device: use your server's IP
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}`;
             
-            // For same computer testing:
-            const wsUrl = 'ws://localhost:8080';
+            console.log(`🔗 Connecting to WebSocket: ${wsUrl}`);
+            this.ws = new WebSocket(wsUrl);
             
-            // For phone/other devices, replace with your server IP:
-            // const wsUrl = 'ws://192.168.1.100:8080'; // example IP
-            
-            console.log(`Connecting to WebSocket: ${wsUrl}`);
-            this.socket = new WebSocket(wsUrl);
-            
-            this.socket.onopen = (event) => {
-                console.log('WebSocket connected to CreaTune server');
+            this.ws.onopen = () => {
+                console.log('✅ WebSocket connected');
                 this.isConnected = true;
                 this.reconnectAttempts = 0;
-                this.emit('connected', { timestamp: Date.now() });
+                this.reconnectDelay = 1000;
+                this.requestESP32Status();
             };
             
-            this.socket.onmessage = (event) => {
+            this.ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    this.routeMessage(data);
-                } catch (err) {
-                    console.log('Non-JSON WebSocket message:', event.data);
+                    this.handleMessage(data);
+                } catch (error) {
+                    console.error('❌ Error parsing message:', error);
                 }
             };
             
-            this.socket.onclose = (event) => {
-                console.log('WebSocket connection closed');
+            this.ws.onclose = () => {
+                console.log('🔌❌ WebSocket disconnected');
                 this.isConnected = false;
-                this.emit('disconnected', { timestamp: Date.now() });
+                this.markAllDisconnected();
                 this.attemptReconnect();
             };
             
-            this.socket.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                this.emit('error', { error, timestamp: Date.now() });
+            this.ws.onerror = (error) => {
+                console.error('🚫 WebSocket error:', error);
+                this.isConnected = false;
             };
             
         } catch (error) {
-            console.error('Failed to create WebSocket:', error);
+            console.error('❌ Failed to create WebSocket:', error);
             this.attemptReconnect();
         }
     }
     
-    routeMessage(data) {
-        // Route ESP32 sensor data to handlers
-        if (data.type === 'sensor_data' && data.sensor) {
-            
-            // Log received sensor data
-            const value = data.voltage || data.moisture_app_value || data.raw_value;
-            console.log(`ESP32 ${data.sensor}: ${value !== undefined ? value.toFixed(3) : 'no value'}`);
-            
-            // Emit generic sensor data event
-            this.emit('sensor_data', data);
-            
-            // Route to specific sensor type handlers
-            const sensorType = this.detectSensorType(data);
-            this.emit(`sensor_${sensorType}`, data);
-            
-        } else if (data.type === 'esp_disconnected') {
-            // Handle ESP32 disconnection
-            console.log(`🔌 ESP32 disconnected: ${data.name}`);
-            
-            // Detect sensor type from disconnected device name
-            const sensorType = this.detectSensorTypeFromName(data.name);
-            
-            // Emit disconnection events
-            this.emit('esp_disconnected', data);
-            this.emit(`sensor_${sensorType}_disconnected`, data);
-            
-        } else if (data.type === 'welcome') {
-            console.log('Server welcome:', data.message);
-        } else {
-            // Handle other message types if needed
-            this.emit('message', data);
+    handleMessage(data) {
+        switch (data.type) {
+            case 'welcome':
+                this.clientId = data.clientId;
+                console.log(`🎉 Connected! Client ID: ${this.clientId}`);
+                break;
+                
+            case 'sensor_data':
+                this.handleSensorData(data);
+                break;
+                
+            case 'esp_status':
+                this.handleESPStatus(data);
+                break;
+                
+            case 'esp_disconnected':
+                this.handleESPDisconnection(data);
+                break;
         }
     }
     
-    detectSensorType(data) {
-        // Detect sensor type from data
-        const sensorName = data.sensor.toLowerCase();
+    handleSensorData(data) {
+        const deviceType = this.identifyDeviceType(data);
         
-        if (sensorName.includes('moisture') || sensorName.includes('soil') || data.soil_condition) {
-            return 'soil';
+        if (deviceType && this.espDevices[deviceType]) {
+            this.espDevices[deviceType].connected = true;
+            this.espDevices[deviceType].lastData = data;
+            
+            if (data.espId !== undefined) {
+                this.espDevices[deviceType].id = data.espId;
+            }
+            
+            this.updateCombinedName();
+            this.notifyCallbacks('data', deviceType, data);
+            
+            console.log(`📊 ${deviceType.toUpperCase()} data:`, data);
         }
-        if (sensorName.includes('temp') || data.temperature !== undefined) {
-            return 'temperature';
-        }
-        if (sensorName.includes('light') || data.light !== undefined) {
-            return 'light';
-        }
-        
-        // Default fallback
-        return 'unknown';
     }
     
-    detectSensorTypeFromName(deviceName) {
-        // Detect sensor type from device name (for disconnections)
-        const name = deviceName.toLowerCase();
+    handleESPStatus(data) {
+        if (data.devices && Array.isArray(data.devices)) {
+            // Reset all to disconnected
+            Object.keys(this.espDevices).forEach(key => {
+                this.espDevices[key].connected = false;
+            });
+            
+            // Update with current status
+            data.devices.forEach(device => {
+                const deviceType = this.identifyDeviceTypeByName(device.name);
+                if (deviceType && this.espDevices[deviceType]) {
+                    this.espDevices[deviceType].connected = device.connected;
+                    this.espDevices[deviceType].lastData = device.lastData;
+                    this.espDevices[deviceType].id = device.id;
+                }
+            });
+            
+            this.updateCombinedName();
+            this.notifyCallbacks('status', this.espDevices, this.combinedName);
+        }
+    }
+    
+    handleESPDisconnection(data) {
+        const deviceType = this.identifyDeviceTypeByName(data.name);
+        if (deviceType && this.espDevices[deviceType]) {
+            this.espDevices[deviceType].connected = false;
+            this.espDevices[deviceType].lastData = null;
+            
+            this.updateCombinedName();
+            this.notifyCallbacks('disconnect', deviceType, data);
+            
+            console.log(`🔌❌ ${deviceType.toUpperCase()} disconnected`);
+        }
+    }
+    
+    identifyDeviceType(data) {
+        const sensor = (data.sensor || '').toLowerCase();
+        const message = (data.message || '').toLowerCase();
         
-        if (name.includes('moisture') || name.includes('soil')) {
-            return 'soil';
-        }
-        if (name.includes('temp')) {
-            return 'temperature';
-        }
-        if (name.includes('light')) {
-            return 'light';
-        }
+        if (sensor.includes('soil') || sensor.includes('moisture') || 
+            data.soilMoisture !== undefined || data.moisture !== undefined) return 'soil';
+        if (sensor.includes('light') || sensor.includes('lux') || 
+            data.lightLevel !== undefined || data.lux !== undefined) return 'light';
+        if (sensor.includes('temp') || sensor.includes('temperature') || 
+            data.temperature !== undefined || data.temp !== undefined) return 'temp';
         
-        // Default fallback
-        return 'unknown';
+        return null;
+    }
+    
+    identifyDeviceTypeByName(name) {
+        const nameLower = (name || '').toLowerCase();
+        if (nameLower.includes('soil')) return 'soil';
+        if (nameLower.includes('light')) return 'light';
+        if (nameLower.includes('temp')) return 'temp';
+        return null;
+    }
+    
+    updateCombinedName() {
+        const connected = Object.keys(this.espDevices)
+            .filter(key => this.espDevices[key].connected)
+            .sort();
+        
+        this.combinedName = connected.length > 0 ? connected.join('-') : 'idle';
+        console.log(`🏷️ Combined name: ${this.combinedName}`);
+    }
+    
+    markAllDisconnected() {
+        Object.keys(this.espDevices).forEach(key => {
+            this.espDevices[key].connected = false;
+            this.espDevices[key].lastData = null;
+        });
+        this.updateCombinedName();
+        this.notifyCallbacks('all_disconnected', this.espDevices);
     }
     
     attemptReconnect() {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error('❌ Max WebSocket reconnection attempts reached');
+            console.error('❌ Max reconnection attempts reached');
             return;
         }
         
         this.reconnectAttempts++;
-        const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 30000); // Max 30s delay
-        console.log(`🔄 WebSocket reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay/1000}s`);
+        console.log(`🔄 Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
         
         setTimeout(() => {
             this.connect();
-        }, delay);
+        }, this.reconnectDelay);
+        
+        this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, 30000);
     }
     
-    // Event system for sensor handlers
-    on(event, handler) {
-        if (!this.eventHandlers.has(event)) {
-            this.eventHandlers.set(event, []);
+    requestESP32Status() {
+        if (this.isConnected && this.ws) {
+            this.ws.send(JSON.stringify({
+                type: 'request_esp_status',
+                clientId: this.clientId,
+                timestamp: Date.now()
+            }));
         }
-        this.eventHandlers.get(event).push(handler);
     }
     
-    off(event, handler) {
-        if (this.eventHandlers.has(event)) {
-            const handlers = this.eventHandlers.get(event);
-            const index = handlers.indexOf(handler);
-            if (index !== -1) {
-                handlers.splice(index, 1);
+    // Public API for other scripts
+    
+    // Register callback for events: 'data', 'status', 'disconnect', 'all_disconnected'
+    on(eventType, callback) {
+        if (!this.callbacks[eventType]) {
+            this.callbacks[eventType] = [];
+        }
+        this.callbacks[eventType].push(callback);
+    }
+    
+    // Remove callback
+    off(eventType, callback) {
+        if (this.callbacks[eventType]) {
+            const index = this.callbacks[eventType].indexOf(callback);
+            if (index > -1) {
+                this.callbacks[eventType].splice(index, 1);
             }
         }
     }
     
-    emit(event, data) {
-        if (this.eventHandlers.has(event)) {
-            this.eventHandlers.get(event).forEach(handler => {
+    notifyCallbacks(eventType, ...args) {
+        if (this.callbacks[eventType]) {
+            this.callbacks[eventType].forEach(callback => {
                 try {
-                    handler(data);
-                } catch (err) {
-                    console.error(`❌ WebSocket event handler error for ${event}:`, err);
+                    callback(...args);
+                } catch (error) {
+                    console.error(`❌ Error in ${eventType} callback:`, error);
                 }
             });
         }
-        
-        // Force immediate UI update for critical events
-        if (event.includes('disconnected')) {
-            setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('websocketDisconnection', {
-                    detail: { event, data, timestamp: Date.now() }
-                }));
-            }, 10);
-        }
     }
     
-    send(data) {
-        if (this.isConnected && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify(data));
-            return true;
-        } else {
-            console.warn('Cannot send data: WebSocket not connected');
-            return false;
-        }
+    // Getters for other scripts to access data
+    getDevices() {
+        return { ...this.espDevices };
     }
     
-    // Utility methods
-    getStatus() {
-        return {
-            connected: this.isConnected,
-            reconnectAttempts: this.reconnectAttempts,
-            readyState: this.socket ? this.socket.readyState : null
-        };
+    getDevice(type) {
+        return this.espDevices[type] ? { ...this.espDevices[type] } : null;
     }
     
-    disconnect() {
-        if (this.socket) {
-            this.socket.close();
-        }
+    getCombinedName() {
+        return this.combinedName;
+    }
+    
+    getConnectedDevices() {
+        return Object.keys(this.espDevices).filter(key => this.espDevices[key].connected);
+    }
+    
+    isConnected() {
+        return this.isConnected;
+    }
+    
+    getConnectionCount() {
+        return Object.values(this.espDevices).filter(d => d.connected).length;
     }
 }
 
-// Initialize WebSocket client globally
-window.creatoneWS = new CreaTuneWebSocketClient();
+// Initialize when DOM loads
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Starting WebSocket Client...');
+    window.creatune = new CreaTuneClient();
+});
 
-// Log connection status
-window.creatoneWS.on('connected', () => console.log('✅ ESP32 WebSocket ready'));
-window.creatoneWS.on('disconnected', () => console.log('❌ ESP32 WebSocket disconnected'));
+// Export for modules
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = CreaTuneClient;
+}

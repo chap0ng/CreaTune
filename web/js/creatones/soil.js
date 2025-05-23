@@ -69,7 +69,7 @@ class SoilHandler {
             this.soilSynth = new Tone.PolySynth(Tone.FMSynth, {
                 harmonicity: 2.5,
                 modulationIndex: 10,
-                oscillator: { type: "sawtooth" },
+                oscillator: { type: "sine" },
                 envelope: {
                     attack: 0.1,
                     decay: 0.8,

@@ -4,49 +4,33 @@
 
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
+
 :root {
+
   /* Primary Colors */
+
   --warm-yellow: #f6c052;
   --steel-blue: #699bc8;
   --sage-green: #8ea47d;
   --warm-beige: #f5eee0;
   --dark-slate: #2d3142;
   --coral-red: #e6695a;
-
   /* Blended Colors */
+
   --yellow-blue: #a0ab8d;
   --blue-green: #79a397;
   --yellow-green: #bea867;
   --all-three: #8fa082;
-  
-  /* Nothing Phone 2a dimensions */
-  --phone-width: 100vw;
-  --phone-height: 100vh;
 }
 
 /* ==========================================================================
-   BASE STYLES & FULLSCREEN
+   BASE STYLES
    ========================================================================== */
 
 * {
-  margin: 0;
+  margin: 1px;
   padding: 0;
   box-sizing: border-box;
-}
-
-html {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-
-html.fullscreen {
-  /* Hide all system UI */
-  appearance: none;
-  user-select: none;
-  -webkit-appearance: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
 }
 
 body {
@@ -55,263 +39,88 @@ body {
   color: var(--dark-slate);
   background-color: var(--warm-beige);
   font-size: 20px;
-  
-  /* True fullscreen - no scrolling, no UI */
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-  position: fixed;
-  top: 0;
-  left: 0;
-  
-  /* Hide system UI elements */
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  -webkit-text-size-adjust: none;
-  -ms-content-zooming: none;
-  touch-action: manipulation;
-  
-  /* Safe area for phones with notches/curves */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-}
-
-/* Fullscreen mode enhancements */
-body.fullscreen-mode {
-  /* Force hide any remaining UI */
-  -webkit-app-region: no-drag;
 }
 
 /* ==========================================================================
-   MAIN LAYOUT - OPTIMIZED FOR NOTHING PHONE 2A
+   MAIN LAYOUT
    ========================================================================== */
 
 .frameidle {
   display: grid;
-  grid-template-columns: min(3vw, 20px) 1fr min(3vw, 20px);
-  grid-template-rows: min(3vw, 20px) 1fr min(3vw, 20px);
+  grid-template-columns: 20px 1fr 20px;
+  grid-template-rows: 20px 1fr 20px;
   grid-template-areas:
     "corner1 frametop corner2"
     "frameleft framebackground frameright"
     "corner3 framebottom corner4";
-  
-  /* Fill entire screen - Nothing Phone 2a optimized */
   width: 100vw;
   height: 100vh;
-  
-  /* No max constraints - use full phone screen */
-  position: absolute;
-  top: 0;
-  left: 0;
-  
-  /* Remove padding - use full screen real estate */
-  padding: 0;
-  margin: 0;
-}
-
-/* Landscape mode optimization for Nothing Phone 2a */
-@media screen and (orientation: landscape) {
-  .frameidle {
-    /* Landscape: 2400x1080 - adjust grid for wider screen */
-    grid-template-columns: min(2vh, 25px) 1fr min(2vh, 25px);
-    grid-template-rows: min(2vh, 25px) 1fr min(2vh, 25px);
-    
-    /* Small padding only in landscape for safe areas */
-    padding: min(1vh, 10px) min(1vw, 15px);
-  }
-}
-
-/* Portrait fallback (show orientation hint) */
-@media screen and (orientation: portrait) {
-  .frameidle {
-    /* Portrait: 1080x2400 - still functional but show hint */
-    grid-template-columns: min(2vw, 20px) 1fr min(2vw, 20px);
-    grid-template-rows: min(2vw, 20px) 1fr min(2vw, 20px);
-  }
+  max-width: min(100vw, calc(100vh * 1.6));
+  max-height: min(100vh, calc(100vw / 1.6));
+  margin: 0 auto;
+  padding: min(80px, 8vw) min(60px, 6vw) min(100px, 10vw) min(60px, 6vw);
+  position: relative;
 }
 
 /* ==========================================================================
-   ORIENTATION HANDLING FOR NOTHING PHONE 2A
+   FRAME COMPONENTS
    ========================================================================== */
 
-/* Portrait mode - show rotation hint */
-@media screen and (orientation: portrait) {
-  /* Show orientation hint for Android */
-  body:not(.landscape-mode)::before {
-    content: "🔄 Rotate for best experience";
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: linear-gradient(135deg, var(--dark-slate), var(--steel-blue));
-    color: white;
-    padding: 1.5rem 2rem;
-    border-radius: 15px;
-    z-index: 10000;
-    font-size: max(18px, 4vw);
-    text-align: center;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    animation: orientationPulse 2s ease-in-out infinite;
-    backdrop-filter: blur(10px);
-    border: 2px solid var(--coral-red);
-  }
-}
+/* Corners */
 
-/* Hide orientation hint in landscape */
-body.landscape-mode::before {
-  display: none !important;
-}
-
-/* Landscape mode optimizations */
-@media screen and (orientation: landscape) {
-  body {
-    /* Optimal for Nothing Phone 2a landscape */
-    font-size: min(22px, 2.5vh);
-  }
-}
-
-/* Fullscreen mode enhancements */
-html.fullscreen,
-html.fullscreen body {
-  /* Hide any remaining browser UI */
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-}
-
-/* Safe area handling for curved edges */
-@supports (padding: env(safe-area-inset-top)) {
-  .frameidle {
-    /* Account for Nothing Phone's curved edges */
-    padding: max(env(safe-area-inset-top), 5px) 
-             max(env(safe-area-inset-right), 5px) 
-             max(env(safe-area-inset-bottom), 5px) 
-             max(env(safe-area-inset-left), 5px);
-  }
-}
-
-/* Animations */
-@keyframes orientationPulse {
-  0%, 100% { 
-    opacity: 1; 
-    transform: translate(-50%, -50%) scale(1); 
-  }
-  50% { 
-    opacity: 0.85; 
-    transform: translate(-50%, -50%) scale(1.05); 
-  }
-}
-
-@keyframes disconnected-flash {
-  0% { opacity: 1; }
-  50% { opacity: 0.6; }
-  100% { opacity: 1; }
-}
-
-/* Frame disconnection state */
-.framebackground.disconnected {
-  animation: disconnected-flash 1.5s ease-in-out;
-}
-
-/* ==========================================================================
-   NOTHING PHONE 2A SPECIFIC OPTIMIZATIONS
-   ========================================================================== */
-
-/* High DPI display optimization */
-@media screen and (-webkit-min-device-pixel-ratio: 2) {
-  .idle-creature, 
-  .soil-creature, 
-  .light-creature {
-    /* Crisp images on high DPI */
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: crisp-edges;
-  }
-}
-
-/* Touch optimization for finger interaction */
-.frametop {
-  /* Larger touch target for easier dragging */
-  min-height: max(25px, 3vh);
-  
-  /* Visual feedback for touch */
-  transition: background-color 0.15s ease;
-}
-
-.frametop:active {
-  background-color: var(--yellow-blue);
-}
-
-/* Prevent text selection on touch */
-.frameidle * {
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-
-/* Smooth scrolling prevention */
-html, body {
-  overscroll-behavior: none;
-  -webkit-overflow-scrolling: auto;
-}
-
-/* ==========================================================================
-   FRAME COMPONENTS - RESPONSIVE SIZING
-   ========================================================================== */
-
-/* Corners - responsive to screen size */
 .corner1, .corner2, .corner3, .corner4 {
   background-color: var(--coral-red);
-  min-width: 15px;
-  min-height: 15px;
 }
 
 .corner1 {
   grid-area: corner1;
-  transition: transform 0.3s ease;
+  transition: transform;
   will-change: transform;
 }
 
 .corner2 {
   grid-area: corner2;
-  transition: transform 0.3s ease;
+  transition: transform;
   will-change: transform;
 }
 
 .corner3 { grid-area: corner3; }
 .corner4 { grid-area: corner4; }
 
-/* Top bar - touch-friendly for Nothing Phone 2a */
+/* Top bar */
+
 .frametop {
   grid-area: frametop;
   background-color: var(--steel-blue);
   user-select: none;
   -webkit-user-select: none;
-  touch-action: pan-y;
+  touch-action: none;
   cursor: ns-resize;
   width: 100%;
   height: 100%;
-  
-  /* Better touch target for phone */
-  min-height: 25px;
 }
 
-/* Side frames - responsive */
-.frameleft, .frameright {
+/* Side frames */
+
+.frameleft {
+  grid-area: frameleft;
   background-color: var(--steel-blue);
   will-change: height;
-  min-width: 15px;
 }
 
-.frameleft { grid-area: frameleft; }
-.frameright { grid-area: frameright; }
+.frameright {
+  grid-area: frameright;
+  background-color: var(--steel-blue);
+  will-change: height;
+}
 
 .framebottom {
   grid-area: framebottom;
   background-color: var(--steel-blue);
-  min-height: 15px;
 }
 
-/* Performance optimizations for mobile */
+/* Performance optimizations */
+
 .frametop, .corner1, .corner2 {
   will-change: transform;
   transform: translateZ(0);
@@ -339,16 +148,12 @@ html, body {
   will-change: margin-top;
   position: relative;
   overflow: hidden;
-  
-  /* Smooth background transitions */
-  transition: background-color 0.4s ease, background-image 0.4s ease;
 }
 
 /* ESP32 Connection States */
+
 .framebackground.soil {
   background-image: url('images/soil-background.jpg');
-  background-size: cover;
-  background-position: center;
 }
 
 .framebackground.temp {
@@ -356,24 +161,7 @@ html, body {
 }
 
 .framebackground.light {
-  background-color: var(--warm-yellow);
-}
-
-/* Combined states */
-.framebackground.soil.light {
-  background: linear-gradient(45deg, var(--sage-green), var(--warm-yellow));
-}
-
-.framebackground.soil.temp {
-  background: linear-gradient(45deg, var(--sage-green), var(--coral-red));
-}
-
-.framebackground.light.temp {
-  background: linear-gradient(45deg, var(--warm-yellow), var(--coral-red));
-}
-
-.framebackground.soil.light.temp {
-  background: linear-gradient(120deg, var(--sage-green), var(--warm-yellow), var(--coral-red));
+  background-color: var(--coral-red);
 }
 
 .framebackground.soil-background {
@@ -386,115 +174,62 @@ html, body {
 }
 
 /* ==========================================================================
-   CREATURES - OPTIMIZED FOR NOTHING PHONE 2A
+   CREATURES
    ========================================================================== */
 
-.idle-creature, 
-.soil-creature, 
-.light-creature {
+.idle-creature, .soil-creature {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) scale(0);
-  
-  /* Responsive sizing for Nothing Phone 2a screen */
-  width: min(25vw, 35vh, 200px);
-  height: min(25vw, 35vh, 200px);
-  
+  top: calc(50% + 10px);
+  left: calc(50% + 0px);
+  transform: translate(-50%, -50%);
+  width: min(30vw, 20vh);
+  height: min(30vw, 20vh);
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  opacity: 0;
+  display: none;
   z-index: 5;
-  
-  /* Smooth transitions - faster for mobile */
-  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Active state - visible and scaled up */
-.soil-creature.active,
-.light-creature.active,
-.idle-creature.active {
-  opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
-}
-
-/* Creature images */
 .soil-creature {
   background-image: url('sprites/creatures/soil-creature.png');
+  background-color: transparent;
 }
 
-.light-creature {
-  background-image: url('sprites/creatures/light-creature.png');
+
+
+.soil-creature.active {
+  display: block;
 }
 
-.idle-creature {
-  background-image: url('sprites/creatures/idle-creature.png');
-}
 
-/* Multiple creatures positioning for landscape */
-@media screen and (orientation: landscape) {
-  .multiple-creatures .soil-creature.active {
-    left: calc(50% - 8vw);
-    transform: translate(-50%, -50%) scale(0.85);
-  }
-
-  .multiple-creatures .light-creature.active {
-    left: calc(50% + 8vw);
-    transform: translate(-50%, -50%) scale(0.85);
-  }
-}
-
-/* Portrait positioning (smaller creatures) */
-@media screen and (orientation: portrait) {
-  .idle-creature, 
-  .soil-creature, 
-  .light-creature {
-    width: min(35vw, 25vh, 180px);
-    height: min(35vw, 25vh, 180px);
-  }
-  
-  .multiple-creatures .soil-creature.active {
-    left: calc(50% - 12vw);
-    transform: translate(-50%, -50%) scale(0.8);
-  }
-
-  .multiple-creatures .light-creature.active {
-    left: calc(50% + 12vw);
-    transform: translate(-50%, -50%) scale(0.8);
-  }
-}
 
 /* ==========================================================================
+
    ANIMATIONS
+
    ========================================================================== */
+
+
 
 @keyframes frametop {
+
   0% { background-position: 0 0; }
   25% { background-position: -256px 0; }
   50% { background-position: -512px 0; }
   75% { background-position: 0 -64px; }
   100% { background-position: -256px -64px; }
+
 }
+
+
 
 @keyframes grid-animation {
+
   0% { background-position: 0 0; }
   25% { background-position: -256px 0; }
   50% { background-position: -512px 0; }
   75% { background-position: 0 -64px; }
   100% { background-position: -256px -64px; }
-}
 
-/* ==========================================================================
-   DISCONNECTION STATES
-   ========================================================================== */
-
-.framebackground.disconnected {
-  animation: disconnected-flash 2s ease-in-out;
-}
-
-@keyframes disconnected-flash {
-  0% { opacity: 1; }
-  50% { opacity: 0.5; }
-  100% { opacity: 1; }
 }
