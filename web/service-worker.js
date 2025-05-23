@@ -1,16 +1,25 @@
 // service-worker.js
-const CACHE_NAME = 'CreaTune-cache-v2';
+const CACHE_NAME = 'CreaTune-cache-v3';
 const urlsToCache = [
   './',
   './index.html',
   './styles.css',
-  './app.js',
   './manifest.json',
-  './images/mic-icon.png',
-  './images/plant-icon.png',
-  './images/creature.png',
+  // Core scripts
+  './js/client/websocket-client.js',
+  './js/creatones/soil.js',
+  './js/frame/background-manager.js',
+  './js/frame/frame-slider.js',
+  './js/creatures/creature-hidder.js',
+  // Images and sprites
+  './images/soil-background.jpg',
+  './sprite/soil-background.png',
+  './sprites/creatures/soil-creature.png',
+  // Icons
   './icons/icon-192x192.png',
-  './icons/icon-512x512.png'
+  './icons/icon-512x512.png',
+  // External CDN (Tone.js) - will be cached when fetched
+  'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js'
 ];
 
 // Install event - cache assets
@@ -18,8 +27,11 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Cache opened');
+        console.log('CreaTune cache opened');
         return cache.addAll(urlsToCache);
+      })
+      .catch(error => {
+        console.error('Cache install failed:', error);
       })
   );
 });
@@ -43,7 +55,7 @@ self.addEventListener('activate', event => {
 // Fetch event - serve from cache when offline
 self.addEventListener('fetch', event => {
   // Skip WebSocket requests
-  if (event.request.url.startsWith('ws://')) {
+  if (event.request.url.startsWith('ws://') || event.request.url.startsWith('wss://')) {
     return;
   }
   
@@ -78,6 +90,10 @@ self.addEventListener('fetch', event => {
         ).catch(() => {
           // Fallback for offline use
           if (event.request.url.endsWith('.html')) {
+            return caches.match('./index.html');
+          }
+          // Fallback for JS files
+          if (event.request.url.endsWith('.js')) {
             return caches.match('./index.html');
           }
         });

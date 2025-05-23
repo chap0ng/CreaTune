@@ -5,6 +5,21 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>CreaTune</title>
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#e6695a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CreaTune">
+  
+  <!-- PWA Icons -->
+  <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512x512.png">
+  
   <link rel="stylesheet" href="styles.css" />
 </head>
 
@@ -22,21 +37,35 @@
       <!-- Background content -->
     </div>
     <div class="idle-creature"></div>
+    <div class="soil-creature"></div>
   </div>
+
+  <!-- Audio library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+  <!-- Core system scripts -->
+  <script src="js/client/websocket-client.js"></script>
+
+  <!-- Frame and UI scripts -->
+  <script src="js/frame/background-manager.js"></script>
+  <script src="js/frame/frame-slider.js"></script>
+  <script src="js/creatures/creature-hidder.js"></script>
+
+  <!-- Sensor handlers -->
+  <script src="js/creatones/soil.js"></script>
+
+  <!-- Service Worker Registration -->
+  <script>
+    // Register your existing service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then(registration => console.log('✅ Service Worker registered'))
+          .catch(error => console.error('❌ Service Worker registration failed:', error));
+      });
+    }
+  </script>
+
 </body>
-
-<!-- Audio library -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-
-<!-- Core system scripts -->
-<script src="js/client/websocket-client.js"></script>
-
-<!-- Frame and UI scripts -->
-<script src="js/frame/background-manager.js"></script>
-<script src="js/frame/frame-slider.js"></script>
-<script src="js/creatures/creature-hidder.js"></script>
-
-<!-- Sensor handlers -->
-<script src="js/creatones/soil.js"></script>
 
 </html>
