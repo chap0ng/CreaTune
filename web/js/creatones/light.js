@@ -1,35 +1,6 @@
-// esp32 soil state: soilsynth Tone.js, soil-background & soil-creature //
-/* -------------------------------------------------------------------- */
-
-/* get current esp32-status */
-
-/* if current esp32-status is soil activate soil-background*/
-/* log : "soil active" */
-
-/* displaying soil-background */
-
-
-/* -------------------------------------------------------------------- */
-/* if current esp32 is soil & soilvalues are in range -> activate soil-creature & tone.js synths*/
-/* log : soil creature found */
-
-/* playing random scale loop soilsynth using tone.js */
-
-/* displaying soil-creature in css if frame close*/
-
-/*hiding soil-creature in css if frame close*/
-
-/* if current esp32 not soil - deactivate soil state */
-/* log : "soil not active" */
-
-/* -------------------------------------*/
-
-/* soil.js - ESP32 Soil State Handler */
-/* Handles soilsynth Tone.js, soil-background & soil-creature */
-
 // light.js - ESP32 Light State Handler
 // Handles light synth Tone.js, light-background & light-creature
-// Template with proper disconnection handling
+// IMPROVED: Faster transitions, proper background/creature logic, no-refresh disconnection
 
 class LightHandler {
     constructor() {
@@ -48,15 +19,15 @@ class LightHandler {
         this.frameBackground = null;
         this.lightCreature = null;
         
-        // Timeout for data monitoring
+        // Faster timeout for disconnection detection
         this.dataTimeout = null;
-        this.DATA_TIMEOUT_MS = 5000;
+        this.DATA_TIMEOUT_MS = 2000; // 2 seconds instead of 5
         
         this.init();
     }
     
     async init() {
-        console.log('Light handler initializing...');
+        console.log('💡 Light handler initializing...');
         
         // Get DOM elements
         this.frameBackground = document.querySelector('.framebackground');
@@ -68,7 +39,7 @@ class LightHandler {
         // Connect to websocket data
         this.connectToWebSocket();
         
-        console.log('Light handler ready');
+        console.log('✅ Light handler ready');
     }
     
     async initializeLightSynth() {
@@ -93,10 +64,10 @@ class LightHandler {
             }).connect(this.lightReverb);
             
             this.lightSynth.volume.value = -10;
-            console.log('Light synth initialized');
+            console.log('🎵 Light synth initialized');
             
         } catch (error) {
-            console.error('Light synth initialization failed:', error);
+            console.error('❌ Light synth initialization failed:', error);
         }
     }
     
@@ -112,9 +83,12 @@ class LightHandler {
                 // Listen for general disconnection
                 window.creatoneWS.on('disconnected', () => this.handleGeneralDisconnection());
                 
-                console.log('Light handler connected to websocket data');
+                // Listen for reconnection
+                window.creatoneWS.on('connected', () => this.handleReconnection());
+                
+                console.log('🔌 Light handler connected to websocket');
             } else {
-                setTimeout(connect, 100);
+                setTimeout(connect, 50); // Faster retry
             }
         };
         connect();
@@ -124,6 +98,11 @@ class LightHandler {
         // Only handle light sensors
         if (!this.isLightData(data)) return;
         
+        // ESP32 connected - show background immediately
+        if (!this.isConnected) {
+            this.handleConnection();
+        }
+        
         this.isConnected = true;
         this.lastDataTime = Date.now();
         
@@ -132,20 +111,20 @@ class LightHandler {
             clearTimeout(this.dataTimeout);
         }
         
-        // Set new timeout to detect disconnection
+        // Set faster timeout for disconnection detection
         this.dataTimeout = setTimeout(() => {
-            console.log('⚠️ Light sensor data timeout - assuming disconnected');
+            console.log('⚠️ Light sensor timeout - disconnecting');
             this.handleDataTimeout();
         }, this.DATA_TIMEOUT_MS);
         
         const value = data.light || data.voltage || 0;
-        console.log(`Light data: ${value.toFixed(3)}`);
+        console.log(`💡 Light: ${value.toFixed(3)}`);
         
-        // Check if in active range (adjust as needed)
+        // NEW LOGIC: Creature appears only if data in range (not too dark/bright)
         if (value >= 0.3 && value <= 0.9) {
-            this.activateLight(value);
+            this.showCreature(value);
         } else {
-            this.deactivateLight();
+            this.hideCreature(); // Hide creature but keep background
         }
     }
     
@@ -156,49 +135,45 @@ class LightHandler {
         );
     }
     
-    handleDisconnection(data) {
-        console.log('🔌 Light ESP32 disconnected:', data.name);
-        this.isConnected = false;
+    handleConnection() {
+        console.log('🔌✅ Light ESP32 connected');
+        this.isConnected = true;
         
-        if (this.dataTimeout) {
-            clearTimeout(this.dataTimeout);
-            this.dataTimeout = null;
+        // Show background immediately when ESP32 connects
+        if (this.frameBackground) {
+            this.frameBackground.classList.add('light');
+            console.log('🖼️ Light background activated');
         }
-        
-        this.forceDeactivate();
+    }
+    
+    handleDisconnection(data) {
+        console.log('🔌❌ Light ESP32 disconnected:', data?.name || 'Unknown');
+        this.forceDisconnect();
     }
     
     handleGeneralDisconnection() {
-        console.log('🔌 WebSocket disconnected - stopping light handler');
-        this.isConnected = false;
-        
-        if (this.dataTimeout) {
-            clearTimeout(this.dataTimeout);
-            this.dataTimeout = null;
-        }
-        
-        this.forceDeactivate();
+        console.log('🔌❌ WebSocket lost - light handler stopping');
+        this.forceDisconnect();
+    }
+    
+    handleReconnection() {
+        console.log('🔌🔄 WebSocket reconnected - light handler ready');
+        // Don't auto-activate, wait for ESP32 data
     }
     
     handleDataTimeout() {
-        console.log('⏰ Light sensor data timeout');
-        this.isConnected = false;
-        this.forceDeactivate();
+        console.log('⏰ Light data timeout - assuming disconnected');
+        this.forceDisconnect();
     }
     
-    activateLight(value) {
-        if (!this.isConnected) return;
-        
+    showCreature(value) {
         this.currentValue = value;
         
         if (!this.isActive) {
             this.isActive = true;
-            console.log('💡 Light active');
+            console.log('👾 Light creature appearing');
             
-            // Visual triggers
-            if (this.frameBackground) {
-                this.frameBackground.classList.add('light', 'active');
-            }
+            // Show creature with smooth transition
             if (this.lightCreature) {
                 this.lightCreature.classList.add('active');
             }
@@ -207,14 +182,12 @@ class LightHandler {
         this.playLightSynth(value);
     }
     
-    deactivateLight() {
+    hideCreature() {
         if (this.isActive) {
             this.isActive = false;
-            console.log('💡 Light not active (value out of range)');
+            console.log('👻 Light creature hiding (out of range)');
             
-            if (this.frameBackground && this.isConnected) {
-                this.frameBackground.classList.remove('active');
-            }
+            // Hide creature but keep background (ESP32 still connected)
             if (this.lightCreature) {
                 this.lightCreature.classList.remove('active');
             }
@@ -223,11 +196,19 @@ class LightHandler {
         }
     }
     
-    forceDeactivate() {
-        console.log('🛑 Force deactivating light handler');
+    forceDisconnect() {
+        console.log('🛑 Force disconnecting light handler');
         
+        this.isConnected = false;
         this.isActive = false;
         
+        // Clear timeout
+        if (this.dataTimeout) {
+            clearTimeout(this.dataTimeout);
+            this.dataTimeout = null;
+        }
+        
+        // Remove ALL visual elements immediately
         if (this.frameBackground) {
             this.frameBackground.classList.remove('light', 'active');
         }
@@ -235,7 +216,28 @@ class LightHandler {
             this.lightCreature.classList.remove('active');
         }
         
+        // Stop synth immediately
         this.stopLightSynth();
+        
+        console.log('🏁 Light handler fully disconnected');
+        
+        // Force UI update without refresh
+        this.forceUIUpdate();
+    }
+    
+    forceUIUpdate() {
+        // Trigger immediate DOM update to avoid refresh requirement
+        if (this.frameBackground) {
+            this.frameBackground.style.transform = 'translateZ(0)';
+            setTimeout(() => {
+                this.frameBackground.style.transform = '';
+            }, 10);
+        }
+        
+        // Dispatch custom event for other components
+        window.dispatchEvent(new CustomEvent('lightDisconnected', {
+            detail: { timestamp: Date.now() }
+        }));
     }
     
     async playLightSynth(value) {
@@ -253,7 +255,7 @@ class LightHandler {
     }
     
     startLightLoop(value) {
-        console.log('🎵 Light creature found - starting synth');
+        console.log('🎼 Starting light synth loop');
         
         // Bright scale for light sounds
         const lightScale = ["C4", "E4", "G4", "B4", "D5", "F5", "A5", "C6"];
@@ -273,8 +275,6 @@ class LightHandler {
         this.isPlaying = true;
         this.lightLoop.start(0);
         Tone.Transport.start();
-        
-        console.log('🎼 Playing light synth loop');
     }
     
     updateLightLoop(value) {
@@ -309,8 +309,10 @@ class LightHandler {
                 this.lightLoop = null;
             }
             
-            Tone.Transport.stop();
-            Tone.Transport.cancel();
+            if (Tone.Transport.state === 'started') {
+                Tone.Transport.stop();
+                Tone.Transport.cancel();
+            }
         }
     }
     
@@ -320,12 +322,21 @@ class LightHandler {
             isConnected: this.isConnected,
             isPlaying: this.isPlaying,
             currentValue: this.currentValue,
-            lastDataTime: this.lastDataTime
+            lastDataTime: this.lastDataTime,
+            timeSinceLastData: Date.now() - this.lastDataTime
         };
+    }
+    
+    forceDisconnectDebug() {
+        this.forceDisconnect();
     }
 }
 
 // Initialize when DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     window.lightHandler = new LightHandler();
+    
+    // Debug in console
+    console.log('🧪 Debug: window.lightHandler.getStatus() to check status');
+    console.log('🧪 Debug: window.lightHandler.forceDisconnectDebug() to test disconnection');
 });

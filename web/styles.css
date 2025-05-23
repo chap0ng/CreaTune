@@ -36,6 +36,23 @@ body {
   color: var(--dark-slate);
   background-color: var(--warm-beige);
   font-size: 20px;
+  
+  /* Force landscape orientation */
+  transform-origin: center center;
+}
+
+/* Landscape orientation support */
+@media screen and (orientation: portrait) {
+  body {
+    transform: rotate(90deg);
+    transform-origin: center center;
+    width: 100vh;
+    height: 100vw;
+    overflow: hidden;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
 }
 
 /* ==========================================================================
@@ -141,11 +158,16 @@ body {
   will-change: margin-top;
   position: relative;
   overflow: hidden;
+  
+  /* Smooth background transitions */
+  transition: background-color 0.4s ease, background-image 0.4s ease;
 }
 
 /* ESP32 Connection States */
 .framebackground.soil {
   background-image: url('images/soil-background.jpg');
+  background-size: cover;
+  background-position: center;
 }
 
 .framebackground.temp {
@@ -192,14 +214,17 @@ body {
   position: absolute;
   top: calc(50% + 10px);
   left: calc(50% + 0px);
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(0);
   width: min(30vw, 20vh);
   height: min(30vw, 20vh);
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  display: none;
+  opacity: 0;
   z-index: 5;
+  
+  /* Smooth transitions for appearance/disappearance */
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Soil Creature */
@@ -209,7 +234,8 @@ body {
 }
 
 .soil-creature.active {
-  display: block;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 /* Light Creature */
@@ -219,7 +245,8 @@ body {
 }
 
 .light-creature.active {
-  display: block;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 /* Idle Creature */
@@ -229,7 +256,19 @@ body {
 }
 
 .idle-creature.active {
-  display: block;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* Multiple creatures positioning */
+.multiple-creatures .soil-creature.active {
+  left: calc(50% - 15px);
+  transform: translate(-50%, -50%) scale(0.9);
+}
+
+.multiple-creatures .light-creature.active {
+  left: calc(50% + 15px);
+  transform: translate(-50%, -50%) scale(0.9);
 }
 
 /* ==========================================================================

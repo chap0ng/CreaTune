@@ -135,16 +135,17 @@ class CreaTuneWebSocketClient {
     
     attemptReconnect() {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error('Max WebSocket reconnection attempts reached');
+            console.error('❌ Max WebSocket reconnection attempts reached');
             return;
         }
         
         this.reconnectAttempts++;
-        console.log(`WebSocket reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+        const delay = Math.min(this.reconnectDelay * this.reconnectAttempts, 30000); // Max 30s delay
+        console.log(`🔄 WebSocket reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay/1000}s`);
         
         setTimeout(() => {
             this.connect();
-        }, this.reconnectDelay * this.reconnectAttempts); // Exponential backoff
+        }, delay);
     }
     
     // Event system for sensor handlers
@@ -171,9 +172,18 @@ class CreaTuneWebSocketClient {
                 try {
                     handler(data);
                 } catch (err) {
-                    console.error(`WebSocket event handler error for ${event}:`, err);
+                    console.error(`❌ WebSocket event handler error for ${event}:`, err);
                 }
             });
+        }
+        
+        // Force immediate UI update for critical events
+        if (event.includes('disconnected')) {
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('websocketDisconnection', {
+                    detail: { event, data, timestamp: Date.now() }
+                }));
+            }, 10);
         }
     }
     

@@ -1,12 +1,11 @@
 // soil.js - ESP32 Soil State Handler
 // Handles soilsynth Tone.js, soil-background & soil-creature
-// Pure synth and visual logic - receives data from websocket-client
-// IMPROVED: Now handles ESP32 disconnections properly
+// IMPROVED: Faster transitions, proper background/creature logic, no-refresh disconnection
 
 class SoilHandler {
     constructor() {
         this.isActive = false;
-        this.isConnected = false; // Track connection status
+        this.isConnected = false;
         this.currentValue = 0;
         this.lastDataTime = 0;
         
@@ -20,15 +19,15 @@ class SoilHandler {
         this.frameBackground = null;
         this.soilCreature = null;
         
-        // Timeout for data monitoring
+        // Faster timeout for disconnection detection
         this.dataTimeout = null;
-        this.DATA_TIMEOUT_MS = 5000; // 5 seconds without data = disconnected
+        this.DATA_TIMEOUT_MS = 2000; // 2 seconds instead of 5
         
         this.init();
     }
     
     async init() {
-        console.log('Soil handler initializing...');
+        console.log('🌱 Soil handler initializing...');
         
         // Get DOM elements
         this.frameBackground = document.querySelector('.framebackground');
@@ -40,7 +39,7 @@ class SoilHandler {
         // Connect to websocket data
         this.connectToWebSocket();
         
-        console.log('Soil handler ready');
+        console.log('✅ Soil handler ready');
     }
     
     async initializeSoilSynth() {
@@ -74,15 +73,15 @@ class SoilHandler {
             }).connect(this.soilReverb);
             
             this.soilSynth.volume.value = -8;
-            console.log('Soil synth initialized');
+            console.log('🎵 Soil synth initialized');
             
         } catch (error) {
-            console.error('Soil synth initialization failed:', error);
+            console.error('❌ Soil synth initialization failed:', error);
         }
     }
     
     connectToWebSocket() {
-        // Wait for websocket client and connect to soil data
+        // Multiple connection attempts with faster retry
         const connect = () => {
             if (window.creatoneWS) {
                 // Listen for soil sensor data
@@ -94,9 +93,12 @@ class SoilHandler {
                 // Listen for general disconnection
                 window.creatoneWS.on('disconnected', () => this.handleGeneralDisconnection());
                 
-                console.log('Soil handler connected to websocket data');
+                // Listen for reconnection to reset state
+                window.creatoneWS.on('connected', () => this.handleReconnection());
+                
+                console.log('🔌 Soil handler connected to websocket');
             } else {
-                setTimeout(connect, 100);
+                setTimeout(connect, 50); // Faster retry
             }
         };
         connect();
@@ -106,7 +108,12 @@ class SoilHandler {
         // Only handle soil/moisture sensors
         if (!this.isSoilData(data)) return;
         
-        // Mark as connected and update last data time
+        // ESP32 connected - show background immediately
+        if (!this.isConnected) {
+            this.handleConnection();
+        }
+        
+        // Update connection state and reset timeout
         this.isConnected = true;
         this.lastDataTime = Date.now();
         
@@ -115,20 +122,20 @@ class SoilHandler {
             clearTimeout(this.dataTimeout);
         }
         
-        // Set new timeout to detect disconnection
+        // Set faster timeout for disconnection detection
         this.dataTimeout = setTimeout(() => {
-            console.log('⚠️ Soil sensor data timeout - assuming disconnected');
+            console.log('⚠️ Soil sensor timeout - disconnecting');
             this.handleDataTimeout();
         }, this.DATA_TIMEOUT_MS);
         
         const value = data.voltage || data.moisture_app_value || 0;
-        console.log(`Soil data: ${value.toFixed(3)}`);
+        console.log(`🌱 Soil: ${value.toFixed(3)}`);
         
-        // Check if in active range (0.4-0.8)
+        // NEW LOGIC: Creature appears only if data in range (not dry)
         if (value >= 0.4 && value <= 0.8) {
-            this.activateSoil(value);
+            this.showCreature(value);
         } else {
-            this.deactivateSoil();
+            this.hideCreature(); // Hide creature but keep background
         }
     }
     
@@ -140,56 +147,45 @@ class SoilHandler {
         );
     }
     
-    handleDisconnection(data) {
-        console.log('🔌 Soil ESP32 disconnected:', data.name);
-        this.isConnected = false;
+    handleConnection() {
+        console.log('🔌✅ Soil ESP32 connected');
+        this.isConnected = true;
         
-        // Clear timeout
-        if (this.dataTimeout) {
-            clearTimeout(this.dataTimeout);
-            this.dataTimeout = null;
+        // Show background immediately when ESP32 connects
+        if (this.frameBackground) {
+            this.frameBackground.classList.add('soil');
+            console.log('🖼️ Soil background activated');
         }
-        
-        // Force deactivate everything
-        this.forceDeactivate();
+    }
+    
+    handleDisconnection(data) {
+        console.log('🔌❌ Soil ESP32 disconnected:', data?.name || 'Unknown');
+        this.forceDisconnect();
     }
     
     handleGeneralDisconnection() {
-        console.log('🔌 WebSocket disconnected - stopping soil handler');
-        this.isConnected = false;
-        
-        // Clear timeout
-        if (this.dataTimeout) {
-            clearTimeout(this.dataTimeout);
-            this.dataTimeout = null;
-        }
-        
-        // Force deactivate everything
-        this.forceDeactivate();
+        console.log('🔌❌ WebSocket lost - soil handler stopping');
+        this.forceDisconnect();
+    }
+    
+    handleReconnection() {
+        console.log('🔌🔄 WebSocket reconnected - soil handler ready');
+        // Don't auto-activate, wait for ESP32 data
     }
     
     handleDataTimeout() {
-        console.log('⏰ Soil sensor data timeout');
-        this.isConnected = false;
-        
-        // Force deactivate everything
-        this.forceDeactivate();
+        console.log('⏰ Soil data timeout - assuming disconnected');
+        this.forceDisconnect();
     }
     
-    activateSoil(value) {
-        // Only activate if connected
-        if (!this.isConnected) return;
-        
+    showCreature(value) {
         this.currentValue = value;
         
         if (!this.isActive) {
             this.isActive = true;
-            console.log('🌱 Soil active');
+            console.log('👾 Soil creature appearing');
             
-            // Visual triggers - add CSS classes
-            if (this.frameBackground) {
-                this.frameBackground.classList.add('soil', 'active');
-            }
+            // Show creature with smooth transition
             if (this.soilCreature) {
                 this.soilCreature.classList.add('active');
             }
@@ -199,16 +195,12 @@ class SoilHandler {
         this.playSoilSynth(value);
     }
     
-    deactivateSoil() {
+    hideCreature() {
         if (this.isActive) {
             this.isActive = false;
-            console.log('🌱 Soil not active (value out of range)');
+            console.log('👻 Soil creature hiding (dry soil)');
             
-            // Visual triggers - remove active class but keep soil if connected
-            if (this.frameBackground && this.isConnected) {
-                this.frameBackground.classList.remove('active');
-                // Keep 'soil' class if still connected
-            }
+            // Hide creature but keep background (ESP32 still connected)
             if (this.soilCreature) {
                 this.soilCreature.classList.remove('active');
             }
@@ -218,12 +210,19 @@ class SoilHandler {
         }
     }
     
-    forceDeactivate() {
-        console.log('🛑 Force deactivating soil handler');
+    forceDisconnect() {
+        console.log('🛑 Force disconnecting soil handler');
         
+        this.isConnected = false;
         this.isActive = false;
         
-        // Visual triggers - remove ALL classes
+        // Clear timeout
+        if (this.dataTimeout) {
+            clearTimeout(this.dataTimeout);
+            this.dataTimeout = null;
+        }
+        
+        // Remove ALL visual elements immediately
         if (this.frameBackground) {
             this.frameBackground.classList.remove('soil', 'active');
         }
@@ -233,6 +232,26 @@ class SoilHandler {
         
         // Stop synth immediately
         this.stopSoilSynth();
+        
+        console.log('🏁 Soil handler fully disconnected');
+        
+        // Force UI update without refresh
+        this.forceUIUpdate();
+    }
+    
+    forceUIUpdate() {
+        // Trigger immediate DOM update to avoid refresh requirement
+        if (this.frameBackground) {
+            this.frameBackground.style.transform = 'translateZ(0)';
+            setTimeout(() => {
+                this.frameBackground.style.transform = '';
+            }, 10);
+        }
+        
+        // Dispatch custom event for other components
+        window.dispatchEvent(new CustomEvent('soilDisconnected', {
+            detail: { timestamp: Date.now() }
+        }));
     }
     
     async playSoilSynth(value) {
@@ -251,14 +270,14 @@ class SoilHandler {
     }
     
     startSoilLoop(value) {
-        console.log('🎵 Soil creature found - starting synth');
+        console.log('🎼 Starting soil synth loop');
         
         // Soil scale for natural sounds
         const soilScale = ["C3", "D3", "F3", "G3", "A3", "C4", "D4", "F4"];
         
         // Create random scale loop
         this.soilLoop = new Tone.Loop((time) => {
-            // Check if still connected before playing
+            // Check if still connected and active
             if (!this.isConnected || !this.isActive) {
                 return;
             }
@@ -280,8 +299,6 @@ class SoilHandler {
         this.isPlaying = true;
         this.soilLoop.start(0);
         Tone.Transport.start();
-        
-        console.log('🎼 Playing random scale loop soilsynth');
     }
     
     updateSoilLoop(value) {
@@ -321,26 +338,36 @@ class SoilHandler {
                 this.soilLoop = null;
             }
             
-            // Only stop transport if no other synths are playing
-            // (You might want to manage this globally later)
-            Tone.Transport.stop();
-            Tone.Transport.cancel();
+            // Stop transport safely
+            if (Tone.Transport.state === 'started') {
+                Tone.Transport.stop();
+                Tone.Transport.cancel();
+            }
         }
     }
     
-    // Public methods for debugging
+    // Public debug methods
     getStatus() {
         return {
             isActive: this.isActive,
             isConnected: this.isConnected,
             isPlaying: this.isPlaying,
             currentValue: this.currentValue,
-            lastDataTime: this.lastDataTime
+            lastDataTime: this.lastDataTime,
+            timeSinceLastData: Date.now() - this.lastDataTime
         };
+    }
+    
+    forceDisconnectDebug() {
+        this.forceDisconnect();
     }
 }
 
 // Initialize when DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     window.soilHandler = new SoilHandler();
+    
+    // Debug in console
+    console.log('🧪 Debug: window.soilHandler.getStatus() to check status');
+    console.log('🧪 Debug: window.soilHandler.forceDisconnectDebug() to test disconnection');
 });

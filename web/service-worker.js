@@ -1,5 +1,5 @@
 // service-worker.js
-const CACHE_NAME = 'CreaTune-cache-v4';
+const CACHE_NAME = 'CreaTune-cache-v5';
 const urlsToCache = [
   './',
   './index.html',
@@ -15,6 +15,8 @@ const urlsToCache = [
   './images/soil-background.jpg',
   './sprite/soil-background.png',
   './sprites/creatures/soil-creature.png',
+  './sprites/creatures/light-creature.png',
+  './sprites/creatures/idle-creature.png',
   // Icons
   './icons/icon-192x192.png',
   './icons/icon-512x512.png',
@@ -24,44 +26,44 @@ const urlsToCache = [
 
 // Install event - cache assets
 self.addEventListener('install', event => {
-  console.log('Service Worker installing...');
+  console.log('🔧 Service Worker installing...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('CreaTune cache opened');
+        console.log('📦 CreaTune cache opened');
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('All files cached successfully');
+        console.log('✅ All files cached successfully');
         self.skipWaiting(); // Force activate immediately
       })
       .catch(error => {
-        console.error('Cache install failed:', error);
+        console.error('❌ Cache install failed:', error);
       })
   );
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
-  console.log('Service Worker activating...');
+  console.log('⚡ Service Worker activating...');
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
+            console.log('🗑️ Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('Service Worker activated');
+      console.log('✅ Service Worker activated');
       self.clients.claim(); // Take control immediately
     })
   );
 });
 
-// Fetch event - serve from cache when offline
+// Fetch event - serve from cache when offline, with better error handling
 self.addEventListener('fetch', event => {
   // Skip WebSocket requests
   if (event.request.url.startsWith('ws://') || event.request.url.startsWith('wss://')) {
@@ -78,7 +80,7 @@ self.addEventListener('fetch', event => {
       .then(response => {
         // Cache hit - return the response
         if (response) {
-          console.log('Serving from cache:', event.request.url);
+          // console.log('📂 Serving from cache:', event.request.url);
           return response;
         }
         
@@ -97,14 +99,14 @@ self.addEventListener('fetch', event => {
 
             caches.open(CACHE_NAME)
               .then(cache => {
-                console.log('Caching new resource:', event.request.url);
+                // console.log('💾 Caching new resource:', event.request.url);
                 cache.put(event.request, responseToCache);
               });
 
             return response;
           }
         ).catch(error => {
-          console.error('Fetch failed:', error);
+          console.error('🚫 Fetch failed for:', event.request.url, error);
           
           // Fallback for offline use
           if (event.request.url.endsWith('.html')) {
@@ -114,8 +116,16 @@ self.addEventListener('fetch', event => {
           // For missing JS files, try to serve from cache or return a helpful error
           if (event.request.url.endsWith('.js')) {
             return new Response(
-              `console.error('Failed to load ${event.request.url}');`,
+              `console.error('❌ Failed to load ${event.request.url} - check network');`,
               { headers: { 'Content-Type': 'application/javascript' } }
+            );
+          }
+          
+          // For missing CSS files
+          if (event.request.url.endsWith('.css')) {
+            return new Response(
+              `/* ❌ Failed to load ${event.request.url} - check network */`,
+              { headers: { 'Content-Type': 'text/css' } }
             );
           }
         });
