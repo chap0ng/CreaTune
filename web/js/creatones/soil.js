@@ -5,15 +5,16 @@
 class SoilHandler {
     constructor() {
         this.isActive = false;
+        this.isConnected = false;
         this.currentValue = 0;
         this.lastDataTime = 0;
         
         // CONNECTION STABILITY SYSTEM
         this.connectionBuffer = []; // Store recent connection attempts
         this.valueBuffer = []; // Store recent sensor values for averaging
-        this.BUFFER_SIZE = 5; // Require 5 consecutive readings
+        this.BUFFER_SIZE = 2; // Require 5 consecutive readings
         this.CONNECTION_DEBOUNCE_MS = 1000; // 1 seconds before considering stable
-        this.DATA_TIMEOUT_MS = 8000; // 8 seconds timeout
+        this.DATA_TIMEOUT_MS = 10000; // 10 seconds - more permissive!
         
         // HYSTERESIS THRESHOLDS (prevent flickering)
         this.ACTIVATE_THRESHOLD_LOW = 0.35;  // Easier to activate
@@ -33,12 +34,13 @@ class SoilHandler {
         
         // Timeouts
         this.dataTimeout = null;
+        this.connectionDebounceTimeout = null;
         
         this.init();
     }
     
     async init() {
-        console.log('🌱 Soil handler initializing...');
+        console.log('🌱 Soil handler initializing with stable connection system...');
         
         // Get DOM elements
         this.frameBackground = document.querySelector('.framebackground');
@@ -48,9 +50,9 @@ class SoilHandler {
         await this.initializeSoilSynth();
         
         // Connect to websocket data
-        this.setupWebSocketListeners();
+        this.connectToWebSocket();
         
-        console.log('✅ Soil handler ready');
+        console.log('✅ Soil handler ready - stable & smooth!');
     }
     
     async initializeSoilSynth() {
@@ -91,25 +93,33 @@ class SoilHandler {
         }
     }
     
-    setupWebSocketListeners() {
-        if (!window.creatoneWS) {
-            setTimeout(() => this.setupWebSocketListeners(), 100);
-            return;
-        }
-        
-        // Listen for soil sensor data
-        window.creatoneWS.on('sensor_soil', (data) => this.processSensorData(data));
-        
-        // Listen for soil sensor disconnection
-        window.creatoneWS.on('sensor_soil_disconnected', () => this.handleDisconnection());
-        
-        // Listen for general disconnection
-        window.creatoneWS.on('disconnected', () => this.handleDisconnection());
-        
-        console.log('🔌 Soil handler connected to WebSocket events');
+    connectToWebSocket() {
+        const connect = () => {
+            if (window.creatoneWS) {
+                // Listen for soil sensor data
+                window.creatoneWS.on('sensor_data', (data) => this.processSensorData(data));
+                
+                // Listen for soil sensor disconnection
+                window.creatoneWS.on('sensor_soil_disconnected', (data) => this.handleDisconnection(data));
+                
+                // Listen for general disconnection
+                window.creatoneWS.on('disconnected', () => this.handleGeneralDisconnection());
+                
+                // Listen for reconnection
+                window.creatoneWS.on('connected', () => this.handleReconnection());
+                
+                console.log('🔌 Soil handler connected with stability system');
+            } else {
+                setTimeout(connect, 100);
+            }
+        };
+        connect();
     }
     
     processSensorData(data) {
+        // Only handle soil/moisture sensors
+        if (!this.isSoilData(data)) return;
+        
         const value = data.voltage || data.moisture_app_value || 0;
         const timestamp = Date.now();
         
@@ -125,47 +135,52 @@ class SoilHandler {
             this.valueBuffer.shift();
         }
         
-        // Check if we have enough stable readings
-        if (this.connectionBuffer.length >= this.BUFFER_SIZE) {
+        // Check if we have enough stable readings for connection
+        if (!this.isConnected && this.connectionBuffer.length >= this.BUFFER_SIZE) {
             const isStableConnection = this.checkStableConnection();
-            if (isStableConnection && !this.hasStableConnection) {
+            if (isStableConnection) {
                 this.handleStableConnection();
             }
         }
         
-        // Update last data time and reset timeout
-        this.lastDataTime = timestamp;
-        
-        // Clear any existing timeout
-        if (this.dataTimeout) {
-            clearTimeout(this.dataTimeout);
+        // Update connection state and reset timeout
+        if (this.isConnected) {
+            this.lastDataTime = timestamp;
+            
+            // Clear any existing timeout
+            if (this.dataTimeout) {
+                clearTimeout(this.dataTimeout);
+            }
+            
+            // Set longer timeout for more stability
+            this.dataTimeout = setTimeout(() => {
+                console.log('⚠️ Soil sensor timeout (8s) - assuming disconnected');
+                this.handleDataTimeout();
+            }, this.DATA_TIMEOUT_MS);
+            
+            // Get smoothed value and check creature activation
+            const smoothedValue = this.getSmoothedValue();
+            console.log(`🌱 Soil: ${value.toFixed(3)} (avg: ${smoothedValue.toFixed(3)})`);
+            
+            // Use hysteresis for creature activation/deactivation
+            this.updateCreatureState(smoothedValue);
         }
-        
-        // Set timeout for data loss
-        this.dataTimeout = setTimeout(() => {
-            console.log('⚠️ Soil sensor timeout - assuming disconnected');
-            this.handleDisconnection();
-        }, this.DATA_TIMEOUT_MS);
-        
-        // Get smoothed value and check creature activation
-        const smoothedValue = this.getSmoothedValue();
-        console.log(`🌱 Soil: ${value.toFixed(3)} (avg: ${smoothedValue.toFixed(3)})`);
-        
-        // Use hysteresis for creature activation/deactivation
-        this.updateCreatureState(smoothedValue);
     }
     
     checkStableConnection() {
+        // Check if last 5 readings are consistent and recent
         const now = Date.now();
         const recentReadings = this.connectionBuffer.filter(
             reading => (now - reading.timestamp) < this.CONNECTION_DEBOUNCE_MS
         );
         
         if (recentReadings.length >= this.BUFFER_SIZE) {
+            // Check if values are in reasonable sensor range
             const values = recentReadings.map(r => r.value);
             const avg = values.reduce((a, b) => a + b, 0) / values.length;
             const variance = values.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) / values.length;
             
+            // Stable if average variance is low (consistent readings)
             return variance < 0.01 && avg > 0.1 && avg < 1.0;
         }
         
@@ -173,17 +188,19 @@ class SoilHandler {
     }
     
     getSmoothedValue() {
+        // Return average of recent values for stability
         if (this.valueBuffer.length === 0) return 0;
         return this.valueBuffer.reduce((a, b) => a + b, 0) / this.valueBuffer.length;
     }
     
     handleStableConnection() {
         console.log('🔌✅ Soil ESP32 STABLE connection established');
-        this.hasStableConnection = true;
+        this.isConnected = true;
         
         // Show background immediately when stable connection
         if (this.frameBackground) {
             this.frameBackground.classList.add('soil');
+            console.log('🖼️ Soil background activated (stable)');
         }
     }
     
@@ -210,7 +227,7 @@ class SoilHandler {
     showCreature(value) {
         this.currentValue = value;
         this.isActive = true;
-        console.log('👾 Soil creature appearing');
+        console.log('👾 Soil creature appearing (stable)');
         
         // Show creature with smooth transition
         if (this.soilCreature) {
@@ -223,55 +240,108 @@ class SoilHandler {
     
     updateCreature(value) {
         this.currentValue = value;
+        // Update synth parameters smoothly
         this.updateSoilSynth(value);
     }
     
     hideCreature() {
         if (this.isActive) {
             this.isActive = false;
-            console.log('👻 Soil creature hiding');
+            console.log('👻 Soil creature hiding (out of stable range)');
             
+            // Hide creature but keep background (ESP32 still connected)
             if (this.soilCreature) {
                 this.soilCreature.classList.remove('active');
             }
             
+            // Stop synth
             this.stopSoilSynth();
         }
     }
     
-    handleDisconnection() {
-        console.log('🛑 Soil handler disconnecting');
+    isSoilData(data) {
+        return data.sensor && (
+            data.sensor.toLowerCase().includes('moisture') ||
+            data.sensor.toLowerCase().includes('soil') ||
+            data.soil_condition
+        );
+    }
+    
+    handleDisconnection(data) {
+        console.log('🔌❌ Soil ESP32 disconnected:', data?.name || 'Unknown');
+        this.forceDisconnect();
+    }
+    
+    handleGeneralDisconnection() {
+        console.log('🔌❌ WebSocket lost - soil handler stopping');
+        this.forceDisconnect();
+    }
+    
+    handleReconnection() {
+        console.log('🔌🔄 WebSocket reconnected - soil handler ready');
+        // Clear buffers for fresh start
+        this.connectionBuffer = [];
+        this.valueBuffer = [];
+    }
+    
+    handleDataTimeout() {
+        console.log('⏰ Soil data timeout (8s) - assuming disconnected');
+        this.forceDisconnect();
+    }
+    
+    forceDisconnect() {
+        console.log('🛑 Force disconnecting soil handler');
         
-        this.hasStableConnection = false;
+        this.isConnected = false;
         this.isActive = false;
         
-        // Clear timeout
+        // Clear all timeouts and buffers
         if (this.dataTimeout) {
             clearTimeout(this.dataTimeout);
             this.dataTimeout = null;
         }
+        if (this.connectionDebounceTimeout) {
+            clearTimeout(this.connectionDebounceTimeout);
+            this.connectionDebounceTimeout = null;
+        }
         
-        // Clear buffers
         this.connectionBuffer = [];
         this.valueBuffer = [];
         
-        // Remove visual elements
+        // Remove ALL visual elements immediately
         if (this.frameBackground) {
-            this.frameBackground.classList.remove('soil');
+            this.frameBackground.classList.remove('soil', 'active');
         }
         if (this.soilCreature) {
             this.soilCreature.classList.remove('active');
         }
         
-        // Stop synth
+        // Stop synth immediately
         this.stopSoilSynth();
         
-        // Dispatch event for creature-hidder
-        window.dispatchEvent(new CustomEvent('soilDisconnected'));
+        console.log('🏁 Soil handler fully disconnected (stable)');
+        
+        // Force UI update
+        this.forceUIUpdate();
+    }
+    
+    forceUIUpdate() {
+        // Trigger immediate DOM update
+        if (this.frameBackground) {
+            this.frameBackground.style.transform = 'translateZ(0)';
+            setTimeout(() => {
+                this.frameBackground.style.transform = '';
+            }, 10);
+        }
+        
+        // Dispatch custom event
+        window.dispatchEvent(new CustomEvent('soilDisconnected', {
+            detail: { timestamp: Date.now() }
+        }));
     }
     
     async playSoilSynth(value) {
-        if (!this.soilSynth) return;
+        if (!this.soilSynth || !this.isConnected) return;
         
         if (Tone.context.state !== 'running') {
             await Tone.start();
@@ -285,18 +355,21 @@ class SoilHandler {
     }
     
     startSoilLoop(value) {
-        console.log('🎼 Starting soil synth loop');
+        console.log('🎼 Starting soil synth loop (stable)');
         
         const soilScale = ["C3", "D3", "F3", "G3", "A3", "C4", "D4", "F4"];
         
         this.soilLoop = new Tone.Loop((time) => {
-            if (!this.isActive) return;
+            if (!this.isConnected || !this.isActive) {
+                return;
+            }
             
             const noteIndex = Math.floor(this.currentValue * (soilScale.length - 1));
             const note = soilScale[noteIndex];
             
             this.soilSynth.triggerAttackRelease(note, "4n", time);
             
+            // Random harmonies
             if (Math.random() < 0.3) {
                 const harmonyIndex = Math.min(noteIndex + 2, soilScale.length - 1);
                 const harmonyNote = soilScale[harmonyIndex];
@@ -311,8 +384,9 @@ class SoilHandler {
     }
     
     updateSoilSynth(value) {
-        if (!this.soilSynth || !this.soilLoop) return;
+        if (!this.soilSynth || !this.soilLoop || !this.isConnected) return;
         
+        // Smooth parameter updates
         this.soilSynth.set({
             harmonicity: 1.5 + (value * 2),
             modulationIndex: 5 + (value * 15),
@@ -335,7 +409,7 @@ class SoilHandler {
     stopSoilSynth() {
         if (this.isPlaying) {
             this.isPlaying = false;
-            console.log('🔇 Stopping soil synth');
+            console.log('🔇 Stopping soil synth (stable)');
             
             if (this.soilLoop) {
                 this.soilLoop.stop();
@@ -345,12 +419,35 @@ class SoilHandler {
             
             if (Tone.Transport.state === 'started') {
                 Tone.Transport.stop();
+                Tone.Transport.cancel();
             }
         }
+    }
+    
+    // Debug methods
+    getStatus() {
+        return {
+            isActive: this.isActive,
+            isConnected: this.isConnected,
+            isPlaying: this.isPlaying,
+            currentValue: this.currentValue,
+            smoothedValue: this.getSmoothedValue(),
+            bufferSize: this.valueBuffer.length,
+            connectionBuffer: this.connectionBuffer.length,
+            lastDataTime: this.lastDataTime,
+            timeSinceLastData: Date.now() - this.lastDataTime
+        };
+    }
+    
+    forceDisconnectDebug() {
+        this.forceDisconnect();
     }
 }
 
 // Initialize when DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     window.soilHandler = new SoilHandler();
+    
+    // Debug in console
+    console.log('🧪 Debug: window.soilHandler.getStatus() - Enhanced stable connection');
 });
