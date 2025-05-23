@@ -7,8 +7,8 @@ class CreaTuneWebSocketClient {
         this.socket = null;
         this.isConnected = false;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 10;
-        this.reconnectDelay = 5000;
+        this.maxReconnectAttempts = 3;
+        this.reconnectDelay = 7000;
         this.eventHandlers = new Map();
         
         this.connect();

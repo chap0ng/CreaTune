@@ -1,6 +1,6 @@
 // light.js - ESP32 Light State Handler
-// STABLE CONNECTION: Debounced, permissive, smooth transitions  
-// Perfect balance between responsiveness and stability
+// ULTRA PERMISSIVE: Very slow to disconnect, very fast to connect
+// Same ultra-forgiving approach as soil handler
 
 class LightHandler {
     constructor() {
@@ -9,18 +9,18 @@ class LightHandler {
         this.currentValue = 0;
         this.lastDataTime = 0;
         
-        // CONNECTION STABILITY SYSTEM (same as soil)
+        // ULTRA PERMISSIVE CONNECTION SYSTEM (same as soil)
         this.connectionBuffer = [];
         this.valueBuffer = [];
-        this.BUFFER_SIZE = 5;
-        this.CONNECTION_DEBOUNCE_MS = 3000;
-        this.DATA_TIMEOUT_MS = 8000; // More permissive!
+        this.BUFFER_SIZE = 2; // Only need 2 readings!
+        this.CONNECTION_DEBOUNCE_MS = 1000; // Only 1 second
+        this.DATA_TIMEOUT_MS = 10000; // 10 SECONDS before disconnect
         
-        // HYSTERESIS THRESHOLDS for light sensor
-        this.ACTIVATE_THRESHOLD_LOW = 0.25;   // Easier to activate
-        this.ACTIVATE_THRESHOLD_HIGH = 0.95;  // Easier to activate  
-        this.DEACTIVATE_THRESHOLD_LOW = 0.15; // Harder to deactivate
-        this.DEACTIVATE_THRESHOLD_HIGH = 1.05; // Harder to deactivate
+        // VERY PERMISSIVE HYSTERESIS for light sensor
+        this.ACTIVATE_THRESHOLD_LOW = 0.1;   // Very easy to activate
+        this.ACTIVATE_THRESHOLD_HIGH = 0.95; // Very easy to activate  
+        this.DEACTIVATE_THRESHOLD_LOW = 0.05; // Very hard to deactivate
+        this.DEACTIVATE_THRESHOLD_HIGH = 1.0; // Very hard to deactivate
         
         // Tone.js components
         this.lightSynth = null;
@@ -40,7 +40,7 @@ class LightHandler {
     }
     
     async init() {
-        console.log('💡 Light handler initializing with stable connection system...');
+        console.log('💡 Light handler initializing - ULTRA PERMISSIVE mode...');
         
         // Get DOM elements
         this.frameBackground = document.querySelector('.framebackground');
@@ -52,7 +52,7 @@ class LightHandler {
         // Connect to websocket data
         this.connectToWebSocket();
         
-        console.log('✅ Light handler ready - stable & smooth!');
+        console.log('✅ Light handler ready - very patient with ESP32!');
     }
     
     async initializeLightSynth() {
@@ -99,7 +99,7 @@ class LightHandler {
                 // Listen for reconnection
                 window.creatoneWS.on('connected', () => this.handleReconnection());
                 
-                console.log('🔌 Light handler connected with stability system');
+                console.log('🔌 Light handler connected - ultra permissive mode');
             } else {
                 setTimeout(connect, 100);
             }
@@ -114,98 +114,78 @@ class LightHandler {
         const value = data.light || data.voltage || 0;
         const timestamp = Date.now();
         
-        // Add to connection buffer for stability checking
+        console.log(`💡 ESP32 Light data received: ${value.toFixed(3)} (${new Date().toLocaleTimeString()})`);
+        
+        // IMMEDIATE CONNECTION - no waiting for buffers
+        if (!this.isConnected) {
+            console.log('🔌✅ Light ESP32 connecting IMMEDIATELY (ultra permissive)');
+            this.isConnected = true;
+            
+            // Show background immediately
+            if (this.frameBackground) {
+                this.frameBackground.classList.add('light');
+                console.log('🖼️ Light background activated immediately');
+            }
+        }
+        
+        // Add to buffers for smoothing (but don't require them)
         this.connectionBuffer.push({ value, timestamp });
         if (this.connectionBuffer.length > this.BUFFER_SIZE) {
             this.connectionBuffer.shift();
         }
         
-        // Add to value buffer for averaging
         this.valueBuffer.push(value);
         if (this.valueBuffer.length > this.BUFFER_SIZE) {
             this.valueBuffer.shift();
         }
         
-        // Check if we have enough stable readings for connection
-        if (!this.isConnected && this.connectionBuffer.length >= this.BUFFER_SIZE) {
-            const isStableConnection = this.checkStableConnection();
-            if (isStableConnection) {
-                this.handleStableConnection();
-            }
-        }
-        
         // Update connection state and reset timeout
-        if (this.isConnected) {
-            this.lastDataTime = timestamp;
-            
-            // Clear any existing timeout
-            if (this.dataTimeout) {
-                clearTimeout(this.dataTimeout);
-            }
-            
-            // Set longer timeout for more stability
-            this.dataTimeout = setTimeout(() => {
-                console.log('⚠️ Light sensor timeout (8s) - assuming disconnected');
-                this.handleDataTimeout();
-            }, this.DATA_TIMEOUT_MS);
-            
-            // Get smoothed value and check creature activation
-            const smoothedValue = this.getSmoothedValue();
-            console.log(`💡 Light: ${value.toFixed(3)} (avg: ${smoothedValue.toFixed(3)})`);
-            
-            // Use hysteresis for creature activation/deactivation
-            this.updateCreatureState(smoothedValue);
-        }
-    }
-    
-    checkStableConnection() {
-        // Same stability logic as soil handler
-        const now = Date.now();
-        const recentReadings = this.connectionBuffer.filter(
-            reading => (now - reading.timestamp) < this.CONNECTION_DEBOUNCE_MS
-        );
+        this.lastDataTime = timestamp;
         
-        if (recentReadings.length >= this.BUFFER_SIZE) {
-            const values = recentReadings.map(r => r.value);
-            const avg = values.reduce((a, b) => a + b, 0) / values.length;
-            const variance = values.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) / values.length;
-            
-            // Stable if average variance is low and in reasonable range
-            return variance < 0.01 && avg >= 0.0 && avg <= 1.2;
+        // Clear any existing timeout
+        if (this.dataTimeout) {
+            clearTimeout(this.dataTimeout);
         }
         
-        return false;
+        // Set VERY LONG timeout - 30 seconds!
+        this.dataTimeout = setTimeout(() => {
+            console.log('⚠️ Light sensor timeout (30s) - disconnecting reluctantly');
+            this.handleDataTimeout();
+        }, this.DATA_TIMEOUT_MS);
+        
+        // Get smoothed value (or use raw if not enough data)
+        const smoothedValue = this.getSmoothedValue() || value;
+        
+        // Use VERY permissive thresholds
+        this.updateCreatureState(smoothedValue);
     }
     
     getSmoothedValue() {
-        if (this.valueBuffer.length === 0) return 0;
+        if (this.valueBuffer.length === 0) return null;
         return this.valueBuffer.reduce((a, b) => a + b, 0) / this.valueBuffer.length;
     }
     
-    handleStableConnection() {
-        console.log('🔌✅ Light ESP32 STABLE connection established');
-        this.isConnected = true;
-        
-        // Show background immediately when stable connection
-        if (this.frameBackground) {
-            this.frameBackground.classList.add('light');
-            console.log('🖼️ Light background activated (stable)');
-        }
-    }
-    
     updateCreatureState(smoothedValue) {
-        // HYSTERESIS: Different thresholds for activation vs deactivation
+        // ULTRA PERMISSIVE: Almost always show creature if ESP32 connected
         if (!this.isActive) {
-            // ACTIVATE: Use more permissive thresholds
+            // ACTIVATE: Very easy thresholds
             if (smoothedValue >= this.ACTIVATE_THRESHOLD_LOW && 
                 smoothedValue <= this.ACTIVATE_THRESHOLD_HIGH) {
                 this.showCreature(smoothedValue);
             }
         } else {
-            // DEACTIVATE: Use stricter thresholds (harder to deactivate)
+            // DEACTIVATE: Almost never deactivate 
             if (smoothedValue < this.DEACTIVATE_THRESHOLD_LOW || 
                 smoothedValue > this.DEACTIVATE_THRESHOLD_HIGH) {
-                this.hideCreature();
+                console.log(`🤔 Light value ${smoothedValue.toFixed(3)} outside range but being very permissive...`);
+                // Still keep creature active unless value is REALLY bad
+                if (smoothedValue < 0.01 || smoothedValue > 1.1) {
+                    this.hideCreature();
+                } else {
+                    // Keep creature but log warning
+                    console.log('💡 Keeping light creature active (permissive mode)');
+                    this.updateCreature(smoothedValue);
+                }
             } else {
                 // Update existing creature
                 this.updateCreature(smoothedValue);
@@ -216,7 +196,7 @@ class LightHandler {
     showCreature(value) {
         this.currentValue = value;
         this.isActive = true;
-        console.log('👾 Light creature appearing (stable)');
+        console.log('👾 Light creature appearing (ultra permissive)');
         
         // Show creature with smooth transition
         if (this.lightCreature) {
@@ -236,7 +216,7 @@ class LightHandler {
     hideCreature() {
         if (this.isActive) {
             this.isActive = false;
-            console.log('👻 Light creature hiding (out of stable range)');
+            console.log('👻 Light creature hiding (finally out of range)');
             
             // Hide creature but keep background (ESP32 still connected)
             if (this.lightCreature) {
@@ -256,7 +236,7 @@ class LightHandler {
     }
     
     handleDisconnection(data) {
-        console.log('🔌❌ Light ESP32 disconnected:', data?.name || 'Unknown');
+        console.log('🔌❌ Light ESP32 explicitly disconnected:', data?.name || 'Unknown');
         this.forceDisconnect();
     }
     
@@ -267,18 +247,19 @@ class LightHandler {
     
     handleReconnection() {
         console.log('🔌🔄 WebSocket reconnected - light handler ready');
-        // Clear buffers for fresh start
+        // Clear buffers but stay permissive
         this.connectionBuffer = [];
         this.valueBuffer = [];
     }
     
     handleDataTimeout() {
-        console.log('⏰ Light data timeout (8s) - assuming disconnected');
+        const timeSinceLastData = Date.now() - this.lastDataTime;
+        console.log(`⏰ Light data timeout after ${Math.round(timeSinceLastData/1000)}s - disconnecting`);
         this.forceDisconnect();
     }
     
     forceDisconnect() {
-        console.log('🛑 Force disconnecting light handler');
+        console.log('🛑 Force disconnecting light handler (after being very patient)');
         
         this.isConnected = false;
         this.isActive = false;
@@ -307,7 +288,7 @@ class LightHandler {
         // Stop synth immediately
         this.stopLightSynth();
         
-        console.log('🏁 Light handler fully disconnected (stable)');
+        console.log('🏁 Light handler fully disconnected (ultra permissive mode)');
         
         // Force UI update
         this.forceUIUpdate();
@@ -343,7 +324,7 @@ class LightHandler {
     }
     
     startLightLoop(value) {
-        console.log('🎼 Starting light synth loop (stable)');
+        console.log('🎼 Starting light synth loop (ultra permissive)');
         
         // Bright scale for light sounds
         const lightScale = ["C4", "E4", "G4", "B4", "D5", "F5", "A5", "C6"];
@@ -390,7 +371,7 @@ class LightHandler {
     stopLightSynth() {
         if (this.isPlaying) {
             this.isPlaying = false;
-            console.log('🔇 Stopping light synth (stable)');
+            console.log('🔇 Stopping light synth (ultra permissive)');
             
             if (this.lightLoop) {
                 this.lightLoop.stop();
@@ -405,7 +386,9 @@ class LightHandler {
         }
     }
     
+    // Enhanced debug methods
     getStatus() {
+        const timeSinceLastData = this.lastDataTime ? Date.now() - this.lastDataTime : 0;
         return {
             isActive: this.isActive,
             isConnected: this.isConnected,
@@ -414,9 +397,27 @@ class LightHandler {
             smoothedValue: this.getSmoothedValue(),
             bufferSize: this.valueBuffer.length,
             connectionBuffer: this.connectionBuffer.length,
-            lastDataTime: this.lastDataTime,
-            timeSinceLastData: Date.now() - this.lastDataTime
+            lastDataTime: new Date(this.lastDataTime).toLocaleTimeString(),
+            timeSinceLastData: `${Math.round(timeSinceLastData/1000)}s`,
+            timeoutRemaining: `${Math.round((this.DATA_TIMEOUT_MS - timeSinceLastData)/1000)}s`,
+            thresholds: {
+                activate: `${this.ACTIVATE_THRESHOLD_LOW} - ${this.ACTIVATE_THRESHOLD_HIGH}`,
+                deactivate: `${this.DEACTIVATE_THRESHOLD_LOW} - ${this.DEACTIVATE_THRESHOLD_HIGH}`
+            }
         };
+    }
+    
+    // Show detailed connection info
+    getConnectionInfo() {
+        console.log('🔍 Light Handler Connection Info:');
+        console.log(`📊 Status: ${this.isConnected ? '🟢 Connected' : '🔴 Disconnected'}`);
+        console.log(`🎵 Audio: ${this.isPlaying ? '🟢 Playing' : '🔴 Silent'}`);
+        console.log(`👾 Creature: ${this.isActive ? '🟢 Active' : '🔴 Hidden'}`);
+        console.log(`📈 Current Value: ${this.currentValue.toFixed(3)}`);
+        console.log(`📊 Smoothed Value: ${this.getSmoothedValue()?.toFixed(3) || 'N/A'}`);
+        console.log(`⏰ Last Data: ${this.lastDataTime ? new Date(this.lastDataTime).toLocaleTimeString() : 'Never'}`);
+        console.log(`⌛ Timeout: 30 seconds (ultra permissive)`);
+        console.log(`🎯 Thresholds: Very permissive (0.1-0.95 activate, 0.05-1.0 stay active)`);
     }
     
     forceDisconnectDebug() {
@@ -428,6 +429,9 @@ class LightHandler {
 document.addEventListener('DOMContentLoaded', () => {
     window.lightHandler = new LightHandler();
     
-    // Debug in console
-    console.log('🧪 Debug: window.lightHandler.getStatus() - Enhanced stable connection');
+    // Enhanced debug commands
+    console.log('🧪 Enhanced Light Debug Commands:');
+    console.log('• window.lightHandler.getStatus() - Basic status');
+    console.log('• window.lightHandler.getConnectionInfo() - Detailed info');
+    console.log('• window.lightHandler.forceDisconnectDebug() - Test disconnection');
 });
