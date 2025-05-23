@@ -9,7 +9,12 @@
   "lang": "en-US",
   "dir": "ltr",
   "background_color": "#f5eee0",
-  "theme_color": "#f5eee0",
+  "theme_color": "#e6695a",
+  "categories": ["music", "entertainment", "utilities"],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
   "icons": [
     {
       "src": "./icons/icon-192x192.png",
@@ -19,9 +24,18 @@
     },
     {
       "src": "./icons/icon-512x512.png",
-      "sizes": "512x512",
+      "sizes": "512x512", 
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "./icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "CreaTune main interface"
     }
   ]
 }
