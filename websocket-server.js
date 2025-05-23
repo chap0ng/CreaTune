@@ -8,7 +8,7 @@ const path = require('path');
 
 // Web server configuration
 const PORT = process.env.PORT || 8080;
-const WEB_ROOT = path.join(__dirname, 'web');
+const WEB_ROOT = __dirname; // Changed from path.join(__dirname, 'web') to __dirname
 
 // Create HTTP server
 const server = http.createServer((req, res) => {
@@ -234,13 +234,13 @@ function sendESP32Status(ws) {
 setInterval(() => {
   const now = Date.now();
   
-// Check for inactive clients (no message in 30 seconds)
-for (const [ws, info] of clients.entries()) {
-  if (now - info.lastMessage > 30 * 1000) {
-    console.log(`Closing inactive connection [${info.id}]`);
-    ws.terminate();
+  // Check for inactive clients (no message in 30 seconds)
+  for (const [ws, info] of clients.entries()) {
+    if (now - info.lastMessage > 30 * 1000) {
+      console.log(`Closing inactive connection [${info.id}]`);
+      ws.terminate();
+    }
   }
-}
   
   // Broadcast ESP32 status every 10 seconds
   if (now % 10000 < 1000) {
@@ -257,7 +257,7 @@ server.listen(PORT, '0.0.0.0', () => {
   ╔════════════════════════════════════════════════╗
   ║  CreaTune WebSocket Server                     ║
   ║  Server running on port ${PORT.toString().padEnd(20, ' ')} ║
-  ║  Web files serving from ${WEB_ROOT.padEnd(20, ' ')} ║
+  ║  Serving files from ${WEB_ROOT.padEnd(25, ' ')} ║
   ╚════════════════════════════════════════════════╝
   `);
   console.log(`Point your browser to http://localhost:${PORT}`);

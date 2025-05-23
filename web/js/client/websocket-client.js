@@ -1,127 +1,173 @@
 // websocket-client.js
+// Clean WebSocket client for ESP32 sensor communication
+// Handles connection and routes data to sensor handlers
+
 class CreaTuneWebSocketClient {
-  constructor() {
-    this.ws = null;
-    this.reconnectInterval = 5000;
-    this.maxReconnectAttempts = -1;
-    this.reconnectAttempts = 0;
-    this.isConnected = false;
-    this.lastDataReceived = 0;
-    this.dataTimeout = 10000;
-    
-    this.currentSensorData = null;
-    this.isAppActive = false;
-    
-    this.init();
-  }
-
-  init() {
-    console.log('🌱 CreaTune WebSocket Client initialized');
-    this.connect();
-    this.startDataTimeoutChecker();
-  }
-
-  connect() {
-    try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.hostname;
-      const port = 8080;
-      const wsUrl = `${protocol}//${host}:${port}/`;
-      
-      console.log(`🔌 Connecting to WebSocket: ${wsUrl}`);
-      
-      this.ws = new WebSocket(wsUrl);
-      
-      this.ws.onopen = (event) => {
-        console.log('✅ WebSocket connected!');
-        this.isConnected = true;
+    constructor() {
+        this.socket = null;
+        this.isConnected = false;
         this.reconnectAttempts = 0;
-        document.dispatchEvent(new CustomEvent('websocket-connected'));
-      };
-      
-      this.ws.onmessage = (event) => this.handleMessage(event.data);
-      this.ws.onclose = (event) => this.handleDisconnection();
-      this.ws.onerror = (error) => this.handleError(error);
-      
-    } catch (error) {
-      console.error('🚨 Failed to create WebSocket connection:', error);
-      this.scheduleReconnect();
+        this.maxReconnectAttempts = 10;
+        this.reconnectDelay = 5000;
+        this.eventHandlers = new Map();
+        
+        this.connect();
     }
-  }
-
-  handleMessage(data) {
-    try {
-      const sensorData = JSON.parse(data);
-      this.lastDataReceived = Date.now();
-      this.currentSensorData = sensorData;
-      
-      if (sensorData.type === 'sensor_data') {
-        this.processSensorData(sensorData);
-        document.dispatchEvent(new CustomEvent('sensor-data', { detail: sensorData }));
-      }
-    } catch (error) {
-      console.error('🚨 Error parsing sensor data:', error);
-    }
-  }
-
-  processSensorData(data) {
-    if (data.sensor !== 'MoistureSensor') return;
     
-    const wasActive = this.isAppActive;
-    this.isAppActive = data.app_active;
-    
-    if (this.isAppActive !== wasActive) {
-      document.dispatchEvent(new CustomEvent('app-state-change', { 
-        detail: { isActive: this.isAppActive } 
-      }));
-    }
-  }
-
-  handleDisconnection() {
-    console.log('❌ WebSocket disconnected');
-    this.isConnected = false;
-    this.isAppActive = false;
-    document.dispatchEvent(new CustomEvent('websocket-disconnected'));
-    this.scheduleReconnect();
-  }
-
-  handleError(error) {
-    console.error('🚨 WebSocket error:', error);
-    this.isConnected = false;
-    document.dispatchEvent(new CustomEvent('websocket-error', { detail: error }));
-  }
-
-  scheduleReconnect() {
-    if (this.maxReconnectAttempts === -1 || this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      console.log(`🔄 Reconnecting in ${this.reconnectInterval/1000}s (attempt ${this.reconnectAttempts})`);
-      setTimeout(() => this.connect(), this.reconnectInterval);
-    } else {
-      console.log('❌ Max reconnection attempts reached');
-    }
-  }
-
-  startDataTimeoutChecker() {
-    setInterval(() => {
-      if (this.isConnected && this.lastDataReceived > 0) {
-        const timeSinceLastData = Date.now() - this.lastDataReceived;
-        if (timeSinceLastData > this.dataTimeout) {
-          console.log('⏰ Data timeout - no sensor data received');
-          this.handleDisconnection();
+    connect() {
+        try {
+            // Change to your server IP for production
+            const wsUrl = 'ws://localhost:8080';
+            this.socket = new WebSocket(wsUrl);
+            
+            this.socket.onopen = (event) => {
+                console.log('WebSocket connected to CreaTune server');
+                this.isConnected = true;
+                this.reconnectAttempts = 0;
+                this.emit('connected', { timestamp: Date.now() });
+            };
+            
+            this.socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this.routeMessage(data);
+                } catch (err) {
+                    console.log('Non-JSON WebSocket message:', event.data);
+                }
+            };
+            
+            this.socket.onclose = (event) => {
+                console.log('WebSocket connection closed');
+                this.isConnected = false;
+                this.emit('disconnected', { timestamp: Date.now() });
+                this.attemptReconnect();
+            };
+            
+            this.socket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                this.emit('error', { error, timestamp: Date.now() });
+            };
+            
+        } catch (error) {
+            console.error('Failed to create WebSocket:', error);
+            this.attemptReconnect();
         }
-      }
-    }, 2000);
-  }
-
-  sendMessage(message) {
-    if (this.ws && this.isConnected) {
-      this.ws.send(JSON.stringify(message));
-    } else {
-      console.warn('⚠️ Cannot send message - WebSocket not connected');
     }
-  }
+    
+    routeMessage(data) {
+        // Route ESP32 sensor data to handlers
+        if (data.type === 'sensor_data' && data.sensor) {
+            
+            // Log received sensor data
+            const value = data.voltage || data.moisture_app_value || data.raw_value;
+            console.log(`ESP32 ${data.sensor}: ${value !== undefined ? value.toFixed(3) : 'no value'}`);
+            
+            // Emit generic sensor data event
+            this.emit('sensor_data', data);
+            
+            // Route to specific sensor type handlers
+            const sensorType = this.detectSensorType(data);
+            this.emit(`sensor_${sensorType}`, data);
+            
+        } else if (data.type === 'welcome') {
+            console.log('Server welcome:', data.message);
+        } else {
+            // Handle other message types if needed
+            this.emit('message', data);
+        }
+    }
+    
+    detectSensorType(data) {
+        // Detect sensor type from data
+        const sensorName = data.sensor.toLowerCase();
+        
+        if (sensorName.includes('moisture') || sensorName.includes('soil') || data.soil_condition) {
+            return 'soil';
+        }
+        if (sensorName.includes('temp') || data.temperature !== undefined) {
+            return 'temperature';
+        }
+        if (sensorName.includes('light') || data.light !== undefined) {
+            return 'light';
+        }
+        
+        // Default fallback
+        return 'unknown';
+    }
+    
+    attemptReconnect() {
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.error('Max WebSocket reconnection attempts reached');
+            return;
+        }
+        
+        this.reconnectAttempts++;
+        console.log(`WebSocket reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+        
+        setTimeout(() => {
+            this.connect();
+        }, this.reconnectDelay * this.reconnectAttempts); // Exponential backoff
+    }
+    
+    // Event system for sensor handlers
+    on(event, handler) {
+        if (!this.eventHandlers.has(event)) {
+            this.eventHandlers.set(event, []);
+        }
+        this.eventHandlers.get(event).push(handler);
+    }
+    
+    off(event, handler) {
+        if (this.eventHandlers.has(event)) {
+            const handlers = this.eventHandlers.get(event);
+            const index = handlers.indexOf(handler);
+            if (index !== -1) {
+                handlers.splice(index, 1);
+            }
+        }
+    }
+    
+    emit(event, data) {
+        if (this.eventHandlers.has(event)) {
+            this.eventHandlers.get(event).forEach(handler => {
+                try {
+                    handler(data);
+                } catch (err) {
+                    console.error(`WebSocket event handler error for ${event}:`, err);
+                }
+            });
+        }
+    }
+    
+    send(data) {
+        if (this.isConnected && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify(data));
+            return true;
+        } else {
+            console.warn('Cannot send data: WebSocket not connected');
+            return false;
+        }
+    }
+    
+    // Utility methods
+    getStatus() {
+        return {
+            connected: this.isConnected,
+            reconnectAttempts: this.reconnectAttempts,
+            readyState: this.socket ? this.socket.readyState : null
+        };
+    }
+    
+    disconnect() {
+        if (this.socket) {
+            this.socket.close();
+        }
+    }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  window.CreaTuneWS = new CreaTuneWebSocketClient();
-});
+// Initialize WebSocket client globally
+window.creatoneWS = new CreaTuneWebSocketClient();
+
+// Log connection status
+window.creatoneWS.on('connected', () => console.log('✅ ESP32 WebSocket ready'));
+window.creatoneWS.on('disconnected', () => console.log('❌ ESP32 WebSocket disconnected'));
