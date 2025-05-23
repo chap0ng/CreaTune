@@ -294,7 +294,7 @@ setInterval(() => {
   
   // Check for inactive clients
   for (const [ws, info] of clients.entries()) {
-    if (now - info.lastMessage > 30 * 1000) {
+    if (now - info.lastMessage > 6 * 1000) {
       console.log(`Closing inactive connection [${info.id}]`);
       ws.terminate();
     }

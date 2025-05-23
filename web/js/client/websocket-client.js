@@ -6,7 +6,7 @@ class CreaTuneClient {
         this.ws = null;
         this.isConnected = false;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 10;
+        this.maxReconnectAttempts = 2;
         this.reconnectDelay = 1000;
         this.clientId = null;
         
