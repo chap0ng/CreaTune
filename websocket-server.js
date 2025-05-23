@@ -178,15 +178,18 @@ wss.on('connection', (ws, req) => {
     // Remove from ESP32 list if it was an ESP32
     if (espDevices.has(ws)) {
       const espInfo = espDevices.get(ws);
-      console.log(`🔌 ESP32 device [${espInfo.id}] disconnected: ${espInfo.name}`);
+      console.log(`🔌❌ ESP32 device [${espInfo.id}] DISCONNECTED: ${espInfo.name}`);
       espDevices.delete(ws);
       
       // Notify web clients about ESP32 disconnection
       broadcastToWebClients({
         type: 'esp_disconnected',
         espId: espInfo.id,
-        name: espInfo.name
+        name: espInfo.name,
+        timestamp: Date.now()
       });
+      
+      console.log(`📤 Broadcasted disconnection of ${espInfo.name} to all web clients`);
     }
     
     // Remove from clients map

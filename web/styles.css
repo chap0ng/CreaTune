@@ -153,7 +153,24 @@ body {
 }
 
 .framebackground.light {
-  background-color: var(--coral-red);
+  background-color: var(--warm-yellow);
+}
+
+/* Combined states */
+.framebackground.soil.light {
+  background: linear-gradient(45deg, var(--sage-green), var(--warm-yellow));
+}
+
+.framebackground.soil.temp {
+  background: linear-gradient(45deg, var(--sage-green), var(--coral-red));
+}
+
+.framebackground.light.temp {
+  background: linear-gradient(45deg, var(--warm-yellow), var(--coral-red));
+}
+
+.framebackground.soil.light.temp {
+  background: linear-gradient(120deg, var(--sage-green), var(--warm-yellow), var(--coral-red));
 }
 
 .framebackground.soil-background {
@@ -169,7 +186,9 @@ body {
    CREATURES
    ========================================================================== */
 
-.idle-creature, .soil-creature {
+.idle-creature, 
+.soil-creature, 
+.light-creature {
   position: absolute;
   top: calc(50% + 10px);
   left: calc(50% + 0px);
@@ -183,12 +202,33 @@ body {
   z-index: 5;
 }
 
+/* Soil Creature */
 .soil-creature {
   background-image: url('sprites/creatures/soil-creature.png');
   background-color: transparent;
 }
 
 .soil-creature.active {
+  display: block;
+}
+
+/* Light Creature */
+.light-creature {
+  background-image: url('sprites/creatures/light-creature.png');
+  background-color: transparent;
+}
+
+.light-creature.active {
+  display: block;
+}
+
+/* Idle Creature */
+.idle-creature {
+  background-image: url('sprites/creatures/idle-creature.png');
+  background-color: transparent;
+}
+
+.idle-creature.active {
   display: block;
 }
 
@@ -210,4 +250,18 @@ body {
   50% { background-position: -512px 0; }
   75% { background-position: 0 -64px; }
   100% { background-position: -256px -64px; }
+}
+
+/* ==========================================================================
+   DISCONNECTION STATES
+   ========================================================================== */
+
+.framebackground.disconnected {
+  animation: disconnected-flash 2s ease-in-out;
+}
+
+@keyframes disconnected-flash {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
 }

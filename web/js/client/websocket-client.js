@@ -16,13 +16,15 @@ class CreaTuneWebSocketClient {
     
     connect() {
         try {
-            // IMPORTANT: Replace 'localhost' with your server's IP address
-            // To find your server IP:
-            // Windows: Open Command Prompt, type: ipconfig
-            // Mac/Linux: Open Terminal, type: ifconfig
-            // Look for your WiFi adapter IP (usually 192.168.x.x)
-            // Example: const wsUrl = 'ws://192.168.1.100:8080';
-            const wsUrl = 'ws://localhost:8080'; // CHANGE THIS TO YOUR SERVER IP
+            // WebSocket connection options:
+            // 1. Testing on same computer: use localhost
+            // 2. Testing on phone/other device: use your server's IP
+            
+            // For same computer testing:
+            const wsUrl = 'ws://localhost:8080';
+            
+            // For phone/other devices, replace with your server IP:
+            // const wsUrl = 'ws://192.168.1.100:8080'; // example IP
             
             console.log(`Connecting to WebSocket: ${wsUrl}`);
             this.socket = new WebSocket(wsUrl);
@@ -76,6 +78,17 @@ class CreaTuneWebSocketClient {
             const sensorType = this.detectSensorType(data);
             this.emit(`sensor_${sensorType}`, data);
             
+        } else if (data.type === 'esp_disconnected') {
+            // Handle ESP32 disconnection
+            console.log(`🔌 ESP32 disconnected: ${data.name}`);
+            
+            // Detect sensor type from disconnected device name
+            const sensorType = this.detectSensorTypeFromName(data.name);
+            
+            // Emit disconnection events
+            this.emit('esp_disconnected', data);
+            this.emit(`sensor_${sensorType}_disconnected`, data);
+            
         } else if (data.type === 'welcome') {
             console.log('Server welcome:', data.message);
         } else {
@@ -95,6 +108,24 @@ class CreaTuneWebSocketClient {
             return 'temperature';
         }
         if (sensorName.includes('light') || data.light !== undefined) {
+            return 'light';
+        }
+        
+        // Default fallback
+        return 'unknown';
+    }
+    
+    detectSensorTypeFromName(deviceName) {
+        // Detect sensor type from device name (for disconnections)
+        const name = deviceName.toLowerCase();
+        
+        if (name.includes('moisture') || name.includes('soil')) {
+            return 'soil';
+        }
+        if (name.includes('temp')) {
+            return 'temperature';
+        }
+        if (name.includes('light')) {
             return 'light';
         }
         
