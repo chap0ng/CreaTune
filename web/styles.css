@@ -4,11 +4,8 @@
 
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
-
 :root {
-
   /* Primary Colors */
-
   --warm-yellow: #f6c052;
   --steel-blue: #699bc8;
   --sage-green: #8ea47d;
@@ -16,7 +13,6 @@
   --dark-slate: #2d3142;
   --coral-red: #e6695a;
   /* Blended Colors */
-
   --yellow-blue: #a0ab8d;
   --blue-green: #79a397;
   --yellow-green: #bea867;
@@ -67,7 +63,6 @@ body {
    ========================================================================== */
 
 /* Corners */
-
 .corner1, .corner2, .corner3, .corner4 {
   background-color: var(--coral-red);
 }
@@ -88,7 +83,6 @@ body {
 .corner4 { grid-area: corner4; }
 
 /* Top bar */
-
 .frametop {
   grid-area: frametop;
   background-color: var(--steel-blue);
@@ -101,7 +95,6 @@ body {
 }
 
 /* Side frames */
-
 .frameleft {
   grid-area: frameleft;
   background-color: var(--steel-blue);
@@ -120,7 +113,6 @@ body {
 }
 
 /* Performance optimizations */
-
 .frametop, .corner1, .corner2 {
   will-change: transform;
   transform: translateZ(0);
@@ -138,7 +130,7 @@ body {
 }
 
 /* ==========================================================================
-   FRAME BACKGROUNDS & STATES
+   FRAME BACKGROUNDS & STATES - FIXED FOR STABILITY
    ========================================================================== */
 
 .framebackground {
@@ -148,10 +140,16 @@ body {
   will-change: margin-top;
   position: relative;
   overflow: hidden;
+  
+  /* ✅ CRITICAL: Smooth transitions to prevent flickering */
+  transition: background-color 0.8s ease-in-out;
+  
+  /* ✅ Performance optimizations */
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 /* ESP32 Connection States */
-
 .framebackground.soil {
   background-image: url('images/soil-background.jpg');
 }
@@ -164,17 +162,58 @@ body {
   background-color: var(--coral-red);
 }
 
+/* ✅ FIXED: Soil background - stable transition */
 .framebackground.soil-background {
+  /* Change background color smoothly instead of abrupt sprite */
+  background-color: var(--sage-green);
+  
+  /* Add subtle texture overlay if you want */
+  background-image: 
+    radial-gradient(circle at 25% 25%, rgba(142,164,125,0.3) 2px, transparent 2px),
+    radial-gradient(circle at 75% 75%, rgba(142,164,125,0.2) 1px, transparent 1px);
+  background-size: 30px 30px, 15px 15px;
+  background-position: 0 0, 15px 15px;
+  
+  /* ✅ Remove conflicting sprite properties that were causing instability */
+  /* width: 64px; height: 64px; - REMOVED */
+  /* background-image: url('sprite/soil-background.png'); - COMMENTED OUT */
+  /* background-size: 64px 64px; - REMOVED */
+  /* animation: grid-animation 2s steps(4) 5s; - REMOVED */
+  
+  /* Keep z-index for layering */
+  z-index: 1;
+  
+  /* ✅ Smooth transition */
+  transition: 
+    background-color 0.8s ease-in-out,
+    background-image 0.6s ease-in-out;
+}
+
+/* Alternative: If you want to keep the sprite but make it stable */
+/*
+.framebackground.soil-background {
+  background-color: var(--sage-green);
+  position: relative;
+}
+
+.framebackground.soil-background::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 64px;
   height: 64px;
   background-image: url('sprite/soil-background.png');
   background-size: 64px 64px;
-  animation: grid-animation 2s steps(4) 5s;
+  opacity: 0.8;
   z-index: 1;
+  transition: opacity 0.5s ease-in-out;
 }
+*/
 
 /* ==========================================================================
-   CREATURES
+   CREATURES - FIXED FOR STABILITY
    ========================================================================== */
 
 .idle-creature, .soil-creature {
@@ -189,6 +228,17 @@ body {
   background-position: center;
   display: none;
   z-index: 5;
+  
+  /* ✅ CRITICAL: Smooth transitions to prevent flickering */
+  opacity: 0;
+  transition: 
+    opacity 0.6s ease-in-out,
+    transform 0.4s ease-in-out;
+  
+  /* ✅ Performance optimizations */
+  will-change: opacity, transform;
+  backface-visibility: hidden;
+  transform: translate(-50%, -50%) translateZ(0);
 }
 
 .soil-creature {
@@ -196,40 +246,81 @@ body {
   background-color: transparent;
 }
 
-
-
+/* ✅ FIXED: Stable creature activation */
 .soil-creature.active {
   display: block;
+  opacity: 1;
+  
+  /* ✅ Subtle idle animation for life */
+  animation: soilCreatureIdle 4s ease-in-out infinite;
 }
 
+/* ✅ NEW: Smooth creature idle animation */
+@keyframes soilCreatureIdle {
+  0%, 100% { 
+    transform: translate(-50%, -50%) translateY(0px) scale(1);
+    filter: brightness(1);
+  }
+  50% { 
+    transform: translate(-50%, -50%) translateY(-3px) scale(1.02);
+    filter: brightness(1.05);
+  }
+}
 
+/* ✅ NEW: Creature sound reaction */
+.soil-creature.reacting {
+  animation: soilCreatureReact 0.8s ease-out;
+}
+
+@keyframes soilCreatureReact {
+  0% { 
+    transform: translate(-50%, -50%) scale(1);
+    filter: brightness(1);
+  }
+  30% { 
+    transform: translate(-50%, -50%) scale(1.15);
+    filter: brightness(1.2) contrast(1.1);
+  }
+  100% { 
+    transform: translate(-50%, -50%) scale(1);
+    filter: brightness(1);
+  }
+}
 
 /* ==========================================================================
-
-   ANIMATIONS
-
+   ANIMATIONS - KEPT YOUR ORIGINAL ONES
    ========================================================================== */
 
-
-
 @keyframes frametop {
-
   0% { background-position: 0 0; }
   25% { background-position: -256px 0; }
   50% { background-position: -512px 0; }
   75% { background-position: 0 -64px; }
   100% { background-position: -256px -64px; }
-
 }
 
-
-
 @keyframes grid-animation {
-
   0% { background-position: 0 0; }
   25% { background-position: -256px 0; }
   50% { background-position: -512px 0; }
   75% { background-position: 0 -64px; }
   100% { background-position: -256px -64px; }
+}
 
+/* ==========================================================================
+   RESPONSIVE ADJUSTMENTS
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .soil-creature {
+    width: min(25vw, 15vh);
+    height: min(25vw, 15vh);
+  }
+}
+
+@media (max-height: 500px) {
+  .soil-creature {
+    width: min(20vw, 12vh);
+    height: min(20vw, 12vh);
+  }
 }

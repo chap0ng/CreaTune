@@ -1,13 +1,24 @@
 // soil.js
-// Stable version using data-driven connection logic
+// ULTRA-STABLE soil handler - fixes all visual flickering issues
 
 class SoilHandler {
     constructor() {
         this.isActive = false;
         this.lastCondition = null;
         this.isConnected = false;
+        this.backgroundVisible = false; // Track background state separately
+        this.creatureVisible = false;   // Track creature state separately
+        
+        // Stability timers
+        this.connectionTimer = null;
+        this.backgroundTimer = null;
+        this.creatureTimer = null;
+        
+        // Data tracking
         this.lastDataTime = 0;
-        this.dataTimeoutMs = 15000; // 15 seconds without data = disconnect
+        this.dataTimeoutMs = 12000; // 12 seconds
+        this.consecutiveDataCount = 0;
+        this.connectionConfirmationThreshold = 2; // Need 2 data packets to confirm connection
         
         this.synth = null;
         this.reverb = null;
@@ -22,7 +33,7 @@ class SoilHandler {
     }
     
     async init() {
-        console.log('🌱 Initializing Soil Handler...');
+        console.log('🌱 Initializing ULTRA-STABLE Soil Handler...');
         
         // Wait for Tone.js and WebSocket client
         await this.waitForDependencies();
@@ -34,13 +45,20 @@ class SoilHandler {
         this.frameBackground = document.querySelector('.framebackground');
         this.soilCreature = document.querySelector('.soil-creature');
         
-        // Listen to WebSocket client
+        if (!this.frameBackground) {
+            console.warn('⚠️  .framebackground element not found');
+        }
+        if (!this.soilCreature) {
+            console.warn('⚠️  .soil-creature element not found');
+        }
+        
+        // Listen to WebSocket client - ONLY data events for stability
         this.setupWebSocketListener();
         
         // Start timeout checker
         this.startTimeoutChecker();
         
-        console.log('🌱✅ Soil Handler ready');
+        console.log('🌱✅ ULTRA-STABLE Soil Handler ready');
     }
     
     async waitForDependencies() {
@@ -53,6 +71,8 @@ class SoilHandler {
         while (!window.creatune) {
             await new Promise(resolve => setTimeout(resolve, 100));
         }
+        
+        console.log('🌱 Dependencies loaded');
     }
     
     async setupAudio() {
@@ -94,38 +114,53 @@ class SoilHandler {
     }
     
     setupWebSocketListener() {
-        // ✅ TRUST DATA EVENTS ONLY - ignore status events
+        // ✅ ONLY listen to data events - ignore status events completely
         window.creatune.on('data', (deviceType, data) => {
             if (deviceType === 'soil') {
-                this.handleSoilData(data);
+                this.handleSoilDataUltraStable(data);
             }
         });
-        
-        // ❌ IGNORE STATUS EVENTS - they're unstable
-        // Don't listen to 'status' events at all
         
         // ✅ Only listen to explicit disconnect events
         window.creatune.on('disconnect', (deviceType) => {
             if (deviceType === 'soil') {
                 console.log('🌱 Explicit soil disconnect received');
-                this.handleSoilDisconnect();
+                this.handleSoilDisconnectUltraStable();
             }
         });
+        
+        // ✅ Listen to complete WebSocket disconnection
+        window.creatune.on('all_disconnected', () => {
+            console.log('🌱 All devices disconnected');
+            this.handleSoilDisconnectUltraStable();
+        });
+        
+        console.log('🌱 WebSocket listeners configured (data-only mode)');
     }
     
-    handleSoilData(data) {
-        console.log('🌱 Soil data received:', data);
+    // ✅ ULTRA-STABLE data handling
+    handleSoilDataUltraStable(data) {
+        console.log('🌱 Soil data received:', JSON.stringify(data));
         
-        // Update last data time
+        // Update data tracking
         this.lastDataTime = Date.now();
+        this.consecutiveDataCount++;
         
-        // ✅ DATA = CONNECTION (most reliable indicator)
-        if (!this.isConnected) {
-            console.log('🌱 ✅ STABLE CONNECTION - data received');
+        // ✅ Require multiple data packets before confirming connection (prevents flicker)
+        if (!this.isConnected && this.consecutiveDataCount >= this.connectionConfirmationThreshold) {
+            console.log('🌱 ✅ ULTRA-STABLE CONNECTION confirmed (multiple data packets)');
             this.isConnected = true;
-            this.showSoilBackground();
+            this.showSoilBackgroundStable();
         }
         
+        // Only process moisture if we're confirmed connected
+        if (this.isConnected) {
+            this.processMoistureDataStable(data);
+        }
+    }
+    
+    // ✅ Process moisture data with stability
+    processMoistureDataStable(data) {
         // Check soil condition from Arduino data
         let condition = null;
         if (data.soil_condition) {
@@ -141,94 +176,133 @@ class SoilHandler {
             }
         }
         
-        console.log(`🌱 Soil condition: ${condition}`);
-        
-        // Handle humid or wet conditions
-        if (condition === 'humid' || condition === 'wet') {
-            this.activateSoilResponse();
-        } else {
-            this.deactivateSoilResponse();
+        // Only log if condition changed
+        if (condition !== this.lastCondition) {
+            console.log(`🌱 Soil condition changed: ${this.lastCondition} → ${condition}`);
+            this.lastCondition = condition;
         }
         
-        this.lastCondition = condition;
+        // Handle humid or wet conditions with stability
+        if (condition === 'humid' || condition === 'wet') {
+            this.activateSoilResponseStable();
+        } else {
+            this.deactivateSoilResponseStable();
+        }
     }
     
-    // ✅ TIMEOUT-BASED DISCONNECTION (more stable than status events)
+    // ✅ Timeout-based disconnection checker
     startTimeoutChecker() {
         setInterval(() => {
             if (this.isConnected && 
                 this.lastDataTime > 0 && 
                 Date.now() - this.lastDataTime > this.dataTimeoutMs) {
                 
-                console.log('🌱 ❌ STABLE DISCONNECTION - data timeout');
-                this.handleSoilDisconnect();
+                console.log('🌱 ❌ ULTRA-STABLE DISCONNECTION - data timeout');
+                this.handleSoilDisconnectUltraStable();
             }
-        }, 5000); // Check every 5 seconds
+        }, 3000); // Check every 3 seconds
     }
     
-    handleSoilDisconnect() {
+    handleSoilDisconnectUltraStable() {
         if (!this.isConnected) return; // Already disconnected
         
-        console.log('🌱❌ Soil disconnected - cleaning up');
+        console.log('🌱❌ ULTRA-STABLE disconnect - cleaning up');
         this.isConnected = false;
         this.lastDataTime = 0;
-        this.hideSoilBackground();
-        this.deactivateSoilResponse();
+        this.consecutiveDataCount = 0;
+        
+        this.hideSoilBackgroundStable();
+        this.deactivateSoilResponseStable();
     }
     
-    showSoilBackground() {
-        if (this.frameBackground && !this.frameBackground.classList.contains('soil-background')) {
-            this.frameBackground.classList.add('soil-background');
-            console.log('🌱 ✅ STABLE - Showing soil background');
+    // ✅ STABLE background management with debouncing
+    showSoilBackgroundStable() {
+        if (this.backgroundVisible) return; // Already visible
+        
+        // Clear any pending background timer
+        if (this.backgroundTimer) {
+            clearTimeout(this.backgroundTimer);
         }
+        
+        // Delay background show to ensure stability
+        this.backgroundTimer = setTimeout(() => {
+            if (this.frameBackground && !this.backgroundVisible) {
+                this.frameBackground.classList.add('soil-background');
+                this.backgroundVisible = true;
+                console.log('🌱 ✅ ULTRA-STABLE - Background shown');
+            }
+        }, 500); // 500ms delay
     }
     
-    hideSoilBackground() {
-        if (this.frameBackground && this.frameBackground.classList.contains('soil-background')) {
+    hideSoilBackgroundStable() {
+        if (!this.backgroundVisible) return; // Already hidden
+        
+        // Clear any pending background timer
+        if (this.backgroundTimer) {
+            clearTimeout(this.backgroundTimer);
+        }
+        
+        if (this.frameBackground && this.backgroundVisible) {
             this.frameBackground.classList.remove('soil-background');
-            console.log('🌱 ❌ STABLE - Hiding soil background');
+            this.backgroundVisible = false;
+            console.log('🌱 ❌ ULTRA-STABLE - Background hidden');
         }
     }
     
-    activateSoilResponse() {
+    // ✅ STABLE creature management with debouncing
+    activateSoilResponseStable() {
         if (this.isActive) return; // Already active
         
-        this.isActive = true;
-        console.log('🌱🎵 Activating soil response (humid/wet)');
+        // Clear any pending creature timer
+        if (this.creatureTimer) {
+            clearTimeout(this.creatureTimer);
+        }
         
-        // Show soil creature
-        this.showSoilCreature();
-        
-        // Start playing ambient tones
-        this.startAmbientTones();
+        this.creatureTimer = setTimeout(() => {
+            if (!this.isActive && this.isConnected) { // Double-check connection
+                this.isActive = true;
+                console.log('🌱🎵 ULTRA-STABLE activation (humid/wet)');
+                
+                this.showSoilCreatureStable();
+                this.startAmbientTones();
+            }
+        }, 300); // 300ms delay
     }
     
-    deactivateSoilResponse() {
+    deactivateSoilResponseStable() {
         if (!this.isActive) return; // Already inactive
         
-        this.isActive = false;
-        console.log('🌱🔇 Deactivating soil response (dry)');
+        // Clear any pending creature timer
+        if (this.creatureTimer) {
+            clearTimeout(this.creatureTimer);
+        }
         
-        // Hide soil creature
-        this.hideSoilCreature();
-        
-        // Stop ambient tones
-        this.stopAmbientTones();
+        this.creatureTimer = setTimeout(() => {
+            if (this.isActive) {
+                this.isActive = false;
+                console.log('🌱🔇 ULTRA-STABLE deactivation (dry)');
+                
+                this.hideSoilCreatureStable();
+                this.stopAmbientTones();
+            }
+        }, 300); // 300ms delay
     }
     
-    showSoilCreature() {
-        if (this.soilCreature) {
+    showSoilCreatureStable() {
+        if (this.soilCreature && !this.creatureVisible) {
             this.soilCreature.classList.add('active');
             this.soilCreature.style.display = 'block';
-            console.log('🌱🦎 Showing soil creature');
+            this.creatureVisible = true;
+            console.log('🌱🦎 ✅ ULTRA-STABLE - Creature shown');
         }
     }
     
-    hideSoilCreature() {
-        if (this.soilCreature) {
+    hideSoilCreatureStable() {
+        if (this.soilCreature && this.creatureVisible) {
             this.soilCreature.classList.remove('active');
             this.soilCreature.style.display = 'none';
-            console.log('🌱🦎 Hiding soil creature');
+            this.creatureVisible = false;
+            console.log('🌱🦎 ❌ ULTRA-STABLE - Creature hidden');
         }
     }
     
@@ -313,7 +387,7 @@ class SoilHandler {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🌱 Starting SIMPLE STABLE Soil Handler...');
+    console.log('🌱 Starting ULTRA-STABLE Soil Handler...');
     window.soilHandler = new SoilHandler();
 });
 
