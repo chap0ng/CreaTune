@@ -10,7 +10,7 @@ class SoilHandler {
         
         // Stability features
         this.connectionDebounceTimer = null;
-        this.connectionStabilityDelay = 2000; // 2 seconds
+        this.connectionStabilityDelay = 3000; // 3 seconds
         this.lastDataTime = 0;
         this.dataTimeout = 10000; // 10 seconds without data = disconnect
         this.connectionStateHistory = []; // Track connection state history
