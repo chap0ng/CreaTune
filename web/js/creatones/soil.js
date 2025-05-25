@@ -14,7 +14,7 @@ class SoilHandler {
         
         // Data tracking
         this.lastCondition = null;
-        this.lastDataTime = 3000;
+        this.lastDataTime = 10000;
         this.dataTimeoutMs = 15000;
         
         // Audio components
