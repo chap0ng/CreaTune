@@ -79,7 +79,7 @@ class SoilHandler {
                 harmonicity: 8,      // High harmonicity for metallic toy piano sound
                 modulationIndex: 25, // High modulation for bright, bell-like tone
                 oscillator: {
-                    type: "sine"
+                    type: "sawtooth" // Sawtooth wave for brightness
                 },
                 envelope: {
                     attack: 0.001,   // Very fast attack for percussive toy piano
@@ -92,7 +92,7 @@ class SoilHandler {
                 },
                 modulationEnvelope: {
                     attack: 0.01,
-                    decay: 0.2,
+                    decay: 0.5,
                     sustain: 0,      // No sustain on modulation
                     release: 0.2
                 }
