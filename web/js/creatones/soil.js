@@ -131,88 +131,63 @@ class SoilHandler {
             this.showBackgroundOnce();
         }
         
-        // ✅ STABLE CONDITION CHECKING - prevent flickering
+        // ✅ SIMPLIFIED CONDITION CHECKING
         const rawCondition = this.determineRawCondition(data);
-        const stableCondition = this.getStableCondition(rawCondition);
+        const stableCondition = this.getStableCondition(rawCondition, data.moisture_app_value);
         
         // Only process if the STABLE condition actually changed
         if (stableCondition !== null && stableCondition !== this.lastCondition) {
-            console.log(`🌱 STABLE condition changed: ${this.lastCondition} → ${stableCondition}`);
+            console.log(`🌱 ✅ STABLE condition changed: ${this.lastCondition} → ${stableCondition}`);
             this.lastCondition = stableCondition;
             
-            // ✅ RESPONSE STATE - Only change when stable condition changes
-            if (stableCondition === 'humid' || stableCondition === 'wet') {
+            // ✅ SIMPLIFIED RESPONSE - active = show creature + synth
+            if (stableCondition === 'active') {
                 if (!this.isActive) {
-                    console.log('🌱🎵 ACTIVATING response (stable data in range)');
+                    console.log('🌱🎵 ✅ ACTIVATING response (stable active condition)');
                     this.activateResponseOnce();
                 }
             } else {
                 if (this.isActive) {
-                    console.log('🌱🔇 DEACTIVATING response (stable data out of range)');
+                    console.log('🌱🔇 ❌ DEACTIVATING response (stable inactive condition)');
                     this.deactivateResponseOnce();
                 }
             }
         } else if (stableCondition === null) {
-            // Still stabilizing - don't make any changes
-            console.log(`🌱 Condition stabilizing... (${this.conditionHistory.length}/${this.conditionStabilityCount})`);
+            // Still stabilizing - show progress
+            const historyStr = this.conditionHistory.slice(-2).join(' → ');
+            console.log(`🌱 ⏳ Stabilizing: ${historyStr} (need ${this.conditionStabilityCount} consistent)`);
         }
-        // ✅ If stable condition hasn't changed, do NOTHING (no retriggering)
+        // ✅ If stable condition hasn't changed, do NOTHING
     }
     
-    // ✅ IMPROVED: Raw condition with hysteresis to prevent oscillation
+    // ✅ SIMPLIFIED: Raw condition with simple hysteresis
     determineRawCondition(data) {
         let value = null;
         
         // Get the moisture value
         if (data.soil_condition) {
-            // If ESP32 provides explicit condition, trust it
-            return data.soil_condition;
+            // Convert ESP32 condition to active/inactive
+            return (data.soil_condition === 'humid' || data.soil_condition === 'wet') ? 'active' : 'inactive';
         } else if (data.moisture_app_value !== undefined) {
             value = data.moisture_app_value;
         } else {
             return null;
         }
         
-        // ✅ HYSTERESIS: Different thresholds based on current state to prevent flicker
+        // ✅ SIMPLE HYSTERESIS: Only 2 states with different enter/exit thresholds
         const currentCondition = this.lastCondition;
         
-        if (currentCondition === 'dry') {
-            // From dry, need higher threshold to become humid
-            if (value >= this.thresholds.dryToHumid) {
-                return value >= this.thresholds.humidToWet ? 'wet' : 'humid';
-            } else {
-                return 'dry';
-            }
-        } else if (currentCondition === 'humid') {
-            // From humid, need lower threshold to become dry, higher to become wet
-            if (value <= this.thresholds.humidToDry) {
-                return 'dry';
-            } else if (value >= this.thresholds.humidToWet) {
-                return 'wet';
-            } else {
-                return 'humid';
-            }
-        } else if (currentCondition === 'wet') {
-            // From wet, need lower threshold to become humid
-            if (value <= this.thresholds.wetToHumid) {
-                return value <= this.thresholds.humidToDry ? 'dry' : 'humid';
-            } else {
-                return 'wet';
-            }
+        if (currentCondition === 'active') {
+            // Currently active - need to drop below lower threshold to become inactive
+            return value >= this.thresholds.activeToDry ? 'active' : 'inactive';
         } else {
-            // First reading or null condition - use simple thresholds
-            if (value <= 0.4) {
-                return 'dry';
-            } else if (value <= 0.7) {
-                return 'humid';
-            } else {
-                return 'wet';
-            }
+            // Currently inactive (or null) - need to rise above higher threshold to become active
+            return value >= this.thresholds.dryToActive ? 'active' : 'inactive';
         }
     }
     
-    // ✅ NEW: Stable condition checking - requires multiple consistent readings
-    getStableCondition(rawCondition) {
+    // ✅ SIMPLIFIED: Stable condition checking
+    getStableCondition(rawCondition, moistureValue = null) {
         if (rawCondition === null) return null;
         
         // Add to history
@@ -225,6 +200,7 @@ class SoilHandler {
         
         // Check if we have enough readings
         if (this.conditionHistory.length < this.conditionStabilityCount) {
+            console.log(`🌱 ⏳ Waiting for stability: ${this.conditionHistory.length}/${this.conditionStabilityCount}`);
             return null; // Not enough data yet
         }
         
@@ -233,10 +209,11 @@ class SoilHandler {
         const isConsistent = recentReadings.every(reading => reading === recentReadings[0]);
         
         if (isConsistent) {
-            console.log(`🌱 Condition STABLE: ${recentReadings[0]} (${this.conditionStabilityCount} consistent readings)`);
+            const valueStr = moistureValue !== null ? moistureValue.toFixed(3) : 'N/A';
+            console.log(`🌱 ✅ STABLE condition: ${recentReadings[0]} (value: ${valueStr})`);
             return recentReadings[0];
         } else {
-            console.log(`🌱 Condition unstable: [${recentReadings.join(', ')}] - waiting for consistency`);
+            console.log(`🌱 ⏳ Stabilizing: [${recentReadings.join(' → ')}]`);
             return null; // Still fluctuating
         }
     }
@@ -354,7 +331,12 @@ class SoilHandler {
     
     // ✅ NEW: Start autonomous random pattern that loops until stopped
     startRandomPattern() {
-        if (!this.audioPlaying) return; // Safety check
+        if (!this.audioPlaying) {
+            console.log('🌱🎵 ❌ Cannot start pattern - audio not active');
+            return;
+        }
+        
+        console.log('🌱🎵 🎹 Starting autonomous music pattern');
         
         // Play initial sound immediately
         this.playRandomChord();
@@ -363,27 +345,30 @@ class SoilHandler {
         this.scheduleNextRandomSound();
     }
     
-    // ✅ IMPROVED: Self-sustaining random note scheduler
+    // ✅ FIXED: Self-sustaining random note scheduler with better debugging
     scheduleNextRandomSound() {
         if (!this.audioPlaying) {
-            // Pattern has been stopped, exit the loop
-            console.log('🌱🎵 Pattern loop ended');
+            console.log('🌱🎵 ⏹️ Pattern stopped - audio inactive');
             return;
         }
         
-        // Random delay between 3-8 seconds
-        const nextSoundDelay = Math.random() * 5000 + 3000;
+        // Random delay between 2-6 seconds (made shorter for testing)
+        const nextSoundDelay = Math.random() * 4000 + 2000;
+        
+        console.log(`🌱🎵 ⏰ Next sound in ${(nextSoundDelay/1000).toFixed(1)}s`);
         
         setTimeout(() => {
             if (!this.audioPlaying) {
-                // Double-check - pattern might have stopped during delay
+                console.log('🌱🎵 ⏹️ Pattern stopped during delay');
                 return;
             }
             
             // Play random sound (chord or single note)
             if (Math.random() > 0.6) {
+                console.log('🌱🎵 🎹 Playing random chord...');
                 this.playRandomChord();
             } else {
+                console.log('🌱🎵 🎵 Playing random note...');
                 this.playRandomNote();
             }
             
@@ -424,7 +409,14 @@ class SoilHandler {
     }
     
     playRandomChord() {
-        if (!this.synth || !this.audioPlaying) return;
+        if (!this.synth) {
+            console.log('🌱🎵 ❌ No synth available');
+            return;
+        }
+        if (!this.audioPlaying) {
+            console.log('🌱🎵 ❌ Audio not playing, skipping chord');
+            return;
+        }
         
         const chordSize = Math.random() > 0.5 ? 2 : 3;
         const chord = [];
@@ -436,17 +428,24 @@ class SoilHandler {
             }
         }
         
-        console.log('🌱🎵 Playing chord:', chord);
+        console.log('🌱🎵 🎹 Playing chord:', chord.join(' + '));
         this.synth.triggerAttackRelease(chord, '4n');
     }
     
     playRandomNote() {
-        if (!this.synth || !this.audioPlaying) return;
+        if (!this.synth) {
+            console.log('🌱🎵 ❌ No synth available');
+            return;
+        }
+        if (!this.audioPlaying) {
+            console.log('🌱🎵 ❌ Audio not playing, skipping note');
+            return;
+        }
         
         const note = this.melancholicScale[Math.floor(Math.random() * this.melancholicScale.length)];
         const duration = Math.random() > 0.5 ? '2n' : '4n';
         
-        console.log('🌱🎵 Playing note:', note);
+        console.log(`🌱🎵 🎵 Playing note: ${note} (${duration})`);
         this.synth.triggerAttackRelease(note, duration);
     }
 }
