@@ -14,8 +14,10 @@ class SoilHandler {
         
         // Data tracking
         this.lastCondition = null;       // Track last ESP32 condition
-        this.lastDataTime = 0;
-        this.dataTimeoutMs = 15000;
+        this.lastDataTime = 0;       // Last time data was received
+        this.dataTimeoutMs = 15000; // Timeout for data inactivity
+        this.dataTimeout = null;         // Timeout reference
+
         
         // Audio components
         this.synth = null;
@@ -233,80 +235,58 @@ class SoilHandler {
         console.log('🌱🦎 ❌ Creature hidden');
     }
     
-    // ✅ START SYNTH PATTERN with better debugging
+    // ✅ SIMPLE: Start synth pattern
     async startSynth() {
-        if (this.audioPlaying) {
-            console.log('🌱🎵 ⚠️ Synth already playing - ignoring start');
-            return;
-        }
+        if (this.audioPlaying) return;
         
-        if (!this.synth) {
-            console.log('🌱🎵 ❌ No synth available');
-            return;
-        }
-        
-        console.log('🌱🎵 🎬 Starting synth - checking Tone.js context...');
+        if (!this.synth) return;
         
         if (Tone.context.state !== 'running') {
-            console.log('🌱🎵 🔄 Starting Tone.js context...');
             await Tone.start();
         }
         
         this.audioPlaying = true;
-        console.log('🌱🎵 ✅ Synth pattern started - playing first sound...');
+        console.log('🌱🎵 ✅ Music started');
         
-        // Start the autonomous pattern
+        // Start immediately and schedule next
         this.playRandomSound();
-        
-        console.log('🌱🎵 ⏰ Scheduling next sound...');
         this.scheduleNextSound();
     }
     
-    // ✅ STOP SYNTH PATTERN
+    // ✅ SIMPLE: Stop synth pattern
     stopSynth() {
-        if (!this.audioPlaying) return; // Already stopped
+        if (!this.audioPlaying) return;
         
         this.audioPlaying = false;
-        console.log('🌱🎵 ❌ Synth pattern stopped');
+        console.log('🌱🎵 ❌ Music stopped');
         
-        // Stop all scheduled events
-        Tone.Transport.cancel();
-        
-        // Release all notes
         if (this.synth) {
             this.synth.releaseAll();
         }
     }
     
-    // ✅ AUTONOMOUS SOUND PATTERN with error handling
+    // ✅ SIMPLE: Just play random notes - no complex chords
     playRandomSound() {
-        if (!this.audioPlaying) return;
+        if (!this.audioPlaying || !this.synth) return;
         
-        try {
-            if (Math.random() > 0.6) {
-                this.playRandomChord();
-            } else {
-                this.playRandomNote();
-            }
-        } catch (error) {
-            console.error('🌱🎵 ❌ Sound play error:', error);
-            // Continue anyway - don't let one error stop the pattern
-        }
+        // Simple: just pick a random note and play it
+        const note = this.melancholicScale[Math.floor(Math.random() * this.melancholicScale.length)];
+        
+        console.log(`🌱🎵 Playing: ${note}`);
+        this.synth.triggerAttackRelease(note, '4n');
     }
     
+    // ✅ SIMPLE: Just schedule the next sound
     scheduleNextSound() {
         if (!this.audioPlaying) return;
         
-        // Random delay 2-6 seconds
-        const delay = Math.random() * 4000 + 2000;
-        console.log(`🌱🎵 ⏰ Next sound in ${(delay/1000).toFixed(1)}s`);
-        
+        // Simple: 3 seconds between notes
         setTimeout(() => {
             if (this.audioPlaying) {
                 this.playRandomSound();
-                this.scheduleNextSound(); // Continue the pattern
+                this.scheduleNextSound(); // Continue
             }
-        }, delay);
+        }, 3000);
     }
     
     playRandomChord() {
