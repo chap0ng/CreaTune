@@ -14,7 +14,7 @@ class SoilHandler {
         
         // Data tracking
         this.lastCondition = null;
-        this.lastDataTime = 10000;
+        this.lastDataTime = 0;
         this.dataTimeoutMs = 15000;
         
         // Audio components
@@ -241,9 +241,13 @@ class SoilHandler {
         }
     }
     
-    // ✅ START AUDIO ONLY ONCE
+    // ✅ START AUDIO ONLY ONCE - kicks off the pattern and lets it loop
     async startAudioOnce() {
-        if (this.audioPlaying) return; // Already playing
+        if (this.audioPlaying) {
+            // ✅ Already playing - don't restart, just let it continue
+            console.log('🌱🎵 Audio already playing - continuing pattern');
+            return;
+        }
         
         if (!this.synth) return;
         
@@ -252,13 +256,10 @@ class SoilHandler {
         }
         
         this.audioPlaying = true;
-        console.log('🌱🎵 ✅ Audio started (ONCE)');
+        console.log('🌱🎵 ✅ Audio pattern STARTED - will loop randomly');
         
-        // Play initial chord
-        this.playRandomChord();
-        
-        // Schedule random notes
-        this.scheduleRandomNotes();
+        // ✅ Start the autonomous looping pattern
+        this.startRandomPattern();
     }
     
     // ✅ STOP AUDIO ONLY ONCE
@@ -266,7 +267,7 @@ class SoilHandler {
         if (!this.audioPlaying) return; // Already stopped
         
         this.audioPlaying = false;
-        console.log('🌱🔇 ❌ Audio stopped (ONCE)');
+        console.log('🌱🔇 ❌ Audio pattern STOPPED');
         
         // Stop all scheduled events
         Tone.Transport.cancel();
@@ -275,6 +276,49 @@ class SoilHandler {
         if (this.synth) {
             this.synth.releaseAll();
         }
+        
+        // The audioPlaying flag will stop the recursive pattern
+    }
+    
+    // ✅ NEW: Start autonomous random pattern that loops until stopped
+    startRandomPattern() {
+        if (!this.audioPlaying) return; // Safety check
+        
+        // Play initial sound immediately
+        this.playRandomChord();
+        
+        // Start the self-sustaining loop
+        this.scheduleNextRandomSound();
+    }
+    
+    // ✅ IMPROVED: Self-sustaining random note scheduler
+    scheduleNextRandomSound() {
+        if (!this.audioPlaying) {
+            // Pattern has been stopped, exit the loop
+            console.log('🌱🎵 Pattern loop ended');
+            return;
+        }
+        
+        // Random delay between 3-8 seconds
+        const nextSoundDelay = Math.random() * 5000 + 3000;
+        
+        setTimeout(() => {
+            if (!this.audioPlaying) {
+                // Double-check - pattern might have stopped during delay
+                return;
+            }
+            
+            // Play random sound (chord or single note)
+            if (Math.random() > 0.6) {
+                this.playRandomChord();
+            } else {
+                this.playRandomNote();
+            }
+            
+            // Schedule the next sound (recursive loop)
+            this.scheduleNextRandomSound();
+            
+        }, nextSoundDelay);
     }
     
     startTimeoutChecker() {
@@ -319,24 +363,6 @@ class SoilHandler {
         
         console.log('🌱🎵 Playing chord:', chord);
         this.synth.triggerAttackRelease(chord, '4n');
-    }
-    
-    scheduleRandomNotes() {
-        if (!this.audioPlaying) return;
-        
-        const nextNoteTime = Math.random() * 5000 + 3000;
-        
-        setTimeout(() => {
-            if (this.audioPlaying) {
-                if (Math.random() > 0.6) {
-                    this.playRandomChord();
-                } else {
-                    this.playRandomNote();
-                }
-                
-                this.scheduleRandomNotes();
-            }
-        }, nextNoteTime);
     }
     
     playRandomNote() {
