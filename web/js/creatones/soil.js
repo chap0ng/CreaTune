@@ -79,7 +79,7 @@ class SoilHandler {
                 harmonicity: 8,      // High harmonicity for metallic toy piano sound
                 modulationIndex: 25, // High modulation for bright, bell-like tone
                 oscillator: {
-                    type: "sawtooth" // Sawtooth wave for brightness
+                    type: "sine"
                 },
                 envelope: {
                     attack: 0.001,   // Very fast attack for percussive toy piano
@@ -92,7 +92,7 @@ class SoilHandler {
                 },
                 modulationEnvelope: {
                     attack: 0.01,
-                    decay: 0.5,
+                    decay: 0.2,
                     sustain: 0,      // No sustain on modulation
                     release: 0.2
                 }
@@ -116,7 +116,7 @@ class SoilHandler {
             this.reverb.toDestination();
             
             // ✅ Adjust volume for toy piano brightness
-            this.synth.volume.value = -8; // Slightly quieter but clear
+            this.synth.volume.value = -3; // Slightly quieter but clear
             
             console.log('🎵 Toy piano audio setup complete');
         } catch (error) {
