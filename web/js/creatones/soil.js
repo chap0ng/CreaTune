@@ -1,20 +1,13 @@
 // soil.js
-// Handles soil sensor data and audio/visual feedback with stability improvements
+// Stable version using data-driven connection logic
 
 class SoilHandler {
     constructor() {
         this.isActive = false;
         this.lastCondition = null;
         this.isConnected = false;
-        this.visuallyConnected = false; // Separate visual state from connection state
-        
-        // Stability features
-        this.connectionDebounceTimer = null;
-        this.connectionStabilityDelay = 3000; // 3 seconds
         this.lastDataTime = 0;
-        this.dataTimeout = 10000; // 10 seconds without data = disconnect
-        this.connectionStateHistory = []; // Track connection state history
-        this.maxHistoryLength = 5;
+        this.dataTimeoutMs = 15000; // 15 seconds without data = disconnect
         
         this.synth = null;
         this.reverb = null;
@@ -44,8 +37,8 @@ class SoilHandler {
         // Listen to WebSocket client
         this.setupWebSocketListener();
         
-        // Start data timeout checker
-        this.startDataTimeoutChecker();
+        // Start timeout checker
+        this.startTimeoutChecker();
         
         console.log('🌱✅ Soil Handler ready');
     }
@@ -101,107 +94,23 @@ class SoilHandler {
     }
     
     setupWebSocketListener() {
-        // Listen for soil device data
+        // ✅ TRUST DATA EVENTS ONLY - ignore status events
         window.creatune.on('data', (deviceType, data) => {
             if (deviceType === 'soil') {
                 this.handleSoilData(data);
             }
         });
         
-        // Listen for device status changes
-        window.creatune.on('status', (devices, combinedName) => {
-            this.handleStatusChangeStable(devices.soil);
-        });
+        // ❌ IGNORE STATUS EVENTS - they're unstable
+        // Don't listen to 'status' events at all
         
-        // Listen for disconnections
+        // ✅ Only listen to explicit disconnect events
         window.creatune.on('disconnect', (deviceType) => {
             if (deviceType === 'soil') {
-                this.handleSoilDisconnectStable();
-            }
-        });
-    }
-    
-    // Stable connection state handling with debouncing
-    handleStatusChangeStable(soilDevice) {
-        const newConnectionState = soilDevice && soilDevice.connected;
-        
-        // Add to connection history
-        this.connectionStateHistory.push({
-            connected: newConnectionState,
-            timestamp: Date.now()
-        });
-        
-        // Keep only recent history
-        if (this.connectionStateHistory.length > this.maxHistoryLength) {
-            this.connectionStateHistory.shift();
-        }
-        
-        // Clear any existing debounce timer
-        if (this.connectionDebounceTimer) {
-            clearTimeout(this.connectionDebounceTimer);
-        }
-        
-        // Set new debounce timer
-        this.connectionDebounceTimer = setTimeout(() => {
-            this.processStableConnectionState(newConnectionState);
-        }, this.connectionStabilityDelay);
-        
-        console.log(`🌱 Connection state queued: ${newConnectionState} (debounced ${this.connectionStabilityDelay}ms)`);
-    }
-    
-    processStableConnectionState(newConnectionState) {
-        // Check if connection state has been stable
-        const recentStates = this.connectionStateHistory.slice(-3); // Last 3 states
-        const isStable = recentStates.length >= 2 && 
-                        recentStates.every(state => state.connected === newConnectionState);
-        
-        if (!isStable) {
-            console.log('🌱 Connection state unstable, waiting for stability...');
-            return;
-        }
-        
-        // Only update visual state if there's an actual change
-        if (newConnectionState !== this.visuallyConnected) {
-            this.visuallyConnected = newConnectionState;
-            this.isConnected = newConnectionState;
-            
-            if (this.visuallyConnected) {
-                console.log('🌱 Soil device STABLE connection established');
-                this.showSoilBackground();
-            } else {
-                console.log('🌱 Soil device STABLE disconnection confirmed');
+                console.log('🌱 Explicit soil disconnect received');
                 this.handleSoilDisconnect();
             }
-        }
-    }
-    
-    handleSoilDisconnectStable() {
-        console.log('🌱 Soil disconnect event received');
-        
-        // Clear debounce timer
-        if (this.connectionDebounceTimer) {
-            clearTimeout(this.connectionDebounceTimer);
-        }
-        
-        // Set disconnect with delay to avoid flicker
-        this.connectionDebounceTimer = setTimeout(() => {
-            this.processStableConnectionState(false);
-        }, 1000); // Shorter delay for disconnects
-    }
-    
-    // Data timeout checker
-    startDataTimeoutChecker() {
-        setInterval(() => {
-            if (this.lastDataTime > 0 && 
-                Date.now() - this.lastDataTime > this.dataTimeout &&
-                this.visuallyConnected) {
-                
-                console.log('🌱⏰ Data timeout - marking as disconnected');
-                this.visuallyConnected = false;
-                this.isConnected = false;
-                this.handleSoilDisconnect();
-            }
-        }, 5000); // Check every 5 seconds
+        });
     }
     
     handleSoilData(data) {
@@ -210,11 +119,10 @@ class SoilHandler {
         // Update last data time
         this.lastDataTime = Date.now();
         
-        // If we receive data, we must be connected (trust the data over status)
+        // ✅ DATA = CONNECTION (most reliable indicator)
         if (!this.isConnected) {
-            console.log('🌱 Data received - confirming connection');
+            console.log('🌱 ✅ STABLE CONNECTION - data received');
             this.isConnected = true;
-            this.visuallyConnected = true;
             this.showSoilBackground();
         }
         
@@ -235,56 +143,37 @@ class SoilHandler {
         
         console.log(`🌱 Soil condition: ${condition}`);
         
-        // Handle humid or wet conditions (with stability check)
+        // Handle humid or wet conditions
         if (condition === 'humid' || condition === 'wet') {
-            this.activateSoilResponseStable();
+            this.activateSoilResponse();
         } else {
-            this.deactivateSoilResponseStable();
+            this.deactivateSoilResponse();
         }
         
         this.lastCondition = condition;
     }
     
-    // Stable response activation with additional checks
-    activateSoilResponseStable() {
-        if (this.isActive) return; // Already active
-        
-        // Only activate if visually connected
-        if (!this.visuallyConnected) {
-            console.log('🌱 Skipping activation - not visually connected');
-            return;
-        }
-        
-        this.isActive = true;
-        console.log('🌱🎵 STABLE activation - soil response (humid/wet)');
-        
-        // Show soil creature
-        this.showSoilCreature();
-        
-        // Start playing ambient tones
-        this.startAmbientTones();
-    }
-    
-    deactivateSoilResponseStable() {
-        if (!this.isActive) return; // Already inactive
-        
-        this.isActive = false;
-        console.log('🌱🔇 STABLE deactivation - soil response (dry)');
-        
-        // Hide soil creature
-        this.hideSoilCreature();
-        
-        // Stop ambient tones
-        this.stopAmbientTones();
+    // ✅ TIMEOUT-BASED DISCONNECTION (more stable than status events)
+    startTimeoutChecker() {
+        setInterval(() => {
+            if (this.isConnected && 
+                this.lastDataTime > 0 && 
+                Date.now() - this.lastDataTime > this.dataTimeoutMs) {
+                
+                console.log('🌱 ❌ STABLE DISCONNECTION - data timeout');
+                this.handleSoilDisconnect();
+            }
+        }, 5000); // Check every 5 seconds
     }
     
     handleSoilDisconnect() {
+        if (!this.isConnected) return; // Already disconnected
+        
         console.log('🌱❌ Soil disconnected - cleaning up');
         this.isConnected = false;
-        this.visuallyConnected = false;
         this.lastDataTime = 0;
         this.hideSoilBackground();
-        this.deactivateSoilResponseStable();
+        this.deactivateSoilResponse();
     }
     
     showSoilBackground() {
@@ -301,11 +190,37 @@ class SoilHandler {
         }
     }
     
+    activateSoilResponse() {
+        if (this.isActive) return; // Already active
+        
+        this.isActive = true;
+        console.log('🌱🎵 Activating soil response (humid/wet)');
+        
+        // Show soil creature
+        this.showSoilCreature();
+        
+        // Start playing ambient tones
+        this.startAmbientTones();
+    }
+    
+    deactivateSoilResponse() {
+        if (!this.isActive) return; // Already inactive
+        
+        this.isActive = false;
+        console.log('🌱🔇 Deactivating soil response (dry)');
+        
+        // Hide soil creature
+        this.hideSoilCreature();
+        
+        // Stop ambient tones
+        this.stopAmbientTones();
+    }
+    
     showSoilCreature() {
         if (this.soilCreature) {
             this.soilCreature.classList.add('active');
             this.soilCreature.style.display = 'block';
-            console.log('🌱🦎 ✅ STABLE - Showing soil creature');
+            console.log('🌱🦎 Showing soil creature');
         }
     }
     
@@ -313,7 +228,7 @@ class SoilHandler {
         if (this.soilCreature) {
             this.soilCreature.classList.remove('active');
             this.soilCreature.style.display = 'none';
-            console.log('🌱🦎 ❌ STABLE - Hiding soil creature');
+            console.log('🌱🦎 Hiding soil creature');
         }
     }
     
@@ -398,7 +313,7 @@ class SoilHandler {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🌱 Starting Stable Soil Handler...');
+    console.log('🌱 Starting SIMPLE STABLE Soil Handler...');
     window.soilHandler = new SoilHandler();
 });
 
