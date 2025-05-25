@@ -1,5 +1,5 @@
 // websocket-server.js
-// Enhanced WebSocket server for CreaTune
+// Enhanced WebSocket server with proper ESP32 device tracking
 
 const WebSocket = require('ws');
 const http = require('http');
@@ -8,7 +8,7 @@ const path = require('path');
 
 // Web server configuration
 const PORT = process.env.PORT || 8080;
-const WEB_ROOT = path.join(__dirname, 'web'); // FIXED: Serve from web/ directory
+const WEB_ROOT = path.join(__dirname, 'web');
 
 // Create HTTP server
 const server = http.createServer((req, res) => {
@@ -28,7 +28,6 @@ const server = http.createServer((req, res) => {
             // Still doesn't exist, return 404
             res.writeHead(404, { 'Content-Type': 'text/plain' });
             res.end('404 Not Found');
-            console.log(`404 - File not found: ${req.url}`);
             return;
           }
           
@@ -41,7 +40,6 @@ const server = http.createServer((req, res) => {
       // File doesn't exist, return 404
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('404 Not Found');
-      console.log(`404 - File not found: ${req.url}`);
       return;
     }
     
@@ -80,7 +78,6 @@ function serveFile(filePath, res) {
     } else {
       res.writeHead(200, { 'Content-Type': contentType });
       res.end(content, 'utf-8');
-      console.log(`✅ Served: ${path.relative(WEB_ROOT, filePath)}`);
     }
   });
 }
@@ -92,24 +89,10 @@ const wss = new WebSocket.Server({ server });
 const clients = new Map();
 let clientIdCounter = 0;
 
-// Connected ESP32 devices
-const espDevices = new Map();
+// ✅ FIXED: ESP32 device tracking by sensor name (not WebSocket object)
+const espDevices = new Map(); // Key: sensor name, Value: device info
+const espConnections = new Map(); // Key: sensor name, Value: current WebSocket
 let espIdCounter = 0;
-
-// Identify ESP32 device type
-function identifyESP32DeviceType(data) {
-  const sensor = (data.sensor || '').toLowerCase();
-  const message = (data.message || '').toLowerCase();
-  
-  if (sensor.includes('soil') || sensor.includes('moisture') || 
-      data.soilMoisture !== undefined || data.moisture !== undefined) return 'soil';
-  if (sensor.includes('light') || sensor.includes('lux') || 
-      data.lightLevel !== undefined || data.lux !== undefined) return 'light';
-  if (sensor.includes('temp') || sensor.includes('temperature') || 
-      data.temperature !== undefined || data.temp !== undefined) return 'temp';
-  
-  return null;
-}
 
 // Handle new connections
 wss.on('connection', (ws, req) => {
@@ -121,7 +104,7 @@ wss.on('connection', (ws, req) => {
     id: clientId,
     ip: ip,
     isESP32: false,
-    deviceType: null,
+    espSensorName: null, // Track which sensor this connection represents
     lastMessage: Date.now()
   });
   
@@ -145,43 +128,24 @@ wss.on('connection', (ws, req) => {
       // Try to parse as JSON
       const data = JSON.parse(message);
       
-      // Handle message types
-      if (data.type === 'request_esp_status') {
-        sendESP32Status(ws);
-      } else if (data.sensor && data.type === 'sensor_data') {
-        handleSensorData(ws, data, clientInfo);
-      } else if (data.sensor || data.value !== undefined || data.temperature !== undefined || 
-                 data.lightLevel !== undefined || data.soilMoisture !== undefined) {
-        // Treat as sensor data even without explicit type
-        data.type = 'sensor_data';
-        handleSensorData(ws, data, clientInfo);
+      // Check if it's from ESP32 sensor
+      if (data.sensor && data.type === 'sensor_data') {
+        handleESP32Data(ws, data, clientInfo);
       } else {
-        // Regular message from web client
+        // Regular message from a web client
+        // Broadcast to all other web clients
         broadcastToWebClients(data, ws);
       }
     } catch (err) {
-      // Not JSON, treat as plain text - could be from ESP32
+      // Not JSON, treat as plain text
       console.log(`Non-JSON message from [${clientInfo.id}]: ${message}`);
       
-      const messageStr = message.toString();
-      if (messageStr.includes('soil') || messageStr.includes('light') || messageStr.includes('temp')) {
-        // Parse as sensor data
-        const sensorData = {
-          type: 'sensor_data',
-          sensor: messageStr,
-          value: parseFloat(messageStr.match(/\d+\.?\d*/)?.[0]) || 0,
-          timestamp: Date.now(),
-          raw: messageStr
-        };
-        handleSensorData(ws, sensorData, clientInfo);
-      } else {
-        // Broadcast text message
-        broadcastToWebClients({
-          type: 'text',
-          message: messageStr,
-          from: clientInfo.id
-        }, ws);
-      }
+      // Broadcast text message to all web clients except sender
+      broadcastToWebClients({
+        type: 'text',
+        message: message.toString(),
+        from: clientInfo.id
+      }, ws);
     }
   });
   
@@ -190,22 +154,12 @@ wss.on('connection', (ws, req) => {
     const clientInfo = clients.get(ws);
     console.log(`Client [${clientInfo.id}] disconnected`);
     
-    // If it was an ESP32, notify web clients
-    if (espDevices.has(ws)) {
-      const espInfo = espDevices.get(ws);
-      console.log(`🔌❌ ESP32 device [${espInfo.id}] DISCONNECTED: ${espInfo.name}`);
-      espDevices.delete(ws);
-      
-      // Notify web clients
-      broadcastToWebClients({
-        type: 'esp_disconnected',
-        espId: espInfo.id,
-        name: espInfo.name,
-        deviceType: espInfo.deviceType,
-        timestamp: Date.now()
-      });
+    // Handle ESP32 disconnection
+    if (clientInfo.isESP32 && clientInfo.espSensorName) {
+      handleESP32Disconnect(clientInfo.espSensorName, ws);
     }
     
+    // Remove from clients map
     clients.delete(ws);
   });
   
@@ -215,51 +169,81 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-// Handle sensor data from ESP32
-function handleSensorData(ws, data, clientInfo) {
-  const deviceType = identifyESP32DeviceType(data);
+// ✅ FIXED: Handle ESP32 data with proper device tracking
+function handleESP32Data(ws, data, clientInfo) {
+  const sensorName = data.sensor;
   
-  // Mark as ESP32
+  // Mark this client as an ESP32
   clientInfo.isESP32 = true;
-  clientInfo.deviceType = deviceType;
+  clientInfo.espSensorName = sensorName;
   
-  // Add to ESP devices if new
-  if (!espDevices.has(ws)) {
+  // Check if this is a new ESP32 device (by sensor name)
+  if (!espDevices.has(sensorName)) {
+    // New device - create entry
     const espId = espIdCounter++;
-    const deviceName = deviceType || `ESP32-${espId}`;
-    
-    espDevices.set(ws, {
+    espDevices.set(sensorName, {
       id: espId,
-      name: deviceName,
-      deviceType: deviceType,
-      lastData: data,
-      connected: Date.now()
+      name: sensorName,
+      firstSeen: Date.now(),
+      connectionCount: 1
     });
     
-    console.log(`🔌 ESP32 device [${espId}]: ${deviceName}`);
+    console.log(`✅ NEW ESP32 device registered: [${espId}] ${sensorName}`);
   } else {
-    // Update existing device
-    const espInfo = espDevices.get(ws);
-    espInfo.lastData = data;
+    // Existing device - check if it's a reconnection
+    const existingDevice = espDevices.get(sensorName);
+    const currentConnection = espConnections.get(sensorName);
+    
+    if (!currentConnection || currentConnection.readyState !== WebSocket.OPEN) {
+      // Device reconnected
+      existingDevice.connectionCount++;
+      console.log(`🔄 ESP32 device reconnected: [${existingDevice.id}] ${sensorName} (connection #${existingDevice.connectionCount})`);
+    }
   }
   
-  // Add device info to data
-  const enhancedData = {
-    ...data,
-    type: 'sensor_data',
-    espId: espDevices.get(ws).id,
-    deviceType: deviceType,
-    timestamp: data.timestamp || Date.now()
-  };
+  // Update device info
+  const deviceInfo = espDevices.get(sensorName);
+  deviceInfo.lastData = data;
+  deviceInfo.lastSeen = Date.now();
   
-  // Broadcast to web clients
-  broadcastToWebClients(enhancedData);
+  // Update current connection mapping
+  espConnections.set(sensorName, ws);
+  
+  // Broadcast sensor data to all web clients
+  broadcastToWebClients(data);
+  
+  console.log(`📊 Data from ${sensorName}:`, JSON.stringify(data, null, 2));
+}
+
+// ✅ FIXED: Handle ESP32 disconnection properly
+function handleESP32Disconnect(sensorName, ws) {
+  const deviceInfo = espDevices.get(sensorName);
+  if (!deviceInfo) return;
+  
+  console.log(`🔌❌ ESP32 device disconnected: [${deviceInfo.id}] ${sensorName}`);
+  
+  // Remove connection mapping
+  const currentConnection = espConnections.get(sensorName);
+  if (currentConnection === ws) {
+    espConnections.delete(sensorName);
+  }
+  
+  // Keep device info but mark as disconnected
+  deviceInfo.lastDisconnected = Date.now();
+  
+  // Notify web clients about ESP32 disconnection
+  broadcastToWebClients({
+    type: 'esp_disconnected',
+    espId: deviceInfo.id,
+    name: sensorName
+  });
 }
 
 // Broadcast message to all web clients (non-ESP32)
 function broadcastToWebClients(data, exclude = null) {
   wss.clients.forEach((client) => {
     if (client !== exclude && client.readyState === WebSocket.OPEN) {
+      // Only send to clients that are not ESP32 devices
       const clientInfo = clients.get(client);
       if (!clientInfo || !clientInfo.isESP32) {
         client.send(JSON.stringify(data));
@@ -268,43 +252,69 @@ function broadcastToWebClients(data, exclude = null) {
   });
 }
 
-// Send ESP32 status to a specific client
+// ✅ FIXED: Send ESP32 status based on sensor names
 function sendESP32Status(ws) {
   const espStatus = [];
   
-  for (const [espWs, espInfo] of espDevices.entries()) {
+  // Collect status from all ESP32 devices
+  for (const [sensorName, deviceInfo] of espDevices.entries()) {
+    const connection = espConnections.get(sensorName);
+    const isConnected = connection && connection.readyState === WebSocket.OPEN;
+    
     espStatus.push({
-      id: espInfo.id,
-      name: espInfo.name,
-      deviceType: espInfo.deviceType,
-      lastData: espInfo.lastData,
-      connected: espWs.readyState === WebSocket.OPEN
+      id: deviceInfo.id,
+      name: sensorName,
+      lastData: deviceInfo.lastData,
+      connected: isConnected,
+      connectionCount: deviceInfo.connectionCount,
+      firstSeen: deviceInfo.firstSeen,
+      lastSeen: deviceInfo.lastSeen
     });
   }
   
+  // Send status
   ws.send(JSON.stringify({
     type: 'esp_status',
     devices: espStatus
   }));
 }
 
-// Periodic cleanup
+// Enhanced cleanup and status updates
 setInterval(() => {
   const now = Date.now();
   
-  // Check for inactive clients
+  // Check for inactive clients (no message in 5 minutes)
   for (const [ws, info] of clients.entries()) {
-    if (now - info.lastMessage > 6 * 1000) {
+    if (now - info.lastMessage > 5 * 60 * 1000) {
       console.log(`Closing inactive connection [${info.id}]`);
       ws.terminate();
     }
   }
   
-  // Log status every 10 seconds
-  if (now % 10000 < 1000) {
-    const espCount = espDevices.size;
-    const clientCount = clients.size - espCount;
-    console.log(`Status: ${espCount} ESP32 devices, ${clientCount} web clients connected`);
+  // Clean up stale ESP32 connections
+  for (const [sensorName, ws] of espConnections.entries()) {
+    if (ws.readyState !== WebSocket.OPEN) {
+      console.log(`🧹 Cleaning up stale connection for ${sensorName}`);
+      espConnections.delete(sensorName);
+    }
+  }
+  
+  // Status report
+  const activeESPCount = espConnections.size;
+  const totalESPDevices = espDevices.size;
+  const webClientCount = clients.size - espConnections.size;
+  
+  console.log(`📊 Status: ${activeESPCount}/${totalESPDevices} ESP32 devices active, ${webClientCount} web clients`);
+  
+  // Log device details every 30 seconds
+  if (now % 30000 < 1000) {
+    console.log('\n📱 ESP32 Device Status:');
+    for (const [sensorName, deviceInfo] of espDevices.entries()) {
+      const connection = espConnections.get(sensorName);
+      const isConnected = connection && connection.readyState === WebSocket.OPEN;
+      console.log(`  [${deviceInfo.id}] ${sensorName}: ${isConnected ? '🟢 CONNECTED' : '🔴 DISCONNECTED'} (connections: ${deviceInfo.connectionCount})`);
+    }
+    console.log('');
   }
 }, 1000);
 
@@ -312,11 +322,10 @@ setInterval(() => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`
   ╔════════════════════════════════════════════════╗
-  ║  🎵 CreaTune WebSocket Server                  ║
+  ║  CreaTune WebSocket Server (FIXED)             ║
   ║  Server running on port ${PORT.toString().padEnd(20, ' ')} ║
-  ║  Serving files from ${WEB_ROOT.padEnd(25, ' ')} ║
+  ║  Web files serving from ${WEB_ROOT.padEnd(20, ' ')} ║
   ╚════════════════════════════════════════════════╝
   `);
-  console.log(`📱 Point your Nothing Phone to: http://YOUR_SERVER_IP:${PORT}`);
-  console.log(`💻 Local access: http://localhost:${PORT}`);
+  console.log(`Point your browser to http://localhost:${PORT}`);
 });
