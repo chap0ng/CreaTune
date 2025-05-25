@@ -14,6 +14,7 @@ class SoilHandler {
         
         // Data tracking
         this.lastCondition = null;
+        this.originalCondition = null;   // ✅ Store actual ESP32 condition for logging
         this.lastDataTime = 0;
         this.dataTimeoutMs = 15000;
         
@@ -131,67 +132,95 @@ class SoilHandler {
             this.showBackgroundOnce();
         }
         
-        // ✅ SIMPLIFIED CONDITION CHECKING
-        const rawCondition = this.determineRawCondition(data);
-        const stableCondition = this.getStableCondition(rawCondition, data.moisture_app_value);
+        // ✅ STORE ORIGINAL + GET NORMALIZED CONDITIONS
+        this.storeOriginalCondition(data);
+        const normalizedCondition = this.determineRawCondition(data);
+        const stableCondition = this.getStableCondition(normalizedCondition, data.moisture_app_value);
         
-        // Only process if the STABLE condition actually changed
+        // Only process if we have a stable condition and it changed
         if (stableCondition !== null && stableCondition !== this.lastCondition) {
-            console.log(`🌱 ✅ STABLE condition changed: ${this.lastCondition} → ${stableCondition}`);
+            console.log(`🌱 ✅ STABLE CHANGE: ${this.lastCondition} → ${stableCondition} (ESP32: ${this.originalCondition})`);
             this.lastCondition = stableCondition;
             
-            // ✅ SIMPLIFIED RESPONSE - active = show creature + synth
-            if (stableCondition === 'active') {
-                if (!this.isActive) {
-                    console.log('🌱🎵 ✅ ACTIVATING response (stable active condition)');
-                    this.activateResponseOnce();
-                }
-            } else {
-                if (this.isActive) {
-                    console.log('🌱🔇 ❌ DEACTIVATING response (stable inactive condition)');
-                    this.deactivateResponseOnce();
-                }
+            // ✅ SIMPLE LOGIC: active = show creature/synth
+            const shouldBeActive = this.isActiveCondition(stableCondition);
+            
+            if (shouldBeActive && !this.isActive) {
+                console.log(`🌱🎵 ✅ ACTIVATING - soil is ${this.originalCondition}`);
+                this.activateResponseOnce();
+            } else if (!shouldBeActive && this.isActive) {
+                console.log(`🌱🔇 ❌ DEACTIVATING - soil is ${this.originalCondition}`);
+                this.deactivateResponseOnce();
             }
         } else if (stableCondition === null) {
-            // Still stabilizing - show progress
-            const historyStr = this.conditionHistory.slice(-2).join(' → ');
-            console.log(`🌱 ⏳ Stabilizing: ${historyStr} (need ${this.conditionStabilityCount} consistent)`);
+            // Show what we're waiting for with original conditions
+            const recentOriginal = this.conditionHistory.slice(-2).map(normalized => 
+                normalized === 'active' ? `${this.originalCondition}(→active)` : normalized
+            );
+            console.log(`🌱 ⏳ Stabilizing: [${recentOriginal.join(' → ')}] (need ${this.conditionStabilityCount} consistent)`);
         }
         // ✅ If stable condition hasn't changed, do NOTHING
     }
     
-    // ✅ SIMPLIFIED: Raw condition with simple hysteresis
+    // ✅ NORMALIZE CONDITIONS: Group humid/wet together for stability
     determineRawCondition(data) {
-        let value = null;
+        // ✅ Get the raw condition from ESP32
+        let rawCondition = null;
         
-        // Get the moisture value
         if (data.soil_condition) {
-            // Convert ESP32 condition to active/inactive
-            return (data.soil_condition === 'humid' || data.soil_condition === 'wet') ? 'active' : 'inactive';
+            rawCondition = data.soil_condition;
+            console.log(`🌱 ESP32 says: ${rawCondition}`);
         } else if (data.moisture_app_value !== undefined) {
-            value = data.moisture_app_value;
-        } else {
-            return null;
+            // Fallback to app value
+            const value = data.moisture_app_value;
+            console.log(`🌱 Using app value: ${value}`);
+            
+            if (value <= 0.4) {
+                rawCondition = 'dry';
+            } else if (value <= 0.7) {
+                rawCondition = 'humid';
+            } else {
+                rawCondition = 'wet';
+            }
         }
         
-        // ✅ SIMPLE HYSTERESIS: Only 2 states with different enter/exit thresholds
-        const currentCondition = this.lastCondition;
+        // ✅ NORMALIZE for stability: humid/wet both become "active"
+        if (rawCondition === 'humid' || rawCondition === 'wet') {
+            return 'active';  // Same state for stability checking
+        } else if (rawCondition === 'dry') {
+            return 'inactive';
+        }
         
-        if (currentCondition === 'active') {
-            // Currently active - need to drop below lower threshold to become inactive
-            return value >= this.thresholds.activeToDry ? 'active' : 'inactive';
-        } else {
-            // Currently inactive (or null) - need to rise above higher threshold to become active
-            return value >= this.thresholds.dryToActive ? 'active' : 'inactive';
+        return null;
+    }
+    
+    // ✅ KEEP ORIGINAL: Store the actual ESP32 condition for logging
+    storeOriginalCondition(data) {
+        if (data.soil_condition) {
+            this.originalCondition = data.soil_condition;
+        } else if (data.moisture_app_value !== undefined) {
+            const value = data.moisture_app_value;
+            if (value <= 0.4) {
+                this.originalCondition = 'dry';
+            } else if (value <= 0.7) {
+                this.originalCondition = 'humid';
+            } else {
+                this.originalCondition = 'wet';
+            }
         }
     }
     
-    // ✅ SIMPLIFIED: Stable condition checking
-    getStableCondition(rawCondition, moistureValue = null) {
-        if (rawCondition === null) return null;
+    // ✅ SIMPLE: Check if condition should activate creature/synth
+    isActiveCondition(condition) {
+        return condition === 'active';  // Now only checking normalized state
+    }
+    
+    // ✅ IMPROVED: Stable condition checking with better logging
+    getStableCondition(normalizedCondition, moistureValue = null) {
+        if (normalizedCondition === null) return null;
         
         // Add to history
-        this.conditionHistory.push(rawCondition);
+        this.conditionHistory.push(normalizedCondition);
         
         // Keep only recent history
         if (this.conditionHistory.length > this.maxConditionHistory) {
@@ -200,8 +229,8 @@ class SoilHandler {
         
         // Check if we have enough readings
         if (this.conditionHistory.length < this.conditionStabilityCount) {
-            console.log(`🌱 ⏳ Waiting for stability: ${this.conditionHistory.length}/${this.conditionStabilityCount}`);
-            return null; // Not enough data yet
+            console.log(`🌱 ⏳ Stability: ${this.conditionHistory.length}/${this.conditionStabilityCount} (${this.originalCondition} → ${normalizedCondition})`);
+            return null;
         }
         
         // Check if last N readings are consistent
@@ -210,11 +239,12 @@ class SoilHandler {
         
         if (isConsistent) {
             const valueStr = moistureValue !== null ? moistureValue.toFixed(3) : 'N/A';
-            console.log(`🌱 ✅ STABLE condition: ${recentReadings[0]} (value: ${valueStr})`);
+            const activeName = recentReadings[0] === 'active' ? 'ACTIVE' : 'INACTIVE';
+            console.log(`🌱 ✅ STABLE: ${recentReadings[0]} (ESP32: ${this.originalCondition}, value: ${valueStr}) → ${activeName}`);
             return recentReadings[0];
         } else {
-            console.log(`🌱 ⏳ Stabilizing: [${recentReadings.join(' → ')}]`);
-            return null; // Still fluctuating
+            console.log(`🌱 ⏳ Stabilizing: [${recentReadings.join(' → ')}] (ESP32: ${this.originalCondition})`);
+            return null;
         }
     }
     
@@ -399,6 +429,7 @@ class SoilHandler {
         this.isConnected = false;
         this.lastDataTime = 0;
         this.lastCondition = null;
+        this.originalCondition = null;  // ✅ Reset original condition too
         
         // ✅ Reset condition history for clean slate
         this.conditionHistory = [];
