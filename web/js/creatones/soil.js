@@ -21,8 +21,21 @@ class SoilHandler {
         this.frameBackground = null;
         this.soilCreature = null;
         
-        // Musical scale
-        this.melancholicScale = ['A3', 'C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'];
+        // Musical scale - Higher octave for toy piano brightness
+        this.melancholicScale = [
+            'C4', 'D4', 'E4', 'G4', 'A4',    // Pentatonic base
+            'C5', 'D5', 'E5', 'G5', 'A5',    // Higher octave for sparkle
+            'F4', 'B4', 'F5', 'B5'           // Extra notes for variation
+        ];
+        
+        // ✅ RHYTHM VARIATIONS - Different note lengths and patterns
+        this.rhythmPatterns = [
+            { notes: 1, durations: ['4n'], delay: 3000 },           // Single quarter note, 3s gap
+            { notes: 2, durations: ['8n', '8n'], delay: 2000 },     // Two eighth notes, 2s gap  
+            { notes: 1, durations: ['2n'], delay: 4000 },           // Long half note, 4s gap
+            { notes: 3, durations: ['16n', '8n', '16n'], delay: 2500 }, // Quick-slow-quick pattern
+            { notes: 0, durations: [], delay: 2000 }                // ✅ SILENCE - no notes, just pause
+        ];
         
         this.init();
     }
@@ -61,35 +74,53 @@ class SoilHandler {
     
     async setupAudio() {
         try {
-            this.synth = new Tone.PolySynth(Tone.Synth, {
+            // ✅ TOY PIANO SOUND - Bright, metallic, bell-like
+            this.synth = new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 8,      // High harmonicity for metallic toy piano sound
+                modulationIndex: 25, // High modulation for bright, bell-like tone
                 oscillator: {
                     type: "sine"
                 },
                 envelope: {
-                    attack: 2.5,
-                    decay: 1.0,
-                    sustain: 0.4,
-                    release: 4.0
+                    attack: 0.001,   // Very fast attack for percussive toy piano
+                    decay: 0.4,      // Quick decay like toy piano keys
+                    sustain: 0.1,    // Low sustain for authentic toy piano
+                    release: 1.2     // Medium release
+                },
+                modulation: {
+                    type: "square"   // Square wave modulation for toy-like character
+                },
+                modulationEnvelope: {
+                    attack: 0.01,
+                    decay: 0.2,
+                    sustain: 0,      // No sustain on modulation
+                    release: 0.2
                 }
             });
             
+            // ✅ LIGHTER REVERB - Toy pianos don't have much reverb
             this.reverb = new Tone.Reverb({
-                decay: 8.0,
-                wet: 0.7
+                decay: 2.0,      // Shorter decay
+                wet: 0.3         // Less reverb for cleaner toy piano sound
             });
             
+            // ✅ HIGH-PASS FILTER - Remove muddy low frequencies
             this.filter = new Tone.Filter({
-                frequency: 800,
-                type: "lowpass"
+                frequency: 200,  // Cut low frequencies for brighter sound
+                type: "highpass"
             });
             
+            // Connect: synth -> filter -> reverb -> output
             this.synth.connect(this.filter);
             this.filter.connect(this.reverb);
             this.reverb.toDestination();
             
-            console.log('🎵 Soil audio setup complete');
+            // ✅ Adjust volume for toy piano brightness
+            this.synth.volume.value = -8; // Slightly quieter but clear
+            
+            console.log('🎵 Toy piano audio setup complete');
         } catch (error) {
-            console.error('❌ Soil audio setup failed:', error);
+            console.error('❌ Toy piano audio setup failed:', error);
         }
     }
     
@@ -230,7 +261,7 @@ class SoilHandler {
         }
     }
     
-    // ✅ MUSIC MANAGEMENT
+    // ✅ MUSIC MANAGEMENT - More interesting patterns
     async startMusic() {
         if (this.audioPlaying) return;
         
@@ -241,41 +272,105 @@ class SoilHandler {
         }
         
         this.audioPlaying = true;
-        console.log('🌱 🎵 Music started');
+        console.log('🌱 🎹 Toy piano music started');
         
-        // Start the simple pattern
-        this.playNote();
-        this.scheduleNextNote();
+        // Start the varied pattern
+        this.playPattern();
     }
     
     stopMusic() {
         if (!this.audioPlaying) return;
         
         this.audioPlaying = false;
-        console.log('🌱 🎵 Music stopped');
+        console.log('🌱 🎹 Toy piano music stopped');
         
         if (this.synth) {
             this.synth.releaseAll();
         }
     }
     
-    playNote() {
+    // ✅ PLAY VARIED PATTERNS - Much more interesting!
+    playPattern() {
         if (!this.audioPlaying || !this.synth) return;
         
-        const note = this.melancholicScale[Math.floor(Math.random() * this.melancholicScale.length)];
-        console.log(`🌱 🎵 Playing: ${note}`);
-        this.synth.triggerAttackRelease(note, '4n');
-    }
-    
-    scheduleNextNote() {
-        if (!this.audioPlaying) return;
+        // ✅ Pick a random rhythm pattern
+        const pattern = this.rhythmPatterns[Math.floor(Math.random() * this.rhythmPatterns.length)];
         
+        if (pattern.notes === 0) {
+            // ✅ SILENCE PATTERN - Just pause
+            console.log('🌱 🔇 Playing silence...');
+        } else {
+            // ✅ PLAY NOTES PATTERN
+            console.log(`🌱 🎹 Playing ${pattern.notes}-note pattern: ${pattern.durations.join(' ')}`);
+            this.playNotesSequence(pattern);
+        }
+        
+        // ✅ Schedule next pattern with pattern-specific delay
         setTimeout(() => {
             if (this.audioPlaying) {
-                this.playNote();
-                this.scheduleNextNote();
+                this.playPattern(); // Recursive - keeps going
             }
-        }, 3000); // 3 seconds between notes
+        }, pattern.delay);
+    }
+    
+    // ✅ PLAY SEQUENCE OF NOTES - For complex patterns
+    playNotesSequence(pattern) {
+        let totalDelay = 0;
+        
+        for (let i = 0; i < pattern.notes; i++) {
+            const note = this.getRandomNote();
+            const duration = pattern.durations[i] || '4n';
+            
+            // Schedule each note in the sequence
+            setTimeout(() => {
+                if (this.audioPlaying && this.synth) {
+                    console.log(`🌱 🎵 Playing: ${note} (${duration})`);
+                    this.synth.triggerAttackRelease(note, duration);
+                }
+            }, totalDelay);
+            
+            // Calculate delay for next note based on duration
+            const durationMs = this.durationToMs(duration);
+            totalDelay += durationMs * 0.6; // Overlap notes slightly for musical flow
+        }
+    }
+    
+    // ✅ GET RANDOM NOTE - With weighted selection for better melodies
+    getRandomNote() {
+        // ✅ Favor middle register notes (more musical)
+        const weights = [
+            1, 1, 2, 2, 2,    // C4-A4 (lower) - normal weight
+            3, 3, 4, 4, 3,    // C5-A5 (higher) - higher weight for brightness
+            1, 2, 1, 2        // F4, B4, F5, B5 - occasional accents
+        ];
+        
+        // Weighted random selection
+        const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+        let random = Math.random() * totalWeight;
+        
+        for (let i = 0; i < this.melancholicScale.length; i++) {
+            random -= weights[i];
+            if (random <= 0) {
+                return this.melancholicScale[i];
+            }
+        }
+        
+        // Fallback
+        return this.melancholicScale[Math.floor(Math.random() * this.melancholicScale.length)];
+    }
+    
+    // ✅ CONVERT TONE.JS DURATIONS TO MILLISECONDS
+    durationToMs(duration) {
+        const bpm = 120; // Assume 120 BPM
+        const beatMs = 60000 / bpm; // ~500ms per beat
+        
+        switch (duration) {
+            case '16n': return beatMs / 4;  // ~125ms
+            case '8n': return beatMs / 2;   // ~250ms  
+            case '4n': return beatMs;       // ~500ms
+            case '2n': return beatMs * 2;   // ~1000ms
+            default: return beatMs;
+        }
     }
 }
 
