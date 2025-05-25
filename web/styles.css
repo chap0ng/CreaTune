@@ -213,16 +213,16 @@ body {
 */
 
 /* ==========================================================================
-   CREATURES - FIXED FOR STABILITY
+   CREATURES - FIXED FOR STABILITY & CENTERED
    ========================================================================== */
 
 .idle-creature, .soil-creature {
   position: absolute;
-  top: calc(50% + 10px);
-  left: calc(50% + 0px);
-  transform: translate(-50%, -50%);
-  width: min(30vw, 20vh);
-  height: min(30vw, 20vh);
+  top: 50%;                    /* ✅ Perfect center - removed +10px offset */
+  left: 50%;                   /* ✅ Perfect center */
+  transform: translate(-50%, -50%) translateZ(0);  /* ✅ Single transform rule */
+  width: min(40vw, 35vh);      /* ✅ Made bigger - was 30vw, 20vh */
+  height: min(40vw, 35vh);     /* ✅ Made bigger for better visibility */
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
@@ -238,7 +238,6 @@ body {
   /* ✅ Performance optimizations */
   will-change: opacity, transform;
   backface-visibility: hidden;
-  transform: translate(-50%, -50%) translateZ(0);
 }
 
 .soil-creature {
@@ -255,34 +254,34 @@ body {
   animation: soilCreatureIdle 4s ease-in-out infinite;
 }
 
-/* ✅ NEW: Smooth creature idle animation */
+/* ✅ IMPROVED: Smooth creature idle animation with perfect centering */
 @keyframes soilCreatureIdle {
   0%, 100% { 
-    transform: translate(-50%, -50%) translateY(0px) scale(1);
+    transform: translate(-50%, -50%) translateY(0px) scale(1) translateZ(0);
     filter: brightness(1);
   }
   50% { 
-    transform: translate(-50%, -50%) translateY(-3px) scale(1.02);
+    transform: translate(-50%, -50%) translateY(-5px) scale(1.03) translateZ(0);  /* ✅ Slightly more movement */
     filter: brightness(1.05);
   }
 }
 
-/* ✅ NEW: Creature sound reaction */
+/* ✅ IMPROVED: Creature sound reaction with perfect centering */
 .soil-creature.reacting {
   animation: soilCreatureReact 0.8s ease-out;
 }
 
 @keyframes soilCreatureReact {
   0% { 
-    transform: translate(-50%, -50%) scale(1);
+    transform: translate(-50%, -50%) scale(1) translateZ(0);
     filter: brightness(1);
   }
   30% { 
-    transform: translate(-50%, -50%) scale(1.15);
+    transform: translate(-50%, -50%) scale(1.2) translateZ(0);  /* ✅ Bigger reaction */
     filter: brightness(1.2) contrast(1.1);
   }
   100% { 
-    transform: translate(-50%, -50%) scale(1);
+    transform: translate(-50%, -50%) scale(1) translateZ(0);
     filter: brightness(1);
   }
 }
@@ -308,19 +307,27 @@ body {
 }
 
 /* ==========================================================================
-   RESPONSIVE ADJUSTMENTS
+   RESPONSIVE ADJUSTMENTS - BIGGER CREATURES
    ========================================================================== */
 
 @media (max-width: 768px) {
   .soil-creature {
-    width: min(25vw, 15vh);
-    height: min(25vw, 15vh);
+    width: min(35vw, 30vh);    /* ✅ Bigger on mobile - was 25vw, 15vh */
+    height: min(35vw, 30vh);
   }
 }
 
 @media (max-height: 500px) {
   .soil-creature {
-    width: min(20vw, 12vh);
-    height: min(20vw, 12vh);
+    width: min(30vw, 25vh);    /* ✅ Bigger on short screens - was 20vw, 12vh */
+    height: min(30vw, 25vh);
+  }
+}
+
+/* ✅ NEW: Extra large screens - make creature even more prominent */
+@media (min-width: 1200px) {
+  .soil-creature {
+    width: min(35vw, 40vh);    /* ✅ Even bigger on large screens */
+    height: min(35vw, 40vh);
   }
 }
