@@ -233,24 +233,32 @@ class SoilHandler {
         console.log('🌱🦎 ❌ Creature hidden');
     }
     
-    // ✅ START SYNTH PATTERN
+    // ✅ START SYNTH PATTERN with better debugging
     async startSynth() {
-        if (this.audioPlaying) return; // Already playing
+        if (this.audioPlaying) {
+            console.log('🌱🎵 ⚠️ Synth already playing - ignoring start');
+            return;
+        }
         
         if (!this.synth) {
             console.log('🌱🎵 ❌ No synth available');
             return;
         }
         
+        console.log('🌱🎵 🎬 Starting synth - checking Tone.js context...');
+        
         if (Tone.context.state !== 'running') {
+            console.log('🌱🎵 🔄 Starting Tone.js context...');
             await Tone.start();
         }
         
         this.audioPlaying = true;
-        console.log('🌱🎵 ✅ Synth pattern started');
+        console.log('🌱🎵 ✅ Synth pattern started - playing first sound...');
         
         // Start the autonomous pattern
         this.playRandomSound();
+        
+        console.log('🌱🎵 ⏰ Scheduling next sound...');
         this.scheduleNextSound();
     }
     
@@ -270,14 +278,19 @@ class SoilHandler {
         }
     }
     
-    // ✅ AUTONOMOUS SOUND PATTERN
+    // ✅ AUTONOMOUS SOUND PATTERN with error handling
     playRandomSound() {
         if (!this.audioPlaying) return;
         
-        if (Math.random() > 0.6) {
-            this.playRandomChord();
-        } else {
-            this.playRandomNote();
+        try {
+            if (Math.random() > 0.6) {
+                this.playRandomChord();
+            } else {
+                this.playRandomNote();
+            }
+        } catch (error) {
+            console.error('🌱🎵 ❌ Sound play error:', error);
+            // Continue anyway - don't let one error stop the pattern
         }
     }
     
@@ -286,6 +299,7 @@ class SoilHandler {
         
         // Random delay 2-6 seconds
         const delay = Math.random() * 4000 + 2000;
+        console.log(`🌱🎵 ⏰ Next sound in ${(delay/1000).toFixed(1)}s`);
         
         setTimeout(() => {
             if (this.audioPlaying) {
@@ -298,23 +312,37 @@ class SoilHandler {
     playRandomChord() {
         if (!this.synth || !this.audioPlaying) return;
         
-        // ✅ More varied chord sizes: 1-4 notes for more variety
+        // ✅ FIXED: Ensure we always get the right number of notes
         const chordSize = Math.floor(Math.random() * 4) + 1; // 1, 2, 3, or 4 notes
         const chord = [];
+        const availableNotes = [...this.melancholicScale]; // Copy the scale
         
-        for (let i = 0; i < chordSize; i++) {
-            const note = this.melancholicScale[Math.floor(Math.random() * this.melancholicScale.length)];
-            if (!chord.includes(note)) {
-                chord.push(note);
-            }
+        // ✅ Pick unique notes by removing them from available notes
+        for (let i = 0; i < chordSize && availableNotes.length > 0; i++) {
+            const randomIndex = Math.floor(Math.random() * availableNotes.length);
+            const note = availableNotes[randomIndex];
+            chord.push(note);
+            availableNotes.splice(randomIndex, 1); // Remove so we don't pick it again
         }
         
-        // ✅ Varied durations for chords too
+        // ✅ Safety check - ensure we have at least one note
+        if (chord.length === 0) {
+            chord.push(this.melancholicScale[0]); // Fallback to first note
+        }
+        
+        // ✅ Varied durations for chords
         const durations = ['16n', '8n', '4n'];
         const duration = durations[Math.floor(Math.random() * durations.length)];
         
-        console.log(`🌱🎵 🎹 Playing ${chordSize}-note chord: ${chord.join(' + ')} (${duration})`);
-        this.synth.triggerAttackRelease(chord, duration);
+        console.log(`🌱🎵 🎹 Playing ${chord.length}-note chord: ${chord.join(' + ')} (${duration})`);
+        
+        try {
+            this.synth.triggerAttackRelease(chord, duration);
+        } catch (error) {
+            console.error('🌱🎵 ❌ Chord play error:', error);
+            // Fallback to single note
+            this.synth.triggerAttackRelease(chord[0], duration);
+        }
     }
     
     playRandomNote() {
@@ -327,7 +355,12 @@ class SoilHandler {
         const duration = durations[Math.floor(Math.random() * durations.length)];
         
         console.log(`🌱🎵 🎵 Playing note: ${note} (${duration})`);
-        this.synth.triggerAttackRelease(note, duration);
+        
+        try {
+            this.synth.triggerAttackRelease(note, duration);
+        } catch (error) {
+            console.error('🌱🎵 ❌ Note play error:', error);
+        }
     }
     
     // ✅ BACKGROUND MANAGEMENT (unchanged)
