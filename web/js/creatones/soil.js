@@ -1,20 +1,19 @@
 // soil.js
-// TRULY STABLE - Only triggers actions when state actually changes
+// PLAY BUTTON APPROACH - Simple and stable
 
 class SoilHandler {
     constructor() {
         // Connection state
         this.isConnected = false;
-        this.backgroundShown = false;    // Track if background is currently shown
+        this.backgroundShown = false;
         
-        // Audio/creature state  
-        this.isActive = false;
-        this.creatureShown = false;      // Track if creature is currently shown
-        this.audioPlaying = false;       // Track if audio is currently playing
+        // ✅ PLAY BUTTON STATE - Simple on/off
+        this.isPlaying = false;          // Is the "play button" pressed?
+        this.creatureShown = false;      // Visual state tracking
+        this.audioPlaying = false;       // Audio state tracking
         
         // Data tracking
-        this.lastCondition = null;
-        this.originalCondition = null;   // ✅ Store actual ESP32 condition for logging
+        this.lastCondition = null;       // Track last ESP32 condition
         this.lastDataTime = 0;
         this.dataTimeoutMs = 15000;
         
@@ -34,7 +33,7 @@ class SoilHandler {
     }
     
     async init() {
-        console.log('🌱 Initializing TRULY STABLE Soil Handler...');
+        console.log('🌱 Initializing PLAY BUTTON Soil Handler...');
         
         await this.waitForDependencies();
         this.setupAudio();
@@ -53,7 +52,7 @@ class SoilHandler {
         this.setupWebSocketListener();
         this.startTimeoutChecker();
         
-        console.log('🌱✅ TRULY STABLE Soil Handler ready');
+        console.log('🌱✅ PLAY BUTTON Soil Handler ready');
     }
     
     async waitForDependencies() {
@@ -125,228 +124,142 @@ class SoilHandler {
         
         this.lastDataTime = Date.now();
         
-        // ✅ CONNECTION STATE - Only change ONCE
+        // ✅ CONNECTION - Show background once
         if (!this.isConnected) {
             this.isConnected = true;
             console.log('🌱 ✅ ESP32 CONNECTED - showing background');
             this.showBackgroundOnce();
         }
         
-        // ✅ STORE ORIGINAL + GET NORMALIZED CONDITIONS
-        this.storeOriginalCondition(data);
-        const normalizedCondition = this.determineRawCondition(data);
-        const stableCondition = this.getStableCondition(normalizedCondition, data.moisture_app_value);
+        // ✅ GET CURRENT CONDITION
+        const currentCondition = this.getCurrentCondition(data);
+        console.log(`🌱 Current condition: ${currentCondition}`);
         
-        // Only process if we have a stable condition and it changed
-        if (stableCondition !== null && stableCondition !== this.lastCondition) {
-            console.log(`🌱 ✅ STABLE CHANGE: ${this.lastCondition} → ${stableCondition} (ESP32: ${this.originalCondition})`);
-            this.lastCondition = stableCondition;
+        // ✅ PLAY BUTTON LOGIC - Only act on condition changes
+        if (currentCondition !== this.lastCondition) {
+            console.log(`🌱 ✅ CONDITION CHANGE: ${this.lastCondition} → ${currentCondition}`);
             
-            // ✅ SIMPLE LOGIC: active = show creature/synth
-            const shouldBeActive = this.isActiveCondition(stableCondition);
+            const shouldPlay = (currentCondition === 'humid' || currentCondition === 'wet');
             
-            if (shouldBeActive && !this.isActive) {
-                console.log(`🌱🎵 ✅ ACTIVATING - soil is ${this.originalCondition}`);
-                this.activateResponseOnce();
-            } else if (!shouldBeActive && this.isActive) {
-                console.log(`🌱🔇 ❌ DEACTIVATING - soil is ${this.originalCondition}`);
-                this.deactivateResponseOnce();
-            }
-        } else if (stableCondition === null) {
-            // Show what we're waiting for with original conditions
-            const recentOriginal = this.conditionHistory.slice(-2).map(normalized => 
-                normalized === 'active' ? `${this.originalCondition}(→active)` : normalized
-            );
-            console.log(`🌱 ⏳ Stabilizing: [${recentOriginal.join(' → ')}] (need ${this.conditionStabilityCount} consistent)`);
-        }
-        // ✅ If stable condition hasn't changed, do NOTHING
-    }
-    
-    // ✅ NORMALIZE CONDITIONS: Group humid/wet together for stability
-    determineRawCondition(data) {
-        // ✅ Get the raw condition from ESP32
-        let rawCondition = null;
-        
-        if (data.soil_condition) {
-            rawCondition = data.soil_condition;
-            console.log(`🌱 ESP32 says: ${rawCondition}`);
-        } else if (data.moisture_app_value !== undefined) {
-            // Fallback to app value
-            const value = data.moisture_app_value;
-            console.log(`🌱 Using app value: ${value}`);
-            
-            if (value <= 0.4) {
-                rawCondition = 'dry';
-            } else if (value <= 0.7) {
-                rawCondition = 'humid';
+            if (shouldPlay && !this.isPlaying) {
+                // ✅ "CLICK" PLAY BUTTON - Start everything
+                console.log('🌱▶️ CLICKING PLAY BUTTON (humid/wet detected)');
+                this.clickPlayButton();
+            } else if (!shouldPlay && this.isPlaying) {
+                // ✅ "CLICK" STOP BUTTON - Stop everything
+                console.log('🌱⏹️ CLICKING STOP BUTTON (dry detected)');
+                this.clickStopButton();
             } else {
-                rawCondition = 'wet';
+                // ✅ No change needed
+                console.log(`🌱➡️ No change needed (already ${this.isPlaying ? 'playing' : 'stopped'})`);
             }
-        }
-        
-        // ✅ NORMALIZE for stability: humid/wet both become "active"
-        if (rawCondition === 'humid' || rawCondition === 'wet') {
-            return 'active';  // Same state for stability checking
-        } else if (rawCondition === 'dry') {
-            return 'inactive';
-        }
-        
-        return null;
-    }
-    
-    // ✅ KEEP ORIGINAL: Store the actual ESP32 condition for logging
-    storeOriginalCondition(data) {
-        if (data.soil_condition) {
-            this.originalCondition = data.soil_condition;
-        } else if (data.moisture_app_value !== undefined) {
-            const value = data.moisture_app_value;
-            if (value <= 0.4) {
-                this.originalCondition = 'dry';
-            } else if (value <= 0.7) {
-                this.originalCondition = 'humid';
-            } else {
-                this.originalCondition = 'wet';
-            }
-        }
-    }
-    
-    // ✅ SIMPLE: Check if condition should activate creature/synth
-    isActiveCondition(condition) {
-        return condition === 'active';  // Now only checking normalized state
-    }
-    
-    // ✅ IMPROVED: Stable condition checking with better logging
-    getStableCondition(normalizedCondition, moistureValue = null) {
-        if (normalizedCondition === null) return null;
-        
-        // Add to history
-        this.conditionHistory.push(normalizedCondition);
-        
-        // Keep only recent history
-        if (this.conditionHistory.length > this.maxConditionHistory) {
-            this.conditionHistory.shift();
-        }
-        
-        // Check if we have enough readings
-        if (this.conditionHistory.length < this.conditionStabilityCount) {
-            console.log(`🌱 ⏳ Stability: ${this.conditionHistory.length}/${this.conditionStabilityCount} (${this.originalCondition} → ${normalizedCondition})`);
-            return null;
-        }
-        
-        // Check if last N readings are consistent
-        const recentReadings = this.conditionHistory.slice(-this.conditionStabilityCount);
-        const isConsistent = recentReadings.every(reading => reading === recentReadings[0]);
-        
-        if (isConsistent) {
-            const valueStr = moistureValue !== null ? moistureValue.toFixed(3) : 'N/A';
-            const activeName = recentReadings[0] === 'active' ? 'ACTIVE' : 'INACTIVE';
-            console.log(`🌱 ✅ STABLE: ${recentReadings[0]} (ESP32: ${this.originalCondition}, value: ${valueStr}) → ${activeName}`);
-            return recentReadings[0];
+            
+            this.lastCondition = currentCondition;
         } else {
-            console.log(`🌱 ⏳ Stabilizing: [${recentReadings.join(' → ')}] (ESP32: ${this.originalCondition})`);
-            return null;
+            // ✅ Same condition - do nothing (no spam)
+            console.log(`🌱➡️ Same condition (${currentCondition}) - no action needed`);
         }
     }
     
-    // ✅ SHOW BACKGROUND ONLY ONCE
-    showBackgroundOnce() {
-        if (this.backgroundShown) return; // Already shown
-        
-        if (this.frameBackground) {
-            this.frameBackground.classList.add('soil-background');
-            this.backgroundShown = true;
-            console.log('🌱 ✅ Background shown (ONCE)');
+    // ✅ SIMPLE: Get condition from ESP32 data
+    getCurrentCondition(data) {
+        if (data.soil_condition) {
+            return data.soil_condition; // "dry", "humid", "wet"
+        } else if (data.moisture_app_value !== undefined) {
+            // Fallback
+            const value = data.moisture_app_value;
+            if (value <= 0.4) {
+                return 'dry';
+            } else if (value <= 0.7) {
+                return 'humid';
+            } else {
+                return 'wet';
+            }
         }
+        return 'unknown';
     }
     
-    // ✅ HIDE BACKGROUND ONLY ONCE  
-    hideBackgroundOnce() {
-        if (!this.backgroundShown) return; // Already hidden
-        
-        if (this.frameBackground) {
-            this.frameBackground.classList.remove('soil-background');
-            this.backgroundShown = false;
-            console.log('🌱 ❌ Background hidden (ONCE)');
-        }
-    }
-    
-    // ✅ ACTIVATE RESPONSE ONLY ONCE
-    activateResponseOnce() {
-        if (this.isActive) return; // Already active
-        
-        this.isActive = true;
-        
-        // Show creature once
-        this.showCreatureOnce();
-        
-        // Start audio once
-        this.startAudioOnce();
-    }
-    
-    // ✅ DEACTIVATE RESPONSE ONLY ONCE
-    deactivateResponseOnce() {
-        if (!this.isActive) return; // Already inactive
-        
-        this.isActive = false;
-        
-        // Hide creature once
-        this.hideCreatureOnce();
-        
-        // Stop audio once
-        this.stopAudioOnce();
-    }
-    
-    // ✅ SHOW CREATURE ONLY ONCE
-    showCreatureOnce() {
-        if (this.creatureShown) return; // Already shown
-        
-        if (this.soilCreature) {
-            this.soilCreature.classList.add('active');
-            this.soilCreature.style.display = 'block';
-            this.creatureShown = true;
-            console.log('🌱🦎 ✅ Creature shown (ONCE)');
-        }
-    }
-    
-    // ✅ HIDE CREATURE ONLY ONCE
-    hideCreatureOnce() {
-        if (!this.creatureShown) return; // Already hidden
-        
-        if (this.soilCreature) {
-            this.soilCreature.classList.remove('active');
-            this.soilCreature.style.display = 'none';
-            this.creatureShown = false;
-            console.log('🌱🦎 ❌ Creature hidden (ONCE)');
-        }
-    }
-    
-    // ✅ START AUDIO ONLY ONCE - kicks off the pattern and lets it loop
-    async startAudioOnce() {
-        if (this.audioPlaying) {
-            // ✅ Already playing - don't restart, just let it continue
-            console.log('🌱🎵 Audio already playing - continuing pattern');
+    // ✅ "CLICK" PLAY BUTTON - Start creature + synth
+    clickPlayButton() {
+        if (this.isPlaying) {
+            console.log('🌱▶️ Already playing - ignoring click');
             return;
         }
         
-        if (!this.synth) return;
+        this.isPlaying = true;
+        console.log('🌱▶️ ✅ PLAY BUTTON CLICKED - Starting everything');
+        
+        // Show creature
+        this.showCreature();
+        
+        // Start synth
+        this.startSynth();
+    }
+    
+    // ✅ "CLICK" STOP BUTTON - Stop creature + synth
+    clickStopButton() {
+        if (!this.isPlaying) {
+            console.log('🌱⏹️ Already stopped - ignoring click');
+            return;
+        }
+        
+        this.isPlaying = false;
+        console.log('🌱⏹️ ✅ STOP BUTTON CLICKED - Stopping everything');
+        
+        // Hide creature
+        this.hideCreature();
+        
+        // Stop synth
+        this.stopSynth();
+    }
+    
+    // ✅ SHOW CREATURE
+    showCreature() {
+        if (!this.soilCreature || this.creatureShown) return;
+        
+        this.soilCreature.classList.add('active');
+        this.soilCreature.style.display = 'block';
+        this.creatureShown = true;
+        console.log('🌱🦎 ✅ Creature shown');
+    }
+    
+    // ✅ HIDE CREATURE
+    hideCreature() {
+        if (!this.soilCreature || !this.creatureShown) return;
+        
+        this.soilCreature.classList.remove('active');
+        this.soilCreature.style.display = 'none';
+        this.creatureShown = false;
+        console.log('🌱🦎 ❌ Creature hidden');
+    }
+    
+    // ✅ START SYNTH PATTERN
+    async startSynth() {
+        if (this.audioPlaying) return; // Already playing
+        
+        if (!this.synth) {
+            console.log('🌱🎵 ❌ No synth available');
+            return;
+        }
         
         if (Tone.context.state !== 'running') {
             await Tone.start();
         }
         
         this.audioPlaying = true;
-        console.log('🌱🎵 ✅ Audio pattern STARTED - will loop randomly');
+        console.log('🌱🎵 ✅ Synth pattern started');
         
-        // ✅ Start the autonomous looping pattern
-        this.startRandomPattern();
+        // Start the autonomous pattern
+        this.playRandomSound();
+        this.scheduleNextSound();
     }
     
-    // ✅ STOP AUDIO ONLY ONCE
-    stopAudioOnce() {
+    // ✅ STOP SYNTH PATTERN
+    stopSynth() {
         if (!this.audioPlaying) return; // Already stopped
         
         this.audioPlaying = false;
-        console.log('🌱🔇 ❌ Audio pattern STOPPED');
+        console.log('🌱🎵 ❌ Synth pattern stopped');
         
         // Stop all scheduled events
         Tone.Transport.cancel();
@@ -355,57 +268,87 @@ class SoilHandler {
         if (this.synth) {
             this.synth.releaseAll();
         }
-        
-        // The audioPlaying flag will stop the recursive pattern
     }
     
-    // ✅ NEW: Start autonomous random pattern that loops until stopped
-    startRandomPattern() {
-        if (!this.audioPlaying) {
-            console.log('🌱🎵 ❌ Cannot start pattern - audio not active');
-            return;
+    // ✅ AUTONOMOUS SOUND PATTERN
+    playRandomSound() {
+        if (!this.audioPlaying) return;
+        
+        if (Math.random() > 0.6) {
+            this.playRandomChord();
+        } else {
+            this.playRandomNote();
         }
-        
-        console.log('🌱🎵 🎹 Starting autonomous music pattern');
-        
-        // Play initial sound immediately
-        this.playRandomChord();
-        
-        // Start the self-sustaining loop
-        this.scheduleNextRandomSound();
     }
     
-    // ✅ FIXED: Self-sustaining random note scheduler with better debugging
-    scheduleNextRandomSound() {
-        if (!this.audioPlaying) {
-            console.log('🌱🎵 ⏹️ Pattern stopped - audio inactive');
-            return;
-        }
+    scheduleNextSound() {
+        if (!this.audioPlaying) return;
         
-        // Random delay between 2-6 seconds (made shorter for testing)
-        const nextSoundDelay = Math.random() * 4000 + 2000;
-        
-        console.log(`🌱🎵 ⏰ Next sound in ${(nextSoundDelay/1000).toFixed(1)}s`);
+        // Random delay 2-6 seconds
+        const delay = Math.random() * 4000 + 2000;
         
         setTimeout(() => {
-            if (!this.audioPlaying) {
-                console.log('🌱🎵 ⏹️ Pattern stopped during delay');
-                return;
+            if (this.audioPlaying) {
+                this.playRandomSound();
+                this.scheduleNextSound(); // Continue the pattern
             }
-            
-            // Play random sound (chord or single note)
-            if (Math.random() > 0.6) {
-                console.log('🌱🎵 🎹 Playing random chord...');
-                this.playRandomChord();
-            } else {
-                console.log('🌱🎵 🎵 Playing random note...');
-                this.playRandomNote();
+        }, delay);
+    }
+    
+    playRandomChord() {
+        if (!this.synth || !this.audioPlaying) return;
+        
+        // ✅ More varied chord sizes: 1-4 notes for more variety
+        const chordSize = Math.floor(Math.random() * 4) + 1; // 1, 2, 3, or 4 notes
+        const chord = [];
+        
+        for (let i = 0; i < chordSize; i++) {
+            const note = this.melancholicScale[Math.floor(Math.random() * this.melancholicScale.length)];
+            if (!chord.includes(note)) {
+                chord.push(note);
             }
-            
-            // Schedule the next sound (recursive loop)
-            this.scheduleNextRandomSound();
-            
-        }, nextSoundDelay);
+        }
+        
+        // ✅ Varied durations for chords too
+        const durations = ['16n', '8n', '4n'];
+        const duration = durations[Math.floor(Math.random() * durations.length)];
+        
+        console.log(`🌱🎵 🎹 Playing ${chordSize}-note chord: ${chord.join(' + ')} (${duration})`);
+        this.synth.triggerAttackRelease(chord, duration);
+    }
+    
+    playRandomNote() {
+        if (!this.synth || !this.audioPlaying) return;
+        
+        const note = this.melancholicScale[Math.floor(Math.random() * this.melancholicScale.length)];
+        
+        // ✅ More varied durations: 16n, 8n, or 4n for rhythmic variety
+        const durations = ['16n', '8n', '4n'];
+        const duration = durations[Math.floor(Math.random() * durations.length)];
+        
+        console.log(`🌱🎵 🎵 Playing note: ${note} (${duration})`);
+        this.synth.triggerAttackRelease(note, duration);
+    }
+    
+    // ✅ BACKGROUND MANAGEMENT (unchanged)
+    showBackgroundOnce() {
+        if (this.backgroundShown) return;
+        
+        if (this.frameBackground) {
+            this.frameBackground.classList.add('soil-background');
+            this.backgroundShown = true;
+            console.log('🌱 ✅ Background shown');
+        }
+    }
+    
+    hideBackgroundOnce() {
+        if (!this.backgroundShown) return;
+        
+        if (this.frameBackground) {
+            this.frameBackground.classList.remove('soil-background');
+            this.backgroundShown = false;
+            console.log('🌱 ❌ Background hidden');
+        }
     }
     
     startTimeoutChecker() {
@@ -421,69 +364,26 @@ class SoilHandler {
     }
     
     handleSoilDisconnect() {
-        if (!this.isConnected) return; // Already disconnected
+        if (!this.isConnected) return;
         
         console.log('🌱❌ ESP32 DISCONNECTED - cleaning up');
         
-        // Reset all states
+        // Reset states
         this.isConnected = false;
         this.lastDataTime = 0;
         this.lastCondition = null;
-        this.originalCondition = null;  // ✅ Reset original condition too
         
-        // ✅ Reset condition history for clean slate
-        this.conditionHistory = [];
-        
-        // Hide everything once
+        // Stop everything
         this.hideBackgroundOnce();
-        this.deactivateResponseOnce();
-    }
-    
-    playRandomChord() {
-        if (!this.synth) {
-            console.log('🌱🎵 ❌ No synth available');
-            return;
+        if (this.isPlaying) {
+            this.clickStopButton();
         }
-        if (!this.audioPlaying) {
-            console.log('🌱🎵 ❌ Audio not playing, skipping chord');
-            return;
-        }
-        
-        const chordSize = Math.random() > 0.5 ? 2 : 3;
-        const chord = [];
-        
-        for (let i = 0; i < chordSize; i++) {
-            const note = this.melancholicScale[Math.floor(Math.random() * this.melancholicScale.length)];
-            if (!chord.includes(note)) {
-                chord.push(note);
-            }
-        }
-        
-        console.log('🌱🎵 🎹 Playing chord:', chord.join(' + '));
-        this.synth.triggerAttackRelease(chord, '4n');
-    }
-    
-    playRandomNote() {
-        if (!this.synth) {
-            console.log('🌱🎵 ❌ No synth available');
-            return;
-        }
-        if (!this.audioPlaying) {
-            console.log('🌱🎵 ❌ Audio not playing, skipping note');
-            return;
-        }
-        
-        const note = this.melancholicScale[Math.floor(Math.random() * this.melancholicScale.length)];
-        const duration = Math.random() > 0.5 ? '2n' : '4n';
-        
-        console.log(`🌱🎵 🎵 Playing note: ${note} (${duration})`);
-        this.synth.triggerAttackRelease(note, duration);
     }
 }
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🌱 Starting TRULY STABLE Soil Handler...');
+    console.log('🌱 Starting PLAY BUTTON Soil Handler...');
     window.soilHandler = new SoilHandler();
 });
 
