@@ -131,42 +131,114 @@ class SoilHandler {
             this.showBackgroundOnce();
         }
         
-        // ✅ DATA CONDITION - Only process if changed
-        const condition = this.determineCondition(data);
+        // ✅ STABLE CONDITION CHECKING - prevent flickering
+        const rawCondition = this.determineRawCondition(data);
+        const stableCondition = this.getStableCondition(rawCondition);
         
-        if (condition !== this.lastCondition) {
-            console.log(`🌱 Condition changed: ${this.lastCondition} → ${condition}`);
-            this.lastCondition = condition;
+        // Only process if the STABLE condition actually changed
+        if (stableCondition !== null && stableCondition !== this.lastCondition) {
+            console.log(`🌱 STABLE condition changed: ${this.lastCondition} → ${stableCondition}`);
+            this.lastCondition = stableCondition;
             
-            // ✅ RESPONSE STATE - Only change when condition actually changes
-            if (condition === 'humid' || condition === 'wet') {
+            // ✅ RESPONSE STATE - Only change when stable condition changes
+            if (stableCondition === 'humid' || stableCondition === 'wet') {
                 if (!this.isActive) {
-                    console.log('🌱🎵 ACTIVATING response (data in range)');
+                    console.log('🌱🎵 ACTIVATING response (stable data in range)');
                     this.activateResponseOnce();
                 }
             } else {
                 if (this.isActive) {
-                    console.log('🌱🔇 DEACTIVATING response (data out of range)');
+                    console.log('🌱🔇 DEACTIVATING response (stable data out of range)');
                     this.deactivateResponseOnce();
                 }
             }
+        } else if (stableCondition === null) {
+            // Still stabilizing - don't make any changes
+            console.log(`🌱 Condition stabilizing... (${this.conditionHistory.length}/${this.conditionStabilityCount})`);
         }
-        // ✅ If condition hasn't changed, do NOTHING (no retriggering)
+        // ✅ If stable condition hasn't changed, do NOTHING (no retriggering)
     }
     
-    determineCondition(data) {
+    // ✅ IMPROVED: Raw condition with hysteresis to prevent oscillation
+    determineRawCondition(data) {
+        let value = null;
+        
+        // Get the moisture value
         if (data.soil_condition) {
+            // If ESP32 provides explicit condition, trust it
             return data.soil_condition;
         } else if (data.moisture_app_value !== undefined) {
-            if (data.moisture_app_value <= 0.4) {
+            value = data.moisture_app_value;
+        } else {
+            return null;
+        }
+        
+        // ✅ HYSTERESIS: Different thresholds based on current state to prevent flicker
+        const currentCondition = this.lastCondition;
+        
+        if (currentCondition === 'dry') {
+            // From dry, need higher threshold to become humid
+            if (value >= this.thresholds.dryToHumid) {
+                return value >= this.thresholds.humidToWet ? 'wet' : 'humid';
+            } else {
                 return 'dry';
-            } else if (data.moisture_app_value <= 0.7) {
+            }
+        } else if (currentCondition === 'humid') {
+            // From humid, need lower threshold to become dry, higher to become wet
+            if (value <= this.thresholds.humidToDry) {
+                return 'dry';
+            } else if (value >= this.thresholds.humidToWet) {
+                return 'wet';
+            } else {
+                return 'humid';
+            }
+        } else if (currentCondition === 'wet') {
+            // From wet, need lower threshold to become humid
+            if (value <= this.thresholds.wetToHumid) {
+                return value <= this.thresholds.humidToDry ? 'dry' : 'humid';
+            } else {
+                return 'wet';
+            }
+        } else {
+            // First reading or null condition - use simple thresholds
+            if (value <= 0.4) {
+                return 'dry';
+            } else if (value <= 0.7) {
                 return 'humid';
             } else {
                 return 'wet';
             }
         }
-        return null;
+    }
+    
+    // ✅ NEW: Stable condition checking - requires multiple consistent readings
+    getStableCondition(rawCondition) {
+        if (rawCondition === null) return null;
+        
+        // Add to history
+        this.conditionHistory.push(rawCondition);
+        
+        // Keep only recent history
+        if (this.conditionHistory.length > this.maxConditionHistory) {
+            this.conditionHistory.shift();
+        }
+        
+        // Check if we have enough readings
+        if (this.conditionHistory.length < this.conditionStabilityCount) {
+            return null; // Not enough data yet
+        }
+        
+        // Check if last N readings are consistent
+        const recentReadings = this.conditionHistory.slice(-this.conditionStabilityCount);
+        const isConsistent = recentReadings.every(reading => reading === recentReadings[0]);
+        
+        if (isConsistent) {
+            console.log(`🌱 Condition STABLE: ${recentReadings[0]} (${this.conditionStabilityCount} consistent readings)`);
+            return recentReadings[0];
+        } else {
+            console.log(`🌱 Condition unstable: [${recentReadings.join(', ')}] - waiting for consistency`);
+            return null; // Still fluctuating
+        }
     }
     
     // ✅ SHOW BACKGROUND ONLY ONCE
@@ -342,6 +414,9 @@ class SoilHandler {
         this.isConnected = false;
         this.lastDataTime = 0;
         this.lastCondition = null;
+        
+        // ✅ Reset condition history for clean slate
+        this.conditionHistory = [];
         
         // Hide everything once
         this.hideBackgroundOnce();
