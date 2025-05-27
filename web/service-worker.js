@@ -1,5 +1,5 @@
 // service-worker.js
-const CACHE_NAME = 'CreaTune-cache-v6'; // Incremented cache version
+const CACHE_NAME = 'CreaTune-cache-v7'; // Incremented cache version
 const urlsToCache = [
   './', // Essential for the root
   './index.html',
@@ -9,20 +9,20 @@ const urlsToCache = [
   // Core scripts
   './js/client/websocket-client.js',
   './js/creatones/soil.js',
-  // './js/creatones/light.js', // Uncomment if this file exists
-  // './js/creatones/creature-hidder.js', // Uncomment if this file exists
-  './js/frame/frame-slider.js',
+  // './js/creatones/light.js', // Uncomment if this file exists and is needed offline
+  // './js/creatones/creature-hidder.js', // Uncomment if this file exists and is needed offline
+  './js/other/frame-slider.js', // Corrected path
   './js/other/Tone.js', // Caching local Tone.js as used in index.html
 
   // Images
-  './images/creature.png', // From your file tree
+  './images/creature.png',
   './images/soil-background.jpg',
 
   // Sprites (adjust paths if these specific files exist)
   './sprites/creatures/soil-creature.png',
   // './sprites/backgrounds/soil-background.png', // Example: if you have this file
-  // './sprites/creatures/light-creature.png', // Uncomment if this file exists
-  // './sprites/creatures/idle-creature.png', // Uncomment if this file exists
+  // './sprites/creatures/light-creature.png', // Uncomment if this file exists and is needed offline
+  // './sprites/creatures/idle-creature.png', // Uncomment if this file exists and is needed offline
 
   // Icons
   './icons/icon-192x192.png',
@@ -31,41 +31,56 @@ const urlsToCache = [
 
 // Install event - cache assets
 self.addEventListener('install', event => {
-  console.log('🔧 Service Worker installing...');
+  console.log(`🔧 Service Worker installing: ${CACHE_NAME}`);
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('📦 CreaTune cache opened');
-        return cache.addAll(urlsToCache);
+        console.log(`📦 Cache opened: ${CACHE_NAME}`);
+        return cache.addAll(urlsToCache)
+          .then(() => {
+            console.log('✅ All specified files cached successfully in:', CACHE_NAME);
+          })
+          .catch(error => {
+            console.error(`❌ Cache.addAll failed for ${CACHE_NAME}:`, error);
+            // For debugging, try to see which URL might have caused it
+            // This often happens if one of the URLs in urlsToCache returns a 404 or other error
+            urlsToCache.forEach(url => {
+              fetch(url).then(res => {
+                if (!res.ok) {
+                  console.error(`Failed to fetch for caching: ${url} - Status: ${res.status}`);
+                }
+              }).catch(fetchErr => {
+                console.error(`Network error trying to fetch for caching: ${url}`, fetchErr);
+              });
+            });
+          });
       })
       .then(() => {
-        console.log('✅ All specified files cached successfully');
         self.skipWaiting(); // Force activate immediately
       })
       .catch(error => {
-        console.error('❌ Cache install failed for one or more resources:', error);
-        // Log which URLs might have failed if possible, though addAll is atomic
-        // For debugging, you might cache URLs one by one or in smaller groups
+        // This catch is for errors in caches.open or the skipWaiting part
+        console.error(`❌ Cache install process failed for ${CACHE_NAME}:`, error);
       })
   );
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
-  console.log('⚡ Service Worker activating...');
+  console.log(`⚡ Service Worker activating: ${CACHE_NAME}`);
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheName !== CACHE_NAME) {
-            console.log('🗑️ Deleting old cache:', cacheName);
+            console.log(`🗑️ Deleting old cache: ${cacheName}`);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('✅ Service Worker activated');
-      self.clients.claim(); // Take control immediately
+      console.log(`✅ Service Worker activated: ${CACHE_NAME}`);
+      return self.clients.claim(); // Take control immediately
     })
   );
 });
@@ -126,8 +141,8 @@ self.addEventListener('fetch', event => {
           // You can add more specific fallbacks for other asset types if needed
           // For example, a placeholder image or a generic "offline" message for JS/CSS.
           // For now, it will just fail if not in cache and network fails.
-          return new Response(`Network error: ${error.message}`, {
-            status: 408,
+          return new Response(`Network error: ${error.message}. Resource not available offline.`, {
+            status: 408, // Request Timeout
             headers: { 'Content-Type': 'text/plain' },
           });
         });
