@@ -1,27 +1,32 @@
 // service-worker.js
-const CACHE_NAME = 'CreaTune-cache-v5';
+const CACHE_NAME = 'CreaTune-cache-v6'; // Incremented cache version
 const urlsToCache = [
-  './',
+  './', // Essential for the root
   './index.html',
   './styles.css',
   './manifest.json',
-  // Core scripts with correct paths
+
+  // Core scripts
   './js/client/websocket-client.js',
   './js/creatones/soil.js',
-  './js/creatones/light.js',
-  './js/creatones/creature-hidder.js',
+  // './js/creatones/light.js', // Uncomment if this file exists
+  // './js/creatones/creature-hidder.js', // Uncomment if this file exists
   './js/frame/frame-slider.js',
-  // Images and sprites
+  './js/other/Tone.js', // Caching local Tone.js as used in index.html
+
+  // Images
+  './images/creature.png', // From your file tree
   './images/soil-background.jpg',
-  './sprite/soil-background.png',
+
+  // Sprites (adjust paths if these specific files exist)
   './sprites/creatures/soil-creature.png',
-  './sprites/creatures/light-creature.png',
-  './sprites/creatures/idle-creature.png',
+  // './sprites/backgrounds/soil-background.png', // Example: if you have this file
+  // './sprites/creatures/light-creature.png', // Uncomment if this file exists
+  // './sprites/creatures/idle-creature.png', // Uncomment if this file exists
+
   // Icons
   './icons/icon-192x192.png',
-  './icons/icon-512x512.png',
-  // External CDN (Tone.js) - will be cached when fetched
-  'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js'
+  './icons/icon-512x512.png'
 ];
 
 // Install event - cache assets
@@ -34,11 +39,13 @@ self.addEventListener('install', event => {
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('✅ All files cached successfully');
+        console.log('✅ All specified files cached successfully');
         self.skipWaiting(); // Force activate immediately
       })
       .catch(error => {
-        console.error('❌ Cache install failed:', error);
+        console.error('❌ Cache install failed for one or more resources:', error);
+        // Log which URLs might have failed if possible, though addAll is atomic
+        // For debugging, you might cache URLs one by one or in smaller groups
       })
   );
 });
@@ -67,12 +74,12 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   // Skip WebSocket requests
   if (event.request.url.startsWith('ws://') || event.request.url.startsWith('wss://')) {
-    return;
+    return; // Let WebSocket requests pass through normally
   }
   
   // Skip non-GET requests
   if (event.request.method !== 'GET') {
-    return;
+    return; // Only cache GET requests
   }
   
   event.respondWith(
@@ -84,50 +91,45 @@ self.addEventListener('fetch', event => {
           return response;
         }
         
-        // Clone the request
+        // Not in cache - fetch from network
+        // console.log('🌐 Fetching from network:', event.request.url);
         const fetchRequest = event.request.clone();
         
         return fetch(fetchRequest).then(
-          response => {
-            // Check if response is valid
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
+          networkResponse => {
+            // Check if response is valid to cache
+            if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+              // Don't cache error responses or opaque responses unless intended
+              return networkResponse;
             }
 
-            // Clone the response
-            const responseToCache = response.clone();
-
+            // Clone the response to cache it
+            const responseToCache = networkResponse.clone();
+            
             caches.open(CACHE_NAME)
               .then(cache => {
                 // console.log('💾 Caching new resource:', event.request.url);
                 cache.put(event.request, responseToCache);
               });
 
-            return response;
+            return networkResponse;
           }
         ).catch(error => {
           console.error('🚫 Fetch failed for:', event.request.url, error);
           
-          // Fallback for offline use
-          if (event.request.url.endsWith('.html')) {
+          // Fallback for offline navigation to HTML pages
+          if (event.request.mode === 'navigate' && event.request.url.endsWith('.html')) {
+            console.log('↩️ Offline fallback to index.html for navigation request.');
             return caches.match('./index.html');
           }
           
-          // For missing JS files, try to serve from cache or return a helpful error
-          if (event.request.url.endsWith('.js')) {
-            return new Response(
-              `console.error('❌ Failed to load ${event.request.url} - check network');`,
-              { headers: { 'Content-Type': 'application/javascript' } }
-            );
-          }
-          
-          // For missing CSS files
-          if (event.request.url.endsWith('.css')) {
-            return new Response(
-              `/* ❌ Failed to load ${event.request.url} - check network */`,
-              { headers: { 'Content-Type': 'text/css' } }
-            );
-          }
+          // You can add more specific fallbacks for other asset types if needed
+          // For example, a placeholder image or a generic "offline" message for JS/CSS.
+          // For now, it will just fail if not in cache and network fails.
+          return new Response(`Network error: ${error.message}`, {
+            status: 408,
+            headers: { 'Content-Type': 'text/plain' },
+          });
         });
       })
   );

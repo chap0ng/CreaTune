@@ -77,6 +77,7 @@ function serveFile(filePath, res) {
       console.error(`Error reading file: ${filePath}`, err);
     } else {
       res.writeHead(200, { 'Content-Type': contentType });
+      //fs.createReadStream("index.html").pipe(res);
       res.end(content, 'utf-8');
     }
   });
