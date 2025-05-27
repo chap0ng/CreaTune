@@ -14,6 +14,11 @@ unsigned long lastSendTime = 0;
 unsigned long lastConnectionAttempt = 0;
 const unsigned long connectionRetryInterval = 3000; // 3 seconds between connection attempts
 
+// Heartbeat variables - NEW CODE
+unsigned long lastHeartbeatTime = 0;
+int heartbeatInterval = 2000; // Default, will be updated from server if needed
+bool heartbeatEnabled = true;
+
 // For smoothing sensor readings
 const int NUM_READINGS = 5;
 int moistureReadings[NUM_READINGS];
@@ -51,6 +56,9 @@ void setup() {
   webSocket.onEvent(webSocketEvent);
   webSocket.setReconnectInterval(2000);
   
+  // Enable WebSocket ping/pong for faster disconnection detection - NEW CODE
+  webSocket.enableHeartbeat(2000, 1500, 2); // ping interval, timeout, retries
+  
   // Print sensor info
   Serial.print("Sensor Name: ");
   Serial.println(SENSOR_NAME);
@@ -76,8 +84,9 @@ void loop() {
     // Only process WebSocket if WiFi is connected
     webSocket.loop();
     
-    // Send sensor data at the specified interval
     unsigned long currentTime = millis();
+    
+    // Send sensor data at the specified interval
     if (currentTime - lastSendTime >= READING_INTERVAL) {
       sendSensorData();
       lastSendTime = currentTime;
@@ -87,7 +96,32 @@ void loop() {
       delay(200);
       digitalWrite(STATUS_LED, LOW);
     }
+    
+    // NEW CODE: Send explicit heartbeat messages if needed
+    if (heartbeatEnabled && currentTime - lastHeartbeatTime >= heartbeatInterval) {
+      sendHeartbeat();
+    }
   }
+}
+
+// NEW FUNCTION: Send heartbeat message to server
+void sendHeartbeat() {
+  if (!webSocket.isConnected() || !heartbeatEnabled) {
+    return;
+  }
+  
+  StaticJsonDocument<128> doc;
+  doc["type"] = "heartbeat";
+  doc["sensorName"] = SENSOR_NAME;
+  doc["uptime"] = millis();
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  webSocket.sendTXT(jsonString);
+  
+  lastHeartbeatTime = millis();
+  // Uncomment for debugging heartbeats
+  // Serial.println("💓 Heartbeat sent");
 }
 
 // Read the moisture sensor and smooth the values
@@ -201,6 +235,9 @@ void sendSensorData() {
 }
 
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
+  // Define reusable variables outside switch
+  String jsonString;
+  
   switch (type) {
     case WStype_DISCONNECTED:
       Serial.println("WebSocket Disconnected (；一_一)");
@@ -208,13 +245,66 @@ void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
       
     case WStype_CONNECTED:
       Serial.println("WebSocket Connected! (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧");
-      // Send initial data immediately after connection
-      sendSensorData();
+      
+      // NEW CODE: Send handshake to identify this device
+      {
+        StaticJsonDocument<200> handshake;
+        handshake["type"] = "esp_handshake";
+        handshake["sensorName"] = SENSOR_NAME;
+        
+        jsonString = "";
+        serializeJson(handshake, jsonString);
+        webSocket.sendTXT(jsonString);
+        Serial.println("Handshake sent to server! (•̀ᴗ•́)و");
+      }
       break;
       
     case WStype_TEXT:
       Serial.printf("Received text: %s\n", payload);
+      
+      // NEW CODE: Parse incoming JSON for heartbeat config and handshake ack
+      {
+        StaticJsonDocument<512> doc;
+        DeserializationError error = deserializeJson(doc, payload);
+        
+        if (!error) {
+          // If this is a handshake acknowledgment with heartbeat settings
+          if (doc.containsKey("type") && strcmp(doc["type"], "handshake_ack") == 0) {
+            Serial.println("✅ Handshake acknowledged!");
+            
+            // Update heartbeat settings if provided
+            if (doc.containsKey("heartbeat_interval")) {
+              heartbeatInterval = doc["heartbeat_interval"];
+              Serial.printf("📢 Setting heartbeat interval to %d ms\n", heartbeatInterval);
+            }
+            
+            if (doc.containsKey("heartbeat_enabled")) {
+              heartbeatEnabled = doc["heartbeat_enabled"];
+              Serial.printf("📢 Heartbeat %s\n", heartbeatEnabled ? "enabled" : "disabled");
+            }
+            
+            // Send initial data after handshake is acknowledged
+            sendSensorData();
+            
+            // And an immediate heartbeat
+            sendHeartbeat();
+          }
+        } else {
+          Serial.print("❌ JSON parsing failed: ");
+          Serial.println(error.c_str());
+        }
+      }
       Serial.println("(^-^)v");
+      break;
+      
+    case WStype_PING:
+      // WebSocketsClient handles pong response automatically
+      Serial.println("Ping received");
+      break;
+      
+    case WStype_PONG:
+      // Server sent a pong response
+      Serial.println("Pong received");
       break;
       
     case WStype_ERROR:
