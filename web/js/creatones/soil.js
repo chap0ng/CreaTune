@@ -1,5 +1,5 @@
 // soil.js
-// CLEAN HANDLER - Simple audio enable button
+// FIXED - Robust disconnect cleanup + better state management
 
 class SoilHandler {
     constructor() {
@@ -22,6 +22,10 @@ class SoilHandler {
         this.frameBackground = null;
         this.soilCreature = null;
         
+        // ✅ Add cleanup tracking
+        this.cleanupTimeout = null;
+        this.lastActivityTime = 0;
+        
         // Musical scale - Higher octave for toy piano brightness
         this.melancholicScale = [
             'C4', 'D4', 'E4', 'G4', 'A4',    
@@ -38,7 +42,7 @@ class SoilHandler {
         await this.waitForDependencies();
         this.setupAudio();
         
-        // Get DOM elements
+        // Get DOM elements with better error handling
         this.frameBackground = document.querySelector('.framebackground');
         this.soilCreature = document.querySelector('.soil-creature');
         
@@ -50,8 +54,6 @@ class SoilHandler {
         }
         
         this.setupWebSocketListener();
-        
-        // ✅ Create simple audio enable button
         this.createAudioEnableButton();
         
         console.log('🌱✅ Clean Soil Handler ready');
@@ -118,13 +120,11 @@ class SoilHandler {
         }
     }
     
-    // ✅ CREATE SIMPLE AUDIO ENABLE BUTTON
     createAudioEnableButton() {
         const button = document.createElement('button');
         button.id = 'audio-enable-btn';
         button.innerHTML = '🎵';
         
-        // ✅ Subtle styling - slightly darker than background
         button.style.cssText = `
             position: fixed;
             top: 20px;
@@ -146,7 +146,6 @@ class SoilHandler {
             justify-content: center;
         `;
         
-        // ✅ Hover effect
         button.onmouseenter = () => {
             button.style.opacity = '1';
             button.style.backgroundColor = 'rgba(45, 49, 66, 0.2)';
@@ -161,7 +160,6 @@ class SoilHandler {
             }
         };
         
-        // ✅ Click to enable audio
         button.onclick = async () => {
             try {
                 console.log('🎵 Enabling audio context...');
@@ -170,14 +168,12 @@ class SoilHandler {
                 this.audioContextReady = true;
                 console.log('✅ Audio enabled - ESP32 can now control music');
                 
-                // ✅ Update button to show audio is ready
                 button.innerHTML = '✓';
                 button.style.backgroundColor = 'rgba(142, 164, 125, 0.3)';
                 button.style.color = 'var(--sage-green)';
                 button.style.opacity = '1';
                 button.style.cursor = 'default';
                 
-                // ✅ Fade out button after 2 seconds
                 setTimeout(() => {
                     button.style.opacity = '0';
                     button.style.pointerEvents = 'none';
@@ -215,22 +211,24 @@ class SoilHandler {
         
         window.creatune.on('data', (deviceType, data) => {
             if (deviceType === 'soil') {
+                this.lastActivityTime = Date.now();
                 console.log(`🌱 Raw data: ${data.soil_condition || data.moisture_app_value}`);
             }
         });
     }
     
     handleSoilConnected() {
-        if (this.isConnected) return;
-        
-        this.isConnected = true;
         console.log('🌱 ✅ SOIL CONNECTED - showing background');
+        this.isConnected = true;
+        this.lastActivityTime = Date.now();
         this.showBackground();
     }
     
     handleSoilStateChange(stateData) {
         console.log(`🌱 🔄 SOIL STATE CHANGE: ${stateData.previousState} → ${stateData.active}`);
         console.log(`🌱 📊 Raw condition: ${stateData.rawData.soil_condition || stateData.rawData.moisture_app_value}`);
+        
+        this.lastActivityTime = Date.now();
         
         if (stateData.active && !this.isPlaying) {
             console.log('🌱 ▶️  ESP32 ACTIVATION - soil is active (humid/wet)');
@@ -243,22 +241,73 @@ class SoilHandler {
         }
     }
     
+    // ✅ FIXED - Remove guard clause that blocks cleanup
     handleSoilDisconnected() {
-        if (!this.isConnected) return;
+        console.log('🌱 ❌ SOIL DISCONNECTED - forcing complete cleanup');
         
-        console.log('🌱 ❌ SOIL DISCONNECTED - cleaning up');
-        
+        // ✅ Always force complete cleanup, regardless of current state
+        this.forceCompleteCleanup();
         this.isConnected = false;
-        this.hideBackground();
-        if (this.isPlaying) {
-            this.turnOff();
+        
+        // ✅ Safety timeout - ensure cleanup happens even if something goes wrong
+        if (this.cleanupTimeout) {
+            clearTimeout(this.cleanupTimeout);
         }
+        
+        this.cleanupTimeout = setTimeout(() => {
+            console.log('🌱 🔄 Safety cleanup timeout - ensuring everything is off');
+            this.forceCompleteCleanup();
+        }, 1000);
+    }
+    
+    // ✅ NEW - Force cleanup method that always works
+    forceCompleteCleanup() {
+        console.log('🌱 🧹 FORCING COMPLETE CLEANUP');
+        
+        // Clear any existing timeouts
+        if (this.cleanupTimeout) {
+            clearTimeout(this.cleanupTimeout);
+            this.cleanupTimeout = null;
+        }
+        
+        // Force stop music regardless of state
+        if (this.audioPlaying || this.isPlaying) {
+            this.audioPlaying = false;
+            this.isPlaying = false;
+            
+            if (this.synth) {
+                try {
+                    this.synth.releaseAll();
+                    console.log('🎹 ✅ Music forcefully stopped');
+                } catch (error) {
+                    console.error('🎹 ❌ Error stopping music:', error);
+                }
+            }
+        }
+        
+        // Force hide creature regardless of state
+        if (this.soilCreature) {
+            this.soilCreature.classList.remove('active');
+            this.soilCreature.style.display = 'none';
+            this.creatureShown = false;
+            console.log('🦎 ✅ Creature forcefully hidden');
+        }
+        
+        // Force hide background regardless of state
+        if (this.frameBackground) {
+            this.frameBackground.classList.remove('soil-background');
+            this.backgroundShown = false;
+            console.log('🎨 ✅ Background forcefully hidden');
+        }
+        
+        console.log('🌱 ✅ Complete cleanup finished - everything should be OFF');
     }
     
     turnOn() {
         if (this.isPlaying) return;
         
         this.isPlaying = true;
+        this.lastActivityTime = Date.now();
         console.log('🌱 ✅ ESP32 TURNING ON - creature + music');
         
         this.showCreature();
@@ -363,6 +412,20 @@ class SoilHandler {
                 this.playNote();
             }
         }, 2000); // 2 seconds between notes
+    }
+    
+    // ✅ DEBUG: Public method to check states
+    getDebugInfo() {
+        return {
+            isConnected: this.isConnected,
+            isPlaying: this.isPlaying,
+            audioPlaying: this.audioPlaying,
+            backgroundShown: this.backgroundShown,
+            creatureShown: this.creatureShown,
+            audioContextReady: this.audioContextReady,
+            lastActivityTime: this.lastActivityTime,
+            timeSinceActivity: Date.now() - this.lastActivityTime
+        };
     }
 }
 

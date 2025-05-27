@@ -1,5 +1,5 @@
 // websocket-client.js
-// STABLE DATA FLOW - Acts as a filter/processor
+// FIXED - Better connection handling + localhost fallback
 
 class CreaTuneClient {
     constructor() {
@@ -50,16 +50,27 @@ class CreaTuneClient {
         window.creatune = this;
     }
     
+    // ✅ FIXED - Better connection handling with localhost fallback
     connect() {
         try {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}`;
+            let wsUrl;
             
-            console.log(`🔗 Connecting to WebSocket: ${wsUrl}`);
+            // ✅ Handle different connection scenarios
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                // For localhost, try the same port first
+                wsUrl = `${protocol}//localhost:${window.location.port || '8080'}`;
+                console.log(`🔗 Connecting to WebSocket (localhost): ${wsUrl}`);
+            } else {
+                // For IP addresses or other hosts, use the same host
+                wsUrl = `${protocol}//${window.location.host}`;
+                console.log(`🔗 Connecting to WebSocket (IP): ${wsUrl}`);
+            }
+            
             this.ws = new WebSocket(wsUrl);
             
             this.ws.onopen = () => {
-                console.log('✅ WebSocket connected');
+                console.log('✅ WebSocket connected successfully');
                 this.isConnected = true;
                 this.reconnectAttempts = 0;
                 this.reconnectDelay = 1000;
@@ -74,8 +85,8 @@ class CreaTuneClient {
                 }
             };
             
-            this.ws.onclose = () => {
-                console.log('🔌❌ WebSocket disconnected');
+            this.ws.onclose = (event) => {
+                console.log(`🔌❌ WebSocket disconnected (code: ${event.code}, reason: ${event.reason})`);
                 this.isConnected = false;
                 this.markAllDisconnected();
                 this.attemptReconnect();
@@ -236,12 +247,13 @@ class CreaTuneClient {
         return null;
     }
     
+    // ✅ FIXED - Better ESP disconnection handling
     handleESPDisconnection(data) {
         const deviceType = this.identifyDeviceTypeByName(data.name);
         if (deviceType && this.deviceStates[deviceType]) {
             const device = this.deviceStates[deviceType];
             
-            console.log(`🔌❌ ${deviceType.toUpperCase()} disconnected`);
+            console.log(`🔌❌ ${deviceType.toUpperCase()} disconnected (ESP event)`);
             
             // Reset device state
             device.connected = false;
@@ -249,7 +261,11 @@ class CreaTuneClient {
             device.stateHistory = [];
             device.lastStateChange = Date.now();
             
-            this.notifyCallbacks('disconnected', deviceType);
+            // ✅ Force immediate disconnect notification
+            setTimeout(() => {
+                console.log(`🔔 Sending disconnect notification for ${deviceType}`);
+                this.notifyCallbacks('disconnected', deviceType);
+            }, 100); // Small delay to ensure handler is ready
         }
     }
     
@@ -261,14 +277,25 @@ class CreaTuneClient {
         return null;
     }
     
+    // ✅ FIXED - More aggressive disconnect handling
     markAllDisconnected() {
+        console.log('🔌❌ Marking all devices as disconnected (WebSocket lost)');
+        
         Object.keys(this.deviceStates).forEach(deviceType => {
             const device = this.deviceStates[deviceType];
             if (device.connected) {
+                console.log(`🔔 Disconnecting ${deviceType}`);
+                
                 device.connected = false;
                 device.active = false;
                 device.stateHistory = [];
-                this.notifyCallbacks('disconnected', deviceType);
+                device.lastStateChange = Date.now();
+                
+                // ✅ Force immediate notification
+                setTimeout(() => {
+                    console.log(`🔔 Sending WebSocket disconnect notification for ${deviceType}`);
+                    this.notifyCallbacks('disconnected', deviceType);
+                }, 100);
             }
         });
     }
@@ -276,6 +303,7 @@ class CreaTuneClient {
     attemptReconnect() {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
             console.error('❌ Max reconnection attempts reached');
+            console.log('💡 Try refreshing the page or check your connection');
             return;
         }
         
@@ -308,13 +336,16 @@ class CreaTuneClient {
     
     notifyCallbacks(eventType, ...args) {
         if (this.callbacks[eventType]) {
-            this.callbacks[eventType].forEach(callback => {
+            console.log(`🔔 Notifying ${this.callbacks[eventType].length} callbacks for '${eventType}'`);
+            this.callbacks[eventType].forEach((callback, index) => {
                 try {
                     callback(...args);
                 } catch (error) {
-                    console.error(`❌ Error in ${eventType} callback:`, error);
+                    console.error(`❌ Error in ${eventType} callback ${index}:`, error);
                 }
             });
+        } else {
+            console.log(`🔔 No callbacks registered for '${eventType}'`);
         }
     }
     
@@ -335,6 +366,18 @@ class CreaTuneClient {
     
     getActiveDevices() {
         return Object.keys(this.deviceStates).filter(key => this.deviceStates[key].active);
+    }
+    
+    // ✅ DEBUG: Get full system state
+    getDebugInfo() {
+        return {
+            wsConnected: this.isConnected,
+            clientId: this.clientId,
+            reconnectAttempts: this.reconnectAttempts,
+            deviceStates: this.deviceStates,
+            connectedDevices: this.getConnectedDevices(),
+            activeDevices: this.getActiveDevices()
+        };
     }
 }
 
