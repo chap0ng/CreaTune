@@ -307,6 +307,96 @@ body {
 }
 
 /* ==========================================================================
+   AUDIO ENABLE BUTTON
+   ========================================================================== */
+#audio-enable-button {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  color: var(--dark-slate);
+  background-color: var(--warm-yellow); /* Initial color */
+  border: 2px solid var(--dark-slate);
+  border-radius: 5px;
+  cursor: pointer;
+  z-index: 10000;
+  transition: opacity 0.5s ease-in-out, background-color 0.3s ease, transform 0.3s ease;
+  box-shadow: 3px 3px 0px var(--dark-slate);
+}
+
+#audio-enable-button:hover {
+  background-color: #f8c96a; /* Slightly lighter yellow on hover */
+  transform: translateY(-2px);
+  box-shadow: 5px 5px 0px var(--dark-slate);
+}
+
+#audio-enable-button.audio-button-confirm {
+  background-color: var(--sage-green); /* Green for success */
+  color: var(--warm-beige);
+  border-color: var(--dark-slate);
+  box-shadow: 3px 3px 0px var(--dark-slate);
+}
+
+#audio-enable-button.audio-button-error {
+  background-color: var(--coral-red); /* Red for error */
+  color: var(--warm-beige);
+  border-color: var(--dark-slate);
+  box-shadow: 3px 3px 0px var(--dark-slate);
+}
+
+#audio-enable-button.audio-button-hidden {
+  opacity: 0;
+  pointer-events: none; /* Make it non-interactive when hidden */
+  transform: translateY(-20px);
+}
+
+
+/* ==========================================================================
+   FRAME BACKGROUND - SOIL CONNECTED STATE
+   ========================================================================== */
+
+.framebackground.soil-connected-bg {
+  /* Using the image you already have defined for .soil */
+  background-image: url('images/soil-background.jpg'); /* Make sure this path is correct */
+  background-size: cover; /* Or your preferred size */
+  background-position: center;
+  background-repeat: no-repeat;
+  /* background-color: var(--sage-green); */ /* Alternative or fallback */
+}
+
+/* Ensure default .framebackground transition applies */
+.framebackground {
+  /* ... other .framebackground styles ... */
+  transition: background-image 0.8s ease-in-out, background-color 0.8s ease-in-out; /* Ensure background-image is part of transition */
+}
+
+
+/* ==========================================================================
+   SOIL CREATURE - VISIBILITY (already mostly handled by your .active class)
+   ========================================================================== */
+
+/* Your existing .soil-creature styles already set display: none and opacity: 0 */
+/* Your existing .soil-creature.active styles set display: block and opacity: 1 */
+/* No changes needed here if .soil-creature.active is correctly applied by JS when audio plays */
+
+.soil-creature {
+  /* ... your existing .soil-creature styles ... */
+  display: none; /* Default state */
+  opacity: 0;
+  transition: opacity 0.6s ease-in-out, transform 0.4s ease-in-out; /* Ensure smooth transition */
+}
+
+.soil-creature.active {
+  display: block; /* Show when active */
+  opacity: 1;
+  /* Your existing animation for .active can remain: */
+  /* animation: soilCreatureIdle 4s ease-in-out infinite; */
+}
+
+
+/* ==========================================================================
    RESPONSIVE ADJUSTMENTS - BIGGER CREATURES
    ========================================================================== */
 

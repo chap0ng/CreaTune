@@ -1,31 +1,37 @@
 // soil.js
-// FIXED - Robust disconnect cleanup + better state management + Tone.js button debug + AudioContext resume
+// FIXED - Robust disconnect cleanup + better state management + Tone.js button debug + AudioContext resume + CSS class-based styling
 
 class SoilHandler {
     constructor() {
         this.synth = null;
         this.loop = null;
-        this.melody = null; // Example melody
+        this.melody = null;
         this.lastActivityTime = 0;
-        this.inactivityTimeout = 1500; // ms before stopping audio after soil becomes inactive
-        this.isActive = false; // Current soil activity state
-        this.isPlaying = false; // Whether sound is playing
-        this.isConnected = false; // Whether sensor is connected
-        this.audioEnabled = false; // Has the user clicked to enable audio?
-        this.debugMode = true; // Enable for console debugging
+        this.inactivityTimeout = 1500;
+        this.isActive = false;      // Sensor data indicates activity
+        this.isPlaying = false;     // Audio is currently playing
+        this.isConnected = false;   // WebSocket connection to sensor is live
+        this.audioEnabled = false;  // User has clicked the enable audio button
+        this.debugMode = true;
 
         // DOM elements
-        this.soilButton = document.getElementById('soil-button'); // For visual feedback
-        this.soilStatus = document.getElementById('soil-status');
-        this.soilVisuals = document.getElementById('soil-visuals');
-        this.audioEnableButton = null; // Will be created
+        this.soilCreatureVisual = document.querySelector('.soil-creature');
+        this.frameBackground = document.querySelector('.framebackground');
+        this.audioEnableButton = null;
 
-        if (!this.soilButton || !this.soilStatus || !this.soilVisuals) {
-            console.warn('💧 Some soil UI elements not found.');
-            // Allow to continue for core logic, UI updates will just fail gracefully
+        // Optional UI elements (ensure these IDs exist in your HTML if you use them)
+        this.soilButton = document.getElementById('soil-button');
+        this.soilStatus = document.getElementById('soil-status');
+
+
+        if (!this.soilCreatureVisual) {
+            console.warn('💧 .soil-creature element not found.');
+        }
+        if (!this.frameBackground) {
+            console.warn('💧 .framebackground element not found.');
         }
 
-        this.initAudioEnableButton(); // Create the button to enable audio
+        this.initAudioEnableButton();
         this.initializeWhenReady();
     }
 
@@ -33,12 +39,12 @@ class SoilHandler {
         const checkDependencies = () => {
             if (window.Tone && window.creatune) {
                 console.log('🌱 SoilHandler: Dependencies (Tone, window.creatune) ready.');
-                this.initTone(); // Initialize Tone.js objects, but don't start audio context yet
+                this.initTone();
                 this.setupListeners();
-                this.updateUI(this.isActive, this.isConnected); // Initial UI state
+                this.updateUI(); // Initial UI state
             } else {
                 if (this.debugMode) console.log('🌱 SoilHandler: Waiting for dependencies...');
-                setTimeout(checkDependencies, 100); // Check again shortly
+                setTimeout(checkDependencies, 100);
             }
         };
         checkDependencies();
@@ -46,58 +52,53 @@ class SoilHandler {
 
     initAudioEnableButton() {
         this.audioEnableButton = document.createElement('button');
-        this.audioEnableButton.id = 'audio-enable-button';
+        this.audioEnableButton.id = 'audio-enable-button'; // Style via CSS
         this.audioEnableButton.textContent = 'Click to Enable Audio';
-        this.audioEnableButton.style.position = 'fixed';
-        this.audioEnableButton.style.top = '10px';
-        this.audioEnableButton.style.right = '10px';
-        this.audioEnableButton.style.zIndex = '10000';
-        this.audioEnableButton.style.padding = '10px';
-        this.audioEnableButton.style.backgroundColor = '#ffc107';
-        this.audioEnableButton.style.border = 'none';
-        this.audioEnableButton.style.cursor = 'pointer';
+        // All styling will be done via CSS using its ID or classes
 
         this.audioEnableButton.addEventListener('click', async () => {
             if (!this.audioEnabled) {
                 try {
-                    await Tone.start(); // IMPORTANT: This starts/resumes the AudioContext
+                    await Tone.start();
                     this.audioEnabled = true;
                     console.log('🎵 AudioContext started by user gesture.');
-                    this.audioEnableButton.textContent = 'Audio Enabled';
-                    this.audioEnableButton.style.backgroundColor = '#28a745';
-                    // If soil is already active, try starting audio now
+                    this.audioEnableButton.textContent = 'Audio Enabled'; // Feedback
+                    this.audioEnableButton.classList.add('audio-button-confirm'); // Class for "confirmed" style
+                    
+                    // Hide the button after a short delay
+                    setTimeout(() => {
+                        this.audioEnableButton.classList.add('audio-button-hidden');
+                    }, 1000); // Hide after 1 second
+
+                    // If soil is already active and connected, try starting audio now
                     if (this.isActive && this.isConnected) {
                         this.startAudio();
                     }
+                    this.updateUI(); // Update UI in case state allows visuals now
                 } catch (e) {
                     console.error('Error starting AudioContext:', e);
                     this.audioEnableButton.textContent = 'Error Enabling Audio';
-                    this.audioEnableButton.style.backgroundColor = '#dc3545';
+                    this.audioEnableButton.classList.add('audio-button-error');
                 }
             }
         });
         document.body.appendChild(this.audioEnableButton);
     }
 
-
     initTone() {
-        if (this.synth) return; // Already initialized
-
+        if (this.synth) return;
         if (!window.Tone) {
             console.error('💧 Tone.js is not loaded. Cannot initialize synth.');
             return;
         }
         console.log('💧 Initializing Tone.js components for soil...');
-
         this.synth = new Tone.PolySynth(Tone.Synth, {
             oscillator: { type: 'sine' },
             envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.5 }
         }).toDestination();
-
         const reverb = new Tone.Reverb({ decay: 1.5, wet: 0.3 }).toDestination();
         this.synth.connect(reverb);
         this.synth.volume.value = -12;
-
         this.melody = [
             { note: 'C4', dur: '8n', time: '0:0' },
             { note: 'E4', dur: '8n', time: '0:0:2' },
@@ -117,7 +118,7 @@ class SoilHandler {
         window.creatune.on('stateChange', (deviceType, state) => {
             if (deviceType === 'soil') {
                 if (this.debugMode) console.log(`💧 Soil state change received: ${state.active ? 'ACTIVE' : 'INACTIVE'} (Raw: ${JSON.stringify(state.rawData)})`);
-                this.toggleActivity(state.active);
+                this.toggleActivity(state.active); // This will update isActive and call updateUI
             }
         });
 
@@ -125,7 +126,11 @@ class SoilHandler {
             if (deviceType === 'soil') {
                 console.log('💧 Soil sensor reported connected by client.');
                 this.isConnected = true;
-                this.updateUI(this.isActive, true);
+                // If audio was already enabled and sensor is now active, try starting audio
+                if (this.audioEnabled && this.isActive) {
+                    this.startAudio();
+                }
+                this.updateUI();
             }
         });
 
@@ -133,74 +138,77 @@ class SoilHandler {
             if (deviceType === 'soil') {
                 console.log('💧 Soil sensor reported disconnected by client.');
                 this.isConnected = false;
-                this.toggleActivity(false); // Force inactive and stop audio
-                this.updateUI(false, false);
-            }
-        });
-
-        // Optional: Listen to raw data for debugging or more granular control
-        window.creatune.on('data', (deviceType, data) => {
-            if (deviceType === 'soil') {
-                this.lastActivityTime = Date.now(); // Keep track of last data
-                if (this.debugMode) {
-                    // console.log('💧 Raw soil data packet:', data);
-                }
-                 // If it's the first data and we are connected, update UI
-                if (this.isConnected && !this.deviceStatesUpdatedFromData) {
-                    const isActiveNow = window.creatune.shouldBeActive('soil', data);
-                    this.toggleActivity(isActiveNow);
-                    this.deviceStatesUpdatedFromData = true; // Avoid rapid toggling from initial data
-                }
+                this.toggleActivity(false); // This will set isActive=false, call stopAudio(), and then updateUI()
             }
         });
         
-        // Check initial state from client if available
+        // Initial state check
         const initialState = window.creatune.getDeviceState('soil');
         if (initialState) {
             this.isConnected = initialState.connected;
-            this.isActive = initialState.active;
-            this.updateUI(this.isActive, this.isConnected);
-            if (this.debugMode) console.log(`💧 SoilHandler: Initial state from client - Connected: ${this.isConnected}, Active: ${this.isActive}`);
+            this.isActive = initialState.active; // Sensor active state
+            if (this.debugMode) console.log(`💧 SoilHandler: Initial state from client - Connected: ${this.isConnected}, SensorActive: ${this.isActive}`);
         }
-
+        this.updateUI(); // Update UI with initial state
         console.log('💧 SoilHandler: WebSocket listeners set up.');
     }
 
-    toggleActivity(active) {
-        if (this.isActive === active && this.isPlaying === active) return; // No change needed
+    toggleActivity(sensorIsActive) {
+        // sensorIsActive refers to the soil sensor's reported state
+        if (this.isActive === sensorIsActive) {
+            // If sensor state hasn't changed, but connection might have, ensure audio reflects this
+            if (sensorIsActive && this.isConnected && !this.isPlaying) this.startAudio();
+            else if ((!sensorIsActive || !this.isConnected) && this.isPlaying) this.stopAudio();
+            this.updateUI();
+            return;
+        }
 
-        this.isActive = active;
-        if (this.debugMode) console.log(`💧 Soil activity toggled to: ${active ? 'ACTIVE ▶️' : 'INACTIVE ⏹️'}`);
+        this.isActive = sensorIsActive;
+        if (this.debugMode) console.log(`💧 Soil sensor activity toggled to: ${this.isActive ? 'ACTIVE' : 'INACTIVE'}`);
 
-        if (active && this.isConnected) {
+        if (this.isActive && this.isConnected) {
             this.startAudio();
         } else {
-            this.stopAudio(); // Stop audio if not active or not connected
+            this.stopAudio(); // Stop audio if sensor not active or not connected
         }
-        this.updateUI(active, this.isConnected);
+        // startAudio/stopAudio will set this.isPlaying and then we update UI
+        // this.updateUI() is called at the end of startAudio/stopAudio implicitly by their structure or explicitly
     }
 
-    updateUI(active, connected) {
+    updateUI() {
+        // Soil Creature Visuals: Visible if audio is playing AND sensor is connected
+        if (this.soilCreatureVisual) {
+            this.soilCreatureVisual.classList.toggle('active', this.isPlaying && this.isConnected);
+        }
+
+        // Frame Background: Apply 'soil-connected-bg' if sensor is connected
+        if (this.frameBackground) {
+            this.frameBackground.classList.toggle('soil-connected-bg', this.isConnected);
+            // If you were using the .soil class for this:
+            // this.frameBackground.classList.toggle('soil', this.isConnected);
+        }
+
+        // --- Optional: For soil-button and soil-status if they exist ---
         if (this.soilButton) {
-            this.soilButton.classList.toggle('active', active && connected);
-            this.soilButton.classList.toggle('connected', connected);
+            this.soilButton.classList.toggle('active', this.isActive && this.isConnected);
+            this.soilButton.classList.toggle('connected', this.isConnected);
         }
         if (this.soilStatus) {
-            if (!connected) {
+            if (!this.isConnected) {
                 this.soilStatus.textContent = 'Soil: Disconnected';
-                this.soilStatus.className = 'status disconnected';
-            } else if (active) {
+                // this.soilStatus.className = 'status disconnected'; // Use classList.add/remove
+            } else if (this.isActive) {
                 this.soilStatus.textContent = 'Soil: Active';
-                this.soilStatus.className = 'status active';
+                // this.soilStatus.className = 'status active';
             } else {
                 this.soilStatus.textContent = 'Soil: Inactive';
-                this.soilStatus.className = 'status inactive';
+                // this.soilStatus.className = 'status inactive';
             }
         }
-        if (this.soilVisuals) {
-            this.soilVisuals.classList.toggle('active', active && connected);
-            this.soilVisuals.classList.toggle('connected', connected);
-            if (this.debugMode) console.log(`💧 SoilHandler UI Update: Visuals active: ${active && connected}, connected: ${connected}`);
+        // --- End Optional ---
+
+        if (this.debugMode) {
+            console.log(`💧 UI Update: isConnected=${this.isConnected}, sensorIsActive=${this.isActive}, audioIsPlaying=${this.isPlaying}, creatureActive=${this.soilCreatureVisual ? this.soilCreatureVisual.classList.contains('active') : 'N/A'}, bgSoilConnected=${this.frameBackground ? this.frameBackground.classList.contains('soil-connected-bg') : 'N/A'}`);
         }
     }
 
@@ -211,58 +219,67 @@ class SoilHandler {
         }
         if (!this.synth) {
             console.error('💧 Synth not initialized. Cannot start audio.');
-            this.initTone(); // Try to init again
+            this.initTone();
             if (!this.synth) return;
         }
-        if (this.isPlaying) return; // Already playing
-
-        console.log('💧 Attempting to start soil audio...');
-        Tone.Transport.bpm.value = 100; // Slower tempo
-
-        if (this.loop) {
-            this.loop.dispose(); // Dispose of old loop if any
+        if (this.isPlaying) {
+            this.updateUI(); // Ensure UI is consistent if already playing
+            return;
+        }
+        if (!this.isConnected || !this.isActive) { // Don't start if not connected or sensor not active
+            if (this.debugMode) console.log('💧 Conditions not met to start audio (not connected or sensor not active).');
+            this.stopAudio(); // Ensure it's stopped if somehow isPlaying was true
+            return;
         }
 
+        console.log('💧 Attempting to start soil audio...');
+        Tone.Transport.bpm.value = 100;
+
+        if (this.loop) {
+            this.loop.dispose();
+        }
         this.loop = new Tone.Part((time, value) => {
             this.synth.triggerAttackRelease(value.note, value.dur, time);
         }, this.melody).start(0);
-        this.loop.loop = true; // Ensure the part loops
-        this.loop.loopEnd = '1m'; // Loop the whole measure
+        this.loop.loop = true;
+        this.loop.loopEnd = '1m';
 
         Tone.Transport.start();
         this.isPlaying = true;
         console.log('💧 Soil audio started.');
+        this.updateUI(); // Update UI after audio state changes
     }
 
     stopAudio() {
-        if (!this.isPlaying) return;
+        if (!this.isPlaying && !this.loop) { // If already stopped or loop doesn't exist
+             this.isPlaying = false; // Ensure state is correct
+             this.updateUI();
+             return;
+        }
         console.log('💧 Attempting to stop soil audio...');
         if (this.loop) {
-            this.loop.stop(0); // Stop the part
+            this.loop.stop(0);
             this.loop.dispose();
             this.loop = null;
         }
-        // Tone.Transport.stop(); // Stop transport only if nothing else uses it.
-        // For individual sounds, just stopping the part/loop is often enough.
-        // If you want to ensure all sounds stop, then Tone.Transport.stop() is okay.
-        // Let's be safe and stop it if this is the only sound source.
+        // Only stop transport if it's actually running and perhaps if no other parts are using it.
+        // For now, assume this is the main controller for soil sound.
         if (Tone.Transport.state === 'started') {
-             Tone.Transport.stop();
+            // Tone.Transport.stop(); // Consider if other sounds might be using the global transport
         }
-
         this.isPlaying = false;
         console.log('💧 Soil audio stopped.');
+        this.updateUI(); // Update UI after audio state changes
     }
 }
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🌱 DOMContentLoaded: Preparing Soil Handler...');
-    // Ensure window.creatune is available or wait for it
     const ensureCreatuneAndTone = () => {
         if (window.creatune && window.Tone) {
             console.log('🌱 Dependencies met. Initializing Soil Handler instance.');
-            if (!window.soilHandlerInstance) { // Prevent multiple initializations
+            if (!window.soilHandlerInstance) {
                 window.soilHandlerInstance = new SoilHandler();
             }
         } else {
