@@ -115,6 +115,17 @@ class CreaTuneClient {
                 // }
                 break;
 
+            case 'ping':
+                // Respond to server heartbeat with pong
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'pong',
+                        timestamp: data.timestamp,
+                        response_time: Date.now()
+                    }));
+                }
+                break;
+
             case 'sensor_data':
                 this.processSensorData(data);
                 break;
@@ -123,6 +134,38 @@ class CreaTuneClient {
                 console.log('📡 ESP Status received:', data.devices);
                 // Here you could update the 'connected' state of devices based on server truth
                 // For now, relying on data flow or explicit esp_disconnected messages.
+                break;
+
+            case 'esp_status_list': // Updated status list format
+                console.log('📡 ESP Status List received:', data.devices);
+                if (Array.isArray(data.devices)) {
+                    data.devices.forEach(device => {
+                        const deviceType = this.identifyDeviceTypeByName(device.name);
+                        if (deviceType && this.deviceStates[deviceType]) {
+                            // Update connection state based on server's knowledge
+                            if (device.connected && !this.deviceStates[deviceType].connected) {
+                                console.log(`📡 ${deviceType.toUpperCase()} marked as connected from server status.`);
+                                this.deviceStates[deviceType].connected = true;
+                                this.notifyCallbacks('connected', deviceType);
+                            } else if (!device.connected && this.deviceStates[deviceType].connected) {
+                                console.log(`🔌❌ ${deviceType.toUpperCase()} marked as disconnected from server status.`);
+                                this.deviceStates[deviceType].connected = false;
+                                this.deviceStates[deviceType].active = false;
+                                this.notifyCallbacks('disconnected', deviceType);
+                            }
+                        }
+                    });
+                }
+                break;
+
+            case 'esp_connected': // Message when a new ESP connects
+                const connectedDeviceType = this.identifyDeviceTypeByName(data.name);
+                if (connectedDeviceType && this.deviceStates[connectedDeviceType]) {
+                    console.log(`🔌✅ ${connectedDeviceType.toUpperCase()} connected to server.`);
+                    // We'll wait for actual data from the device before marking it active
+                    this.deviceStates[connectedDeviceType].connected = true;
+                    this.notifyCallbacks('connected', connectedDeviceType);
+                }
                 break;
 
             case 'esp_disconnected': // Message from server indicating an ESP has disconnected
