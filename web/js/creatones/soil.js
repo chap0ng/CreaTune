@@ -191,6 +191,12 @@ class SoilHandler {
     }
     
     setupWebSocketListener() {
+        // Ensure window.creatune is available
+        if (!window.creatune) {
+            console.error('🚨 CreaTune WebSocket client (window.creatune) not found! Cannot set up listeners.');
+            return;
+        }
+
         window.creatune.on('connected', (deviceType) => {
             if (deviceType === 'soil') {
                 this.handleSoilConnected();
@@ -204,6 +210,8 @@ class SoilHandler {
         });
         
         window.creatune.on('disconnected', (deviceType) => {
+            // ✅ Log when the event is received from websocket-client
+            console.log(`🌱 SoilHandler received 'disconnected' event for deviceType: ${deviceType}`);
             if (deviceType === 'soil') {
                 this.handleSoilDisconnected();
             }
@@ -212,7 +220,7 @@ class SoilHandler {
         window.creatune.on('data', (deviceType, data) => {
             if (deviceType === 'soil') {
                 this.lastActivityTime = Date.now();
-                console.log(`🌱 Raw data: ${data.soil_condition || data.moisture_app_value}`);
+                // console.log(`🌱 Raw data: ${data.soil_condition || data.moisture_app_value}`); // Reduced verbosity
             }
         });
     }
@@ -226,85 +234,95 @@ class SoilHandler {
     
     handleSoilStateChange(stateData) {
         console.log(`🌱 🔄 SOIL STATE CHANGE: ${stateData.previousState} → ${stateData.active}`);
-        console.log(`🌱 📊 Raw condition: ${stateData.rawData.soil_condition || stateData.rawData.moisture_app_value}`);
+        if (stateData.rawData) {
+            console.log(`🌱 📊 Raw condition: ${stateData.rawData.soil_condition || stateData.rawData.moisture_app_value}`);
+        }
         
         this.lastActivityTime = Date.now();
         
         if (stateData.active && !this.isPlaying) {
-            console.log('🌱 ▶️  ESP32 ACTIVATION - soil is active (humid/wet)');
+            console.log('🌱 ▶️  ESP32 ACTIVATION - soil is active');
             this.turnOn();
         } else if (!stateData.active && this.isPlaying) {
-            console.log('🌱 ⏹️  ESP32 DEACTIVATION - soil is inactive (dry)');
+            console.log('🌱 ⏹️  ESP32 DEACTIVATION - soil is inactive');
             this.turnOff();
         } else {
-            console.log(`🌱 ➡️  No change needed (already ${this.isPlaying ? 'ON' : 'OFF'})`);
+            // console.log(`🌱 ➡️  No change needed (already ${this.isPlaying ? 'ON' : 'OFF'})`);
         }
     }
     
-    // ✅ FIXED - Remove guard clause that blocks cleanup
     handleSoilDisconnected() {
-        console.log('🌱 ❌ SOIL DISCONNECTED - forcing complete cleanup');
+        console.log('🌱❌ SOIL DISCONNECTED event received by handler. Initiating cleanup...');
         
-        // ✅ Always force complete cleanup, regardless of current state
-        this.forceCompleteCleanup();
-        this.isConnected = false;
-        
-        // ✅ Safety timeout - ensure cleanup happens even if something goes wrong
-        if (this.cleanupTimeout) {
-            clearTimeout(this.cleanupTimeout);
-        }
-        
-        this.cleanupTimeout = setTimeout(() => {
-            console.log('🌱 🔄 Safety cleanup timeout - ensuring everything is off');
-            this.forceCompleteCleanup();
-        }, 1000);
-    }
-    
-    // ✅ NEW - Force cleanup method that always works
-    forceCompleteCleanup() {
-        console.log('🌱 🧹 FORCING COMPLETE CLEANUP');
-        
-        // Clear any existing timeouts
+        // Clear any previous safety timeout to prevent redundant or late cleanups
         if (this.cleanupTimeout) {
             clearTimeout(this.cleanupTimeout);
             this.cleanupTimeout = null;
+            console.log('🌱🧹 Cleared previous safety cleanup timeout.');
         }
+
+        // Perform immediate and primary cleanup
+        this.forceCompleteCleanup(); 
+        this.isConnected = false; // Update connection state immediately
         
-        // Force stop music regardless of state
-        if (this.audioPlaying || this.isPlaying) {
-            this.audioPlaying = false;
-            this.isPlaying = false;
-            
-            if (this.synth) {
-                try {
-                    this.synth.releaseAll();
-                    console.log('🎹 ✅ Music forcefully stopped');
-                } catch (error) {
-                    console.error('🎹 ❌ Error stopping music:', error);
-                }
+        console.log('🌱🏁 Soil disconnect handling complete in handleSoilDisconnected.');
+    }
+    
+    forceCompleteCleanup() {
+        console.log('🌱🧹 Executing forceCompleteCleanup...');
+        
+        // Stop Music
+        if (this.synth) {
+            console.log('🌱🧹 Attempting to stop music...');
+            try {
+                this.synth.releaseAll(); // Stops all notes on the synth
+                console.log('🎹 ✅ Music forcefully stopped via releaseAll()');
+            } catch (error) {
+                console.error('🎹 ❌ Error stopping music with releaseAll():', error);
             }
+        } else {
+            console.warn('🌱🧹 Synth not available (this.synth is null), cannot stop music.');
         }
+        // Always update flags regardless of synth state
+        this.audioPlaying = false;
+        this.isPlaying = false; 
+        console.log(`🌱🧹 Music flags set: audioPlaying=${this.audioPlaying}, isPlaying=${this.isPlaying}`);
         
-        // Force hide creature regardless of state
+        // Hide Creature
         if (this.soilCreature) {
+            console.log('🌱🧹 Attempting to hide creature...');
             this.soilCreature.classList.remove('active');
-            this.soilCreature.style.display = 'none';
+            this.soilCreature.style.display = 'none'; // More direct way to ensure it's hidden
             this.creatureShown = false;
-            console.log('🦎 ✅ Creature forcefully hidden');
+            console.log('🦎 ✅ Creature forcefully hidden. creatureShown set to false.');
+        } else {
+            console.warn('🌱🧹 Soil creature element (this.soilCreature) not found, cannot hide.');
+            this.creatureShown = false; // Still set flag
         }
         
-        // Force hide background regardless of state
+        // Hide Background
         if (this.frameBackground) {
+            console.log('🌱🧹 Attempting to hide background...');
             this.frameBackground.classList.remove('soil-background');
             this.backgroundShown = false;
-            console.log('🎨 ✅ Background forcefully hidden');
+            console.log('🎨 ✅ Background class removed. backgroundShown set to false.');
+        } else {
+            console.warn('🌱🧹 Frame background element (this.frameBackground) not found, cannot hide.');
+            this.backgroundShown = false; // Still set flag
         }
         
-        console.log('🌱 ✅ Complete cleanup finished - everything should be OFF');
+        // Clear any lingering playNote timeouts
+        // This requires playNote to store its timeoutId if you implement it that way.
+        // For now, relying on audioPlaying flag.
+
+        console.log('🌱✅ forceCompleteCleanup finished.');
     }
     
     turnOn() {
-        if (this.isPlaying) return;
+        if (this.isPlaying) {
+            // console.log('🌱 turnOn called but already playing.');
+            return;
+        }
         
         this.isPlaying = true;
         this.lastActivityTime = Date.now();
@@ -315,13 +333,16 @@ class SoilHandler {
     }
     
     turnOff() {
-        if (!this.isPlaying) return;
+        if (!this.isPlaying) {
+            // console.log('🌱 turnOff called but not playing.');
+            return;
+        }
         
         this.isPlaying = false;
         console.log('🌱 ❌ ESP32 TURNING OFF - creature + music');
         
         this.hideCreature();
-        this.stopMusic();
+        this.stopMusic(); // stopMusic already sets audioPlaying to false
     }
     
     showBackground() {
@@ -331,16 +352,21 @@ class SoilHandler {
             this.frameBackground.classList.add('soil-background');
             this.backgroundShown = true;
             console.log('🌱 🎨 Background shown');
+        } else {
+            console.warn('🌱 🎨 Cannot show background, frameBackground element not found.');
         }
     }
     
-    hideBackground() {
-        if (!this.backgroundShown) return;
+    hideBackground() { // This might be called by forceCompleteCleanup
+        // if (!this.backgroundShown) return; // Guard removed for forceCompleteCleanup
         
         if (this.frameBackground) {
             this.frameBackground.classList.remove('soil-background');
-            this.backgroundShown = false;
+            this.backgroundShown = false; // Ensure flag is set
             console.log('🌱 🎨 Background hidden');
+        } else {
+            console.warn('🌱 🎨 Cannot hide background, frameBackground element not found.');
+            this.backgroundShown = false; // Ensure flag is set
         }
     }
     
@@ -349,72 +375,91 @@ class SoilHandler {
         
         if (this.soilCreature) {
             this.soilCreature.classList.add('active');
-            this.soilCreature.style.display = 'block';
+            this.soilCreature.style.display = 'block'; // Ensure it's visible
             this.creatureShown = true;
             console.log('🌱 🦎 Creature shown');
+        } else {
+            console.warn('🌱 🦎 Cannot show creature, soilCreature element not found.');
         }
     }
     
-    hideCreature() {
-        if (!this.creatureShown) return;
+    hideCreature() { // This might be called by forceCompleteCleanup
+        // if (!this.creatureShown) return; // Guard removed for forceCompleteCleanup
         
         if (this.soilCreature) {
             this.soilCreature.classList.remove('active');
-            this.soilCreature.style.display = 'none';
-            this.creatureShown = false;
+            this.soilCreature.style.display = 'none'; // Ensure it's hidden
+            this.creatureShown = false; // Ensure flag is set
             console.log('🌱 🦎 Creature hidden');
+        } else {
+            console.warn('🌱 🦎 Cannot hide creature, soilCreature element not found.');
+            this.creatureShown = false; // Ensure flag is set
         }
     }
     
     async startMusic() {
-        if (this.audioPlaying) return;
-        
-        if (!this.synth) {
-            console.error('❌ No synth available');
+        if (this.audioPlaying) {
+            // console.log('🌱 startMusic called but audio already playing.');
             return;
         }
         
-        // ✅ Check if audio context is ready
-        if (!this.audioContextReady || Tone.context.state !== 'running') {
-            console.warn('⚠️  Audio context not ready - user needs to click audio button first');
+        if (!this.synth) {
+            console.error('❌ No synth available for startMusic.');
+            return;
+        }
+        
+        if (!this.audioContextReady || (Tone.context && Tone.context.state !== 'running')) {
+            console.warn('⚠️  Audio context not ready or not running. User needs to interact. Music not started.');
+            // Optionally, try to start Tone.context again here if it's just suspended
+            // try { await Tone.start(); this.audioContextReady = true; } catch(e) {}
             return;
         }
         
         this.audioPlaying = true;
         console.log('🌱 🎹 ESP32 activated music - starting toy piano');
         
-        this.playNote();
+        this.playNote(); // Start the musical pattern
     }
     
-    stopMusic() {
-        if (!this.audioPlaying) return;
-        
-        this.audioPlaying = false;
-        console.log('🌱 🎹 ESP32 deactivated music - stopping toy piano');
+    stopMusic() { // This might be called by forceCompleteCleanup or turnOff
+        // if (!this.audioPlaying) return; // Guard removed for forceCompleteCleanup
+
+        console.log('🌱 🎹 ESP32 deactivated music - stopping toy piano (called by turnOff or direct)');
+        this.audioPlaying = false; // Ensure flag is set
         
         if (this.synth) {
-            this.synth.releaseAll();
+            try {
+                this.synth.releaseAll();
+                console.log('🎹 ✅ Music stopped in stopMusic()');
+            } catch (error) {
+                console.error('🎹 ❌ Error in stopMusic():', error);
+            }
+        } else {
+            console.warn('🌱🎹 Synth not available in stopMusic()');
         }
     }
     
-    // ✅ SIMPLE MUSIC PATTERN
     playNote() {
-        if (!this.audioPlaying || !this.synth) return;
+        if (!this.audioPlaying || !this.synth) {
+            // console.log('🎹 playNote check: audioPlaying or synth false, not playing note.');
+            return;
+        }
         
         const note = this.melancholicScale[Math.floor(Math.random() * this.melancholicScale.length)];
         
-        console.log(`🎹 Playing: ${note}`);
+        // console.log(`🎹 Playing: ${note}`); // Can be verbose
         this.synth.triggerAttackRelease(note, '4n');
         
         // Schedule next note
+        // Ensure this timeout is cleared if music is stopped abruptly.
+        // For now, the this.audioPlaying flag handles this.
         setTimeout(() => {
-            if (this.audioPlaying) {
+            if (this.audioPlaying) { // Check flag again before re-calling
                 this.playNote();
             }
         }, 2000); // 2 seconds between notes
     }
     
-    // ✅ DEBUG: Public method to check states
     getDebugInfo() {
         return {
             isConnected: this.isConnected,
@@ -424,14 +469,17 @@ class SoilHandler {
             creatureShown: this.creatureShown,
             audioContextReady: this.audioContextReady,
             lastActivityTime: this.lastActivityTime,
-            timeSinceActivity: Date.now() - this.lastActivityTime
+            timeSinceActivity: this.lastActivityTime > 0 ? Date.now() - this.lastActivityTime : -1
         };
     }
 }
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🌱 Starting Clean Soil Handler...');
+    console.log('🌱 DOMContentLoaded: Starting Clean Soil Handler...');
+    // Ensure window.creatune is initialized before SoilHandler tries to use it.
+    // This assumes websocket-client.js is loaded and has run its DOMContentLoaded.
+    // If there's a race condition, SoilHandler's waitForDependencies will handle it.
     window.soilHandler = new SoilHandler();
 });
 
