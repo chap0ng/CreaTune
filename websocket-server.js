@@ -27,9 +27,6 @@ const server = http.createServer((req, res) => {
   fs.stat(filePath, (err, stats) => {
     if (err) {
       if (err.code === 'ENOENT') {
-        // If file not found, try serving index.html for SPA-like behavior (optional)
-        // For PWAs, usually specific asset paths are expected.
-        // For now, just 404.
         console.warn(`File not found: ${filePath}, URL: ${req.url}`);
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('404 Not Found');
@@ -113,7 +110,7 @@ let espIdCounter = 0;
 
 // Timeout and Ping settings
 const PING_INTERVAL_MS = 2000;  // 2 seconds (much more aggressive)
-const ESP_TIMEOUT_MS = 3000;    // 3 seconds timeout for ESPs
+const ESP_TIMEOUT_MS = 5000;    // 5 seconds timeout for ESPs (a bit more forgiving)
 const CLIENT_TIMEOUT_MS = 30000;// For web clients (longer timeout)
 
 // Enhanced heartbeat function to track connection health
@@ -272,13 +269,30 @@ function handleESP32Data(ws, data, sensorName) {
       return;
     }
     
-    // Add device_type to data before broadcasting if not present, using sensorName
+    // Add device_type to data before broadcasting if not present
     if (!data.device_type) {
-        data.device_type = sensorName.toLowerCase(); // e.g., "soil", "light"
+      // Extract device type from sensor name (ESP_SOIL -> soil)
+      if (sensorName.toLowerCase().includes('soil')) {
+        data.device_type = 'soil';
+      } else if (sensorName.toLowerCase().includes('light')) {
+        data.device_type = 'light';
+      } else if (sensorName.toLowerCase().includes('temp')) {
+        data.device_type = 'temp';
+      } else {
+        data.device_type = sensorName.toLowerCase(); // Default fallback
+      }
     }
     
-    // console.log(`📡 From ${sensorName} (ID: ${deviceInfo.id}):`, data); // Can be verbose
-    broadcastToWebClients({ type: 'sensor_data', ...data, sensor: sensorName, espId: deviceInfo.id });
+    // Debug log data received from ESP32
+    console.log(`📡 From ${sensorName}: ${JSON.stringify(data).substring(0, 100)}`);
+    
+    // Broadcast to all web clients with ALL original data preserved
+    broadcastToWebClients({ 
+      type: 'sensor_data',
+      ...data, // Preserve all original data fields
+      sensor: sensorName, 
+      espId: deviceInfo.id
+    });
   } else {
     console.warn(`⚠️ Received data from unknown or disconnected ESP: ${sensorName}. Requesting handshake.`);
     ws.send(JSON.stringify({ type: 'request_handshake', message: 'Identify yourself' }));
@@ -316,7 +330,8 @@ function broadcastToWebClients(data, excludeWs = null) {
 function sendESP32StatusToSingleClient(ws) {
   const status = [];
   espDevices.forEach((deviceInfo, sensorName) => {
-    const isActiveConnection = espConnections.has(sensorName) && espConnections.get(sensorName).readyState === WebSocket.OPEN;
+    const isActiveConnection = espConnections.has(sensorName) && 
+                               espConnections.get(sensorName).readyState === WebSocket.OPEN;
     status.push({
       name: sensorName,
       id: deviceInfo.id,
@@ -331,7 +346,8 @@ function sendESP32StatusToSingleClient(ws) {
 function broadcastESPStatusUpdate() {
   const status = [];
   espDevices.forEach((deviceInfo, sensorName) => {
-    const isActiveConnection = espConnections.has(sensorName) && espConnections.get(sensorName).readyState === WebSocket.OPEN;
+    const isActiveConnection = espConnections.has(sensorName) && 
+                               espConnections.get(sensorName).readyState === WebSocket.OPEN;
     status.push({
       name: sensorName,
       id: deviceInfo.id,
@@ -411,7 +427,6 @@ setInterval(() => {
 }, ESP_TIMEOUT_MS); // Check regularly
 
 // Status logging interval
-let activeESPCountForLog = 0; // To be updated by actual logic if needed for this log
 setInterval(() => {
   const now = Date.now();
   const totalESPInDeviceMap = espDevices.size;
@@ -422,24 +437,8 @@ setInterval(() => {
     if (client.type === 'web') webClientCount++;
   });
   
-  console.log(`📊 Status: ${connectedESPCount}/${totalESPInDeviceMap} ESP32 devices connected, ${webClientCount} web clients. Total clients in map: ${clients.size}`);
-  
-  // Log device details every 30 seconds
-  if (Math.floor(now / 1000) % 30 === 0) { // Simpler way to log every 30s
-    console.log('\n📱 ESP32 Device Status Details:');
-    if (espDevices.size === 0) {
-        console.log('  No ESP32 devices registered yet.');
-    } else {
-        espDevices.forEach((deviceInfo, sensorName) => {
-            const connection = espConnections.get(sensorName);
-            const isConnected = connection && connection.readyState === WebSocket.OPEN;
-            const timeSinceLastSeen = connection ? ((now - deviceInfo.lastSeen) / 1000).toFixed(1) + 's ago' : 'N/A';
-            console.log(`  [${deviceInfo.id}] ${sensorName} (IP: ${deviceInfo.ip || 'N/A'}): ${isConnected ? '🟢 CONNECTED' : '🔴 DISCONNECTED'}. Last seen: ${timeSinceLastSeen}. Connections: ${deviceInfo.connectionCount}`);
-        });
-    }
-    console.log('');
-  }
-}, 5000); // Log status more frequently for debugging, e.g., every 5 seconds
+  console.log(`📊 Status: ${connectedESPCount}/${totalESPInDeviceMap} ESP32 devices connected, ${webClientCount} web clients.`);
+}, 30000); // Log status every 30 seconds
 
 // Listen for server errors 
 server.on('error', (error) => {

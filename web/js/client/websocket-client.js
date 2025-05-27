@@ -76,7 +76,8 @@ class CreaTuneClient {
             this.ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    // console.log('📥 Received message:', data); // Optional: for debugging
+                    // Debug all received messages (uncomment when needed)
+                    // console.log('📥 Received message:', data);
                     this.handleMessage(data);
                 } catch (error) {
                     console.error('❌ Error parsing message:', event.data, error);
@@ -93,8 +94,6 @@ class CreaTuneClient {
             this.ws.onerror = (error) => {
                 console.error('🚫 WebSocket error:', error);
                 // onclose will usually follow an error, so reconnection is handled there
-                // If onclose doesn't fire, we might need to trigger reconnection here too.
-                // For simplicity, relying on onclose for now.
                 this.isConnected = false;
             };
 
@@ -132,8 +131,6 @@ class CreaTuneClient {
 
             case 'esp_status': // If server sends a list of currently connected ESPs
                 console.log('📡 ESP Status received:', data.devices);
-                // Here you could update the 'connected' state of devices based on server truth
-                // For now, relying on data flow or explicit esp_disconnected messages.
                 break;
 
             case 'esp_status_list': // Updated status list format
@@ -222,29 +219,41 @@ class CreaTuneClient {
                 // console.log(`⏳ ${deviceType} state change blocked - too soon.`);
             }
         }
-        this.notifyCallbacks('data', deviceType, data); // Notify raw data for logging or other uses
+        
+        // Always notify about raw data, even if state didn't change
+        this.notifyCallbacks('data', deviceType, data);
     }
 
     shouldBeActive(deviceType, data) {
         // Define activation logic per device
         switch (deviceType) {
             case 'soil':
-                if (data.soil_condition) { // From your ESP32 code
+                // Handle all possible soil data formats
+                if (data.soil_condition) { 
                     return data.soil_condition === 'humid' || data.soil_condition === 'wet';
-                } else if (data.moisture_app_value !== undefined) { // From your app logic
-                    return data.moisture_app_value > 0.4; // Example: 0-1 scale
+                } else if (data.moisture_app_value !== undefined) { 
+                    return data.moisture_app_value > 0.4; 
+                } else if (data.voltage !== undefined) {
+                    // ESP32 soil data often sends voltage
+                    return data.voltage > 0.4;
+                } else if (data.raw_value !== undefined) {
+                    // ESP32 sometimes sends raw sensor value
+                    return data.raw_value < 700; // Assuming lower values are wetter soil
                 }
-                return false; // Default for soil if no relevant data
+                return false;
+                
             case 'light':
-                if (data.lightLevel !== undefined) { // Assuming 'lightLevel' from ESP
-                    return data.lightLevel > 500; // Example threshold for "bright"
+                if (data.lightLevel !== undefined) {
+                    return data.lightLevel > 500;
                 }
                 return false;
+                
             case 'temp':
-                if (data.temperature !== undefined) { // Assuming 'temperature' from ESP
-                    return data.temperature > 25; // Example: degrees C for "warm"
+                if (data.temperature !== undefined) {
+                    return data.temperature > 25;
                 }
                 return false;
+                
             default:
                 return false;
         }
@@ -260,20 +269,33 @@ class CreaTuneClient {
     }
 
     identifyDeviceType(data) {
-        // Prioritize explicit 'sensor' or 'device_type' field from ESP data
+        // FIXED: Better detection for ESP32 soil moisture data
+        
+        // Check for explicit device_type field
         if (data.device_type && this.deviceStates[data.device_type.toLowerCase()]) {
             return data.device_type.toLowerCase();
         }
+        
+        // Check sensor name
         if (data.sensor) {
             const sensorLower = data.sensor.toLowerCase();
             if (sensorLower.includes('soil') || sensorLower.includes('moisture')) return 'soil';
             if (sensorLower.includes('light') || sensorLower.includes('lux')) return 'light';
             if (sensorLower.includes('temp')) return 'temp';
         }
-        // Fallback to checking common data fields
-        if (data.soilMoisture !== undefined || data.moisture !== undefined || data.soil_condition !== undefined || data.moisture_app_value !== undefined) return 'soil';
+        
+        // Fallback to checking specific fields from ESP32
+        if (data.soil_condition !== undefined || 
+            data.moisture_app_value !== undefined || 
+            data.moisture !== undefined ||
+            data.raw_value !== undefined || 
+            data.voltage !== undefined) {
+            return 'soil';
+        }
+        
         if (data.lightLevel !== undefined || data.lux !== undefined) return 'light';
         if (data.temperature !== undefined || data.temp !== undefined) return 'temp';
+        
         return null;
     }
     
