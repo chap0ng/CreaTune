@@ -1,23 +1,23 @@
 // websocket-client.js
-// FIXED - Better connection handling + localhost fallback
+// Enhanced WebSocket client with stable state management and robust connection handling
 
 class CreaTuneClient {
     constructor() {
         this.ws = null;
         this.isConnected = false;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 2;
+        this.maxReconnectAttempts = 5; // Increased for more resilience
         this.reconnectDelay = 1000;
         this.clientId = null;
-        
-        // ✅ STABLE STATE SYSTEM - Only tracks clean states
+
+        // Device state tracking
         this.deviceStates = {
             soil: {
                 connected: false,
-                active: false,        // Clean on/off state
+                active: false,        // Clean on/off state based on stability
                 lastRawData: null,
-                lastStateChange: 0,   // When state last changed
-                stateHistory: []      // Track recent states for stability
+                lastStateChange: 0,   // Timestamp of the last stable state change
+                stateHistory: []      // History of raw 'shouldBeActive' states
             },
             light: {
                 connected: false,
@@ -34,360 +34,343 @@ class CreaTuneClient {
                 stateHistory: []
             }
         };
-        
-        // ✅ STABILITY SETTINGS
-        this.stabilityRequiredReadings = 3;  // Need 3 consistent readings
-        this.maxHistoryLength = 5;
-        this.minStateChangeInterval = 2000;  // 2 seconds between state changes
-        
-        this.callbacks = [];
-        this.init();
+
+        // Stability settings
+        this.stabilityRequiredReadings = 3;  // How many consistent readings to confirm a state
+        this.maxHistoryLength = 5;           // Max readings to keep for stability check
+        this.minStateChangeInterval = 2000;  // Minimum ms between active/inactive state changes
+
+        this.callbacks = {}; // Changed from array to object for named event types
+        // No auto-init here, will be called by DOMContentLoaded
     }
-    
+
     init() {
-        console.log('🔌 Initializing STABLE WebSocket Client...');
+        console.log('🔌 Initializing CreaTune WebSocket Client...');
         this.connect();
-        window.creatune = this;
+        // window.creatune = this; // This will be set in the DOMContentLoaded listener
     }
-    
-    // ✅ FIXED - Better connection handling with localhost fallback
+
     connect() {
         try {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             let wsUrl;
-            
-            // ✅ Handle different connection scenarios
+
             if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                // For localhost, try the same port first
                 wsUrl = `${protocol}//localhost:${window.location.port || '8080'}`;
-                console.log(`🔗 Connecting to WebSocket (localhost): ${wsUrl}`);
+                console.log(`🔗 Attempting WebSocket connection (localhost): ${wsUrl}`);
             } else {
-                // For IP addresses or other hosts, use the same host
                 wsUrl = `${protocol}//${window.location.host}`;
-                console.log(`🔗 Connecting to WebSocket (IP): ${wsUrl}`);
+                console.log(`🔗 Attempting WebSocket connection (remote): ${wsUrl}`);
             }
-            
+
             this.ws = new WebSocket(wsUrl);
-            
+
             this.ws.onopen = () => {
-                console.log('✅ WebSocket connected successfully');
+                console.log('✅ WebSocket connected successfully.');
                 this.isConnected = true;
                 this.reconnectAttempts = 0;
-                this.reconnectDelay = 1000;
+                this.reconnectDelay = 1000; // Reset delay on successful connection
+                // Server should send a 'welcome' message with clientId
             };
-            
+
             this.ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
+                    // console.log('📥 Received message:', data); // Optional: for debugging
                     this.handleMessage(data);
                 } catch (error) {
-                    console.error('❌ Error parsing message:', error);
+                    console.error('❌ Error parsing message:', event.data, error);
                 }
             };
-            
+
             this.ws.onclose = (event) => {
-                console.log(`🔌❌ WebSocket disconnected (code: ${event.code}, reason: ${event.reason})`);
+                console.log(`🔌❌ WebSocket disconnected (Code: ${event.code}, Reason: "${event.reason}")`);
                 this.isConnected = false;
-                this.markAllDisconnected();
+                this.markAllDisconnected(); // Ensure all devices are marked as disconnected
                 this.attemptReconnect();
             };
-            
+
             this.ws.onerror = (error) => {
                 console.error('🚫 WebSocket error:', error);
+                // onclose will usually follow an error, so reconnection is handled there
+                // If onclose doesn't fire, we might need to trigger reconnection here too.
+                // For simplicity, relying on onclose for now.
                 this.isConnected = false;
             };
-            
+
         } catch (error) {
-            console.error('❌ Failed to create WebSocket:', error);
-            this.attemptReconnect();
+            console.error('❌ Failed to create WebSocket connection:', error);
+            this.attemptReconnect(); // Try to reconnect if initial connection fails
         }
     }
-    
+
     handleMessage(data) {
         switch (data.type) {
             case 'welcome':
                 this.clientId = data.clientId;
-                console.log(`🎉 Connected! Client ID: ${this.clientId}`);
+                console.log(`🎉 Welcome! Client ID: ${this.clientId}. Requesting ESP status...`);
+                // Optionally, request current ESP status from server upon connection
+                // if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                //    this.ws.send(JSON.stringify({ type: 'get_esp_status' }));
+                // }
                 break;
-                
+
             case 'sensor_data':
                 this.processSensorData(data);
                 break;
-                
-            case 'esp_disconnected':
+
+            case 'esp_status': // If server sends a list of currently connected ESPs
+                console.log('📡 ESP Status received:', data.devices);
+                // Here you could update the 'connected' state of devices based on server truth
+                // For now, relying on data flow or explicit esp_disconnected messages.
+                break;
+
+            case 'esp_disconnected': // Message from server indicating an ESP has disconnected
                 this.handleESPDisconnection(data);
                 break;
+
+            default:
+                console.log('📦 Received unhandled message type:', data.type, data);
         }
     }
-    
-    // ✅ CORE: Process sensor data and create stable states
+
     processSensorData(data) {
         const deviceType = this.identifyDeviceType(data);
-        
+
         if (!deviceType || !this.deviceStates[deviceType]) {
-            console.log(`❓ Unknown device type for data:`, data);
+            console.warn(`❓ Unknown or unconfigured device type for data:`, data);
             return;
         }
-        
+
         const device = this.deviceStates[deviceType];
-        
-        // ✅ STEP 1: Mark as connected (data = connection)
+
+        // Mark as connected if not already (first data implies connection)
         if (!device.connected) {
             device.connected = true;
-            console.log(`📡 ${deviceType.toUpperCase()} connected via data`);
+            console.log(`📡 ${deviceType.toUpperCase()} now considered connected (received data).`);
             this.notifyCallbacks('connected', deviceType);
         }
-        
-        // ✅ STEP 2: Store raw data
+
         device.lastRawData = data;
-        
-        // ✅ STEP 3: Determine if this data should be "active"
         const shouldBeActive = this.shouldBeActive(deviceType, data);
-        
-        // ✅ STEP 4: Add to stability history
+
+        // Update state history
         device.stateHistory.push(shouldBeActive);
         if (device.stateHistory.length > this.maxHistoryLength) {
             device.stateHistory.shift();
         }
-        
-        // ✅ STEP 5: Check for stable state change
+
         const stableState = this.getStableState(device);
-        
+
         if (stableState !== null && stableState !== device.active) {
-            // ✅ STEP 6: Apply minimum time between changes
             const timeSinceLastChange = Date.now() - device.lastStateChange;
-            
+
             if (timeSinceLastChange >= this.minStateChangeInterval) {
-                console.log(`🔄 ${deviceType.toUpperCase()} STABLE STATE CHANGE: ${device.active} → ${stableState}`);
-                
+                const previousActiveState = device.active; // Capture current active state before changing it
                 device.active = stableState;
                 device.lastStateChange = Date.now();
-                
-                // ✅ STEP 7: Send clean on/off event
+                console.log(`🔄 ${deviceType.toUpperCase()} STABLE STATE CHANGE: ${previousActiveState} → ${device.active}`);
                 this.notifyCallbacks('stateChange', deviceType, {
-                    active: stableState,
+                    active: device.active,
                     rawData: data,
-                    previousState: !stableState
+                    previousState: previousActiveState // Send the actual previous state
                 });
             } else {
-                console.log(`⏳ ${deviceType} state change blocked - too soon (${(timeSinceLastChange/1000).toFixed(1)}s ago)`);
+                // console.log(`⏳ ${deviceType} state change blocked - too soon.`);
             }
         }
-        
-        // ✅ Always send raw data event (for logging/debugging)
-        this.notifyCallbacks('data', deviceType, data);
+        this.notifyCallbacks('data', deviceType, data); // Notify raw data for logging or other uses
     }
-    
-    // ✅ DEVICE-SPECIFIC: Should this data trigger active state?
+
     shouldBeActive(deviceType, data) {
+        // Define activation logic per device
         switch (deviceType) {
             case 'soil':
-                // For soil: humid or wet = active
-                if (data.soil_condition) {
+                if (data.soil_condition) { // From your ESP32 code
                     return data.soil_condition === 'humid' || data.soil_condition === 'wet';
-                } else if (data.moisture_app_value !== undefined) {
-                    return data.moisture_app_value > 0.4; // Above dry threshold
+                } else if (data.moisture_app_value !== undefined) { // From your app logic
+                    return data.moisture_app_value > 0.4; // Example: 0-1 scale
                 }
-                break;
-                
+                return false; // Default for soil if no relevant data
             case 'light':
-                // For light: bright conditions = active
-                if (data.lightLevel !== undefined) {
-                    return data.lightLevel > 500; // Example threshold
+                if (data.lightLevel !== undefined) { // Assuming 'lightLevel' from ESP
+                    return data.lightLevel > 500; // Example threshold for "bright"
                 }
-                break;
-                
+                return false;
             case 'temp':
-                // For temp: warm conditions = active
-                if (data.temperature !== undefined) {
-                    return data.temperature > 25; // Example threshold
+                if (data.temperature !== undefined) { // Assuming 'temperature' from ESP
+                    return data.temperature > 25; // Example: degrees C for "warm"
                 }
-                break;
+                return false;
+            default:
+                return false;
         }
-        
-        return false; // Default to inactive
     }
-    
-    // ✅ STABILITY: Get stable state from history
+
     getStableState(device) {
         if (device.stateHistory.length < this.stabilityRequiredReadings) {
-            console.log(`⏳ Need ${this.stabilityRequiredReadings - device.stateHistory.length} more readings for stability`);
-            return null; // Not enough data
+            return null; // Not enough data for a stable assessment
         }
-        
-        // Check if last N readings are consistent
         const recentReadings = device.stateHistory.slice(-this.stabilityRequiredReadings);
         const isConsistent = recentReadings.every(reading => reading === recentReadings[0]);
-        
-        if (isConsistent) {
-            return recentReadings[0]; // Return the stable state
-        } else {
-            console.log(`📊 Inconsistent readings: [${recentReadings.join(', ')}]`);
-            return null; // Still unstable
-        }
+        return isConsistent ? recentReadings[0] : null;
     }
-    
+
     identifyDeviceType(data) {
-        const sensor = (data.sensor || '').toLowerCase();
-        
-        if (sensor.includes('soil') || sensor.includes('moisture') || 
-            data.soilMoisture !== undefined || data.moisture !== undefined ||
-            data.moisture_app_value !== undefined || data.soil_condition !== undefined) {
-            return 'soil';
+        // Prioritize explicit 'sensor' or 'device_type' field from ESP data
+        if (data.device_type && this.deviceStates[data.device_type.toLowerCase()]) {
+            return data.device_type.toLowerCase();
         }
-        if (sensor.includes('light') || sensor.includes('lux') || 
-            data.lightLevel !== undefined || data.lux !== undefined) {
-            return 'light';
+        if (data.sensor) {
+            const sensorLower = data.sensor.toLowerCase();
+            if (sensorLower.includes('soil') || sensorLower.includes('moisture')) return 'soil';
+            if (sensorLower.includes('light') || sensorLower.includes('lux')) return 'light';
+            if (sensorLower.includes('temp')) return 'temp';
         }
-        if (sensor.includes('temp') || sensor.includes('temperature') || 
-            data.temperature !== undefined || data.temp !== undefined) {
-            return 'temp';
-        }
-        
+        // Fallback to checking common data fields
+        if (data.soilMoisture !== undefined || data.moisture !== undefined || data.soil_condition !== undefined || data.moisture_app_value !== undefined) return 'soil';
+        if (data.lightLevel !== undefined || data.lux !== undefined) return 'light';
+        if (data.temperature !== undefined || data.temp !== undefined) return 'temp';
         return null;
     }
     
-    // ✅ FIXED - Better ESP disconnection handling
-    handleESPDisconnection(data) {
-        const deviceType = this.identifyDeviceTypeByName(data.name);
-        if (deviceType && this.deviceStates[deviceType]) {
-            const device = this.deviceStates[deviceType];
-            
-            console.log(`🔌❌ ${deviceType.toUpperCase()} disconnected (ESP event)`);
-            
-            // Reset device state
-            device.connected = false;
-            device.active = false;
-            device.stateHistory = [];
-            device.lastStateChange = Date.now();
-            
-            // ✅ Force immediate disconnect notification
-            setTimeout(() => {
-                console.log(`🔔 Sending disconnect notification for ${deviceType}`);
-                this.notifyCallbacks('disconnected', deviceType);
-            }, 100); // Small delay to ensure handler is ready
-        }
-    }
-    
-    identifyDeviceTypeByName(name) {
-        const nameLower = (name || '').toLowerCase();
+    identifyDeviceTypeByName(name) { // Used by esp_disconnected if name is provided
+        if (!name) return null;
+        const nameLower = name.toLowerCase();
         if (nameLower.includes('soil')) return 'soil';
         if (nameLower.includes('light')) return 'light';
         if (nameLower.includes('temp')) return 'temp';
         return null;
     }
-    
-    // ✅ FIXED - More aggressive disconnect handling
+
+    handleESPDisconnection(data) { // data typically { type: 'esp_disconnected', name: 'ESP_SOIL' }
+        const deviceType = this.identifyDeviceTypeByName(data.name); // Server should send a name/identifier
+        if (deviceType && this.deviceStates[deviceType]) {
+            const device = this.deviceStates[deviceType];
+            if (device.connected || device.active) { // Only act if it was considered connected or active
+                console.log(`🔌❌ ${deviceType.toUpperCase()} reported disconnected by server.`);
+                device.connected = false;
+                device.active = false; // Ensure it's marked inactive
+                device.stateHistory = []; // Clear history
+                // device.lastStateChange = Date.now(); // Optional: mark time of this "change"
+                
+                // Notify listeners about the disconnection.
+                // Using a small timeout can help prevent issues if listeners try to immediately update UI
+                // that might be in the process of other changes.
+                setTimeout(() => {
+                    this.notifyCallbacks('disconnected', deviceType);
+                }, 50); 
+            }
+        } else {
+            console.warn(`❓ Received ESP disconnection for unknown or unconfigured device:`, data.name);
+        }
+    }
+
     markAllDisconnected() {
-        console.log('🔌❌ Marking all devices as disconnected (WebSocket lost)');
-        
+        console.log('🔌❌ WebSocket connection lost. Marking all devices as disconnected.');
         Object.keys(this.deviceStates).forEach(deviceType => {
             const device = this.deviceStates[deviceType];
-            if (device.connected) {
-                console.log(`🔔 Disconnecting ${deviceType}`);
-                
+            if (device.connected || device.active) { // Only act if it was considered connected or active
                 device.connected = false;
-                device.active = false;
+                device.active = false; // Ensure it's marked inactive
                 device.stateHistory = [];
-                device.lastStateChange = Date.now();
-                
-                // ✅ Force immediate notification
+                // device.lastStateChange = Date.now(); // Optional
+
+                // Notify for each device that was connected
                 setTimeout(() => {
-                    console.log(`🔔 Sending WebSocket disconnect notification for ${deviceType}`);
-                    this.notifyCallbacks('disconnected', deviceType);
-                }, 100);
+                     this.notifyCallbacks('disconnected', deviceType);
+                }, 50);
             }
         });
     }
-    
+
     attemptReconnect() {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error('❌ Max reconnection attempts reached');
-            console.log('💡 Try refreshing the page or check your connection');
+            console.error(`❌ Max reconnection attempts (${this.maxReconnectAttempts}) reached. Please check server or refresh.`);
+            this.notifyCallbacks('reconnectFailed'); // Notify UI about permanent failure
             return;
         }
-        
         this.reconnectAttempts++;
-        console.log(`🔄 Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+        const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts -1), 30000); // Exponential backoff
+        
+        console.log(`🔄 Attempting to reconnect in ${(delay / 1000).toFixed(1)}s (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
         
         setTimeout(() => {
             this.connect();
-        }, this.reconnectDelay);
-        
-        this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, 30000);
+        }, delay);
     }
-    
-    // ✅ PUBLIC API: Register for specific event types
+
+    // --- Public API for event subscription ---
     on(eventType, callback) {
         if (!this.callbacks[eventType]) {
             this.callbacks[eventType] = [];
         }
         this.callbacks[eventType].push(callback);
     }
-    
+
     off(eventType, callback) {
         if (this.callbacks[eventType]) {
-            const index = this.callbacks[eventType].indexOf(callback);
-            if (index > -1) {
-                this.callbacks[eventType].splice(index, 1);
-            }
+            this.callbacks[eventType] = this.callbacks[eventType].filter(cb => cb !== callback);
         }
     }
-    
+
     notifyCallbacks(eventType, ...args) {
         if (this.callbacks[eventType]) {
-            console.log(`🔔 Notifying ${this.callbacks[eventType].length} callbacks for '${eventType}'`);
-            this.callbacks[eventType].forEach((callback, index) => {
+            // console.log(`🔔 Notifying ${this.callbacks[eventType].length} callbacks for '${eventType}' with args:`, ...args);
+            this.callbacks[eventType].forEach(callback => {
                 try {
                     callback(...args);
                 } catch (error) {
-                    console.error(`❌ Error in ${eventType} callback ${index}:`, error);
+                    console.error(`❌ Error in callback for event '${eventType}':`, error);
                 }
             });
-        } else {
-            console.log(`🔔 No callbacks registered for '${eventType}'`);
         }
     }
-    
-    // ✅ PUBLIC API: Get clean device states
+
+    // --- Public API for getting state ---
     getDeviceState(deviceType) {
         const device = this.deviceStates[deviceType];
         return device ? {
             connected: device.connected,
             active: device.active,
             lastStateChange: device.lastStateChange,
-            rawData: device.lastRawData
+            lastRawData: device.lastRawData
         } : null;
     }
-    
+
     getConnectedDevices() {
         return Object.keys(this.deviceStates).filter(key => this.deviceStates[key].connected);
     }
-    
+
     getActiveDevices() {
         return Object.keys(this.deviceStates).filter(key => this.deviceStates[key].active);
     }
     
-    // ✅ DEBUG: Get full system state
+    // --- Debug ---
     getDebugInfo() {
         return {
             wsConnected: this.isConnected,
             clientId: this.clientId,
             reconnectAttempts: this.reconnectAttempts,
-            deviceStates: this.deviceStates,
-            connectedDevices: this.getConnectedDevices(),
-            activeDevices: this.getActiveDevices()
+            deviceStates: JSON.parse(JSON.stringify(this.deviceStates)), // Deep copy for safety
+            connectedDeviceTypes: this.getConnectedDevices(),
+            activeDeviceTypes: this.getActiveDevices()
         };
     }
 }
 
-// Initialize when DOM loads
+// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Starting STABLE WebSocket Client...');
-    window.creatune = new CreaTuneClient();
+    console.log('🚀 DOMContentLoaded: Initializing CreaTune System...');
+    if (!window.creatune) { // Ensure it's only initialized once
+        window.creatune = new CreaTuneClient();
+        window.creatune.init(); // Start the connection process
+    } else {
+        console.log('ℹ️ CreaTuneClient already initialized.');
+    }
 });
 
-// Export for modules
+// Export for potential module usage (though primarily designed for global window.creatune)
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = CreaTuneClient;
 }
