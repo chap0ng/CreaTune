@@ -23,7 +23,6 @@ class SoilHandler {
         
         // Musical scale
         this.melancholicScale = [
-            'C5', 'D5', 'E5', 'G5', 'A5',    // Higher octave for sparkle
             'C4', 'D4', 'E4', 'G4', 'A4',    
             'C5', 'D5', 'E5', 'G5', 'A5',    
             'F4', 'B4', 'F5', 'B5'           
