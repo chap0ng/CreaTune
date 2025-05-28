@@ -114,10 +114,10 @@ class SoilHandler {
             // Toy Piano Synth
             this.toyPianoSynth = new Tone.PolySynth(Tone.Synth, {
                 oscillator: { type: 'triangle' },
-                envelope: { attack: 0.005, decay: 0.3, sustain: 0.05, release: 0.2 },
+                envelope: { attack: 0.005, decay: 0.3, sustain: 0.05, release: 0.4 },
                 volume: -Infinity
             });
-            const reverb = new Tone.Reverb({ decay: 2.5, wet: 0.35 });
+            const reverb = new Tone.Reverb({ decay: 1.5, wet: 0.15 });
             this.toyPianoSynth.chain(reverb, Tone.Destination);
 
             // Insect Synth - Changed to a single Tone.FMSynth for direct LFO connection

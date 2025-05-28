@@ -51,7 +51,7 @@ body {
     "corner3 framebottom corner4";
   width: 100vw;
   height: 100vh;
-  max-width: min(100vw, calc(100vh * 1.6));
+  max-width: min(100vw, calc(100vh * 1.6)); /* Default aspect ratio 16:10 */
   max-height: min(100vh, calc(100vw / 1.6));
   margin: 0 auto;
   padding: min(80px, 8vw) min(60px, 6vw) min(100px, 10vw) min(60px, 6vw);
@@ -154,7 +154,6 @@ body {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  /* background-color: var(--sage-green); */ /* Alternative or fallback if image fails */
 }
 
 /* Other device-specific backgrounds (if needed by JS) */
@@ -166,8 +165,6 @@ body {
   background-color: var(--coral-red); /* Example */
 }
 
-/* This .soil-background class provides an alternative style (color + gradient) if applied by JS */
-/* It's distinct from .soil-connected-bg which uses an image */
 .framebackground.soil-background {
   background-color: var(--sage-green);
   background-image: 
@@ -176,7 +173,6 @@ body {
   background-size: 30px 30px, 15px 15px;
   background-position: 0 0, 15px 15px;
   z-index: 1;
-  /* transition already handled by base .framebackground */
 }
 
 /* ==========================================================================
@@ -188,15 +184,15 @@ body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%) translateZ(0);
-  width: min(40vw, 35vh);
-  height: min(40vw, 35vh);
+  width: min(40vw, 35vh); /* Default size */
+  height: min(40vw, 35vh); /* Default size */
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  display: none; /* Default state: hidden */
+  display: none; 
   z-index: 5;
   
-  opacity: 0; /* Default state: transparent */
+  opacity: 0; 
   transition: 
     opacity 0.6s ease-in-out,
     transform 0.4s ease-in-out;
@@ -207,11 +203,11 @@ body {
 
 .soil-creature {
   background-image: url('sprites/creatures/soil-creature.png');
-  background-color: transparent; /* Ensure no conflicting background color */
+  background-color: transparent; 
 }
 
-.soil-creature.active { /* This class is toggled by soil.js when audio is playing */
-  display: block; /* Show when active */
+.soil-creature.active { 
+  display: block; 
   opacity: 1;
   animation: soilCreatureIdle 4s ease-in-out infinite;
 }
@@ -227,7 +223,7 @@ body {
   }
 }
 
-.soil-creature.reacting { /* Optional class for specific reactions */
+.soil-creature.reacting { 
   animation: soilCreatureReact 0.8s ease-out;
 }
 
@@ -277,7 +273,7 @@ body {
   font-family: 'VT323', monospace;
   font-size: 18px;
   color: var(--dark-slate);
-  background-color: var(--warm-yellow); /* Initial color */
+  background-color: var(--warm-yellow); 
   border: 2px solid var(--dark-slate);
   border-radius: 5px;
   cursor: pointer;
@@ -287,20 +283,20 @@ body {
 }
 
 #audio-enable-button:hover {
-  background-color: #f8c96a; /* Slightly lighter yellow on hover */
+  background-color: #f8c96a; 
   transform: translateY(-2px);
   box-shadow: 5px 5px 0px var(--dark-slate);
 }
 
 #audio-enable-button.audio-button-confirm {
-  background-color: var(--sage-green); /* Green for success */
+  background-color: var(--sage-green); 
   color: var(--warm-beige);
   border-color: var(--dark-slate);
   box-shadow: 3px 3px 0px var(--dark-slate);
 }
 
 #audio-enable-button.audio-button-error {
-  background-color: var(--coral-red); /* Red for error */
+  background-color: var(--coral-red); 
   color: var(--warm-beige);
   border-color: var(--dark-slate);
   box-shadow: 3px 3px 0px var(--dark-slate);
@@ -308,7 +304,7 @@ body {
 
 #audio-enable-button.audio-button-hidden {
   opacity: 0;
-  pointer-events: none; /* Make it non-interactive when hidden */
+  pointer-events: none; 
   transform: translateY(-20px);
 }
 
@@ -316,23 +312,57 @@ body {
    RESPONSIVE ADJUSTMENTS - CREATURE SIZE
    ========================================================================== */
 
-@media (max-width: 768px) {
-  .soil-creature { /* Also applies to .idle-creature if it shares structure */
+@media (max-width: 768px) { /* Primarily for portrait phone views */
+  .idle-creature, .soil-creature {
     width: min(35vw, 30vh);
     height: min(35vw, 30vh);
   }
 }
 
-@media (max-height: 500px) {
-  .soil-creature { /* Also applies to .idle-creature */
+@media (max-height: 500px) { /* Primarily for very short viewport heights (e.g. small device landscape or split screen) */
+  .idle-creature, .soil-creature {
     width: min(30vw, 25vh);
     height: min(30vw, 25vh);
   }
 }
 
-@media (min-width: 1200px) {
-  .soil-creature { /* Also applies to .idle-creature */
+@media (min-width: 1200px) { /* For larger screens / desktops */
+  .idle-creature, .soil-creature {
     width: min(35vw, 40vh);
     height: min(35vw, 40vh);
+  }
+}
+
+/* ==========================================================================
+   FULLSCREEN HORIZONTAL FOR PHONES (like Nothing Phone 2a)
+   ========================================================================== */
+@media (orientation: landscape) and (hover: none) and (pointer: coarse) {
+  /* (hover: none) and (pointer: coarse) helps target touch devices */
+
+  body {
+    /* Optional: prevent any accidental scrollbars if frame is truly edge-to-edge */
+    overflow: hidden;
+  }
+
+  .frameidle {
+    width: 95vw;      /* Frame structure takes 95% of viewport width */
+    height: 95vh;     /* Frame structure takes 95% of viewport height */
+    max-width: 95vw;  /* Override default aspect ratio constraints */
+    max-height: 95vh; /* Override default aspect ratio constraints */
+    padding: 0;       /* Remove outer padding; 20px grid tracks become the border */
+    margin: auto;     /* Center the 95vw/95vh block on screen */
+  }
+
+  .idle-creature, .soil-creature {
+    /* Adjust creature size to be proportional to the larger frame on landscape phones */
+    width: min(40vw, 50vh);
+    height: min(40vw, 50vh);
+  }
+
+  #audio-enable-button {
+    font-size: 16px; /* Slightly smaller */
+    padding: 10px 15px;
+    top: 10px;
+    right: 10px;
   }
 }
