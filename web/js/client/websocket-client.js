@@ -9,8 +9,8 @@ class CreaTuneClient {
 
         // !!! CRUCIAL: SET YOUR PHONE'S ACTUAL WI-FI IP ADDRESS AND PORT HERE !!!
         // This is the IP address your Termux server is reachable on from your local network.
-        // Example: '192.168.1.100:8080'
-        this.serverHostOverride = '192.168.0.100:8080'; // <--- REPLACE THIS!
+        // Example: '192.168.0.100:8080'
+        this.serverHostOverride = '192.168.0.100:8080'; // <--- REPLACE THIS WITH YOUR ACTUAL PHONE IP!
 
         this.deviceStates = {
             soil: {
@@ -94,7 +94,7 @@ class CreaTuneClient {
             if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
                 this.serverHostOverride && this.serverHostOverride.toLowerCase() !== 'your_phone_wifi_ip_address:8080') { // Check against placeholder
                 targetHost = this.serverHostOverride;
-                if (this.debug && (this.reconnectAttempts === 0)) console.log(`🔗 Using serverHostOverride for WebSocket: ${targetHost} (PWA/localhost context)`);
+                if (this.debug && (this.reconnectAttempts === 0 || !this.isConnected)) console.log(`🔗 Using serverHostOverride for WebSocket: ${targetHost} (PWA/localhost context)`);
             }
             
             const wsUrl = `${protocol}//${targetHost}`;
