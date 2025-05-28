@@ -127,8 +127,6 @@ body {
 
 .framebackground, .frameleft, .frameright {
   will-change: margin-top;
-  width: 100%;
-  height: 100%;
 }
 
 /* ==========================================================================
