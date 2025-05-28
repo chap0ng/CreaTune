@@ -8,9 +8,9 @@ class SoilHandler {
         this.insectLFO = null;
 
         // Audio Params
-        this.fadeDuration = 0.7;
-        this.toyPianoTargetVolume = -15;
-        this.insectTargetVolume = -25;
+        this.fadeDuration = 0.4; // Duration for fade in/out
+        this.toyPianoTargetVolume = -3; 
+        this.insectTargetVolume = -6;   
 
         // State
         this.isActive = false;
