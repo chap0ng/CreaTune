@@ -1,425 +1,331 @@
-// websocket-server.js
-// Enhanced WebSocket server with proper ESP32 device tracking and faster disconnection detection
-
 const WebSocket = require('ws');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const os = require('os'); // For network interface logging
+const os = require('os'); // For network interface listing
 
-// Web server configuration
-const PORT = process.env.PORT || 8080;
-const WEB_ROOT = path.join(__dirname, 'web');
+const PORT = 8080;
+const WEB_ROOT = path.join(__dirname, 'web'); // Serve files from the 'web' subdirectory
 
-// Create HTTP server
+// --- Configuration ---
+const HEARTBEAT_INTERVAL = 30000; // Interval for server-to-client ping (ws library's built-in)
+const CLIENT_TIMEOUT = HEARTBEAT_INTERVAL * 2 + 5000; // Time to wait for pong before considering client dead
+
+const ESP_PING_INTERVAL = 15000; // Interval for application-level ping to ESP32 clients (ms)
+const ESP_RESPONSE_TIMEOUT = 10000; // Time to wait for ESP32 pong before considering it unresponsive (ms)
+
+const DEBUG = true; // Toggle detailed logging
+
+// --- Data Structures ---
+const clients = new Map(); // Stores all connected WebSocket clients (web and ESP)
+const espDevices = new Map(); // Stores known ESP device configurations/metadata
+                              // Key: deviceName (e.g., "ESP32-Soil-XYZ"), Value: { ws, name, type, lastPong, pingTimeoutId, ... }
+
+// Define your ESP device types and how to identify them from their names
+const deviceTypeMapping = [
+    { nameIncludes: 'soil', type: 'soil' },
+    { nameIncludes: 'moisture', type: 'soil' },
+    // { nameIncludes: 'light', type: 'light' },
+    // { nameIncludes: 'temp', type: 'temp' },
+    // Add more mappings as needed
+];
+
+// --- HTTP Server for Static Files ---
 const server = http.createServer((req, res) => {
-  let filePath = path.join(WEB_ROOT, req.url === '/' ? 'index.html' : req.url);
-  const extname = path.extname(filePath);
+    let filePath = path.join(WEB_ROOT, req.url === '/' ? 'index.html' : req.url);
+    const extname = String(path.extname(filePath)).toLowerCase();
+    const mimeTypes = {
+        '.html': 'text/html',
+        '.js': 'text/javascript',
+        '.css': 'text/css',
+        '.json': 'application/json',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.wav': 'audio/wav',
+        '.mp4': 'video/mp4',
+        '.woff': 'application/font-woff',
+        '.ttf': 'application/font-ttf',
+        '.eot': 'application/vnd.ms-fontobject',
+        '.otf': 'application/font-otf',
+        '.wasm': 'application/wasm'
+    };
+    const contentType = mimeTypes[extname] || 'application/octet-stream';
 
-  // Security: Prevent directory traversal
-  if (!filePath.startsWith(WEB_ROOT)) {
-    res.writeHead(403, { 'Content-Type': 'text/plain' });
-    res.end('403 Forbidden');
-    console.warn(`Forbidden access attempt: ${req.url}`);
-    return;
-  }
-
-  fs.stat(filePath, (err, stats) => {
-    if (err) {
-      if (err.code === 'ENOENT') {
-        console.warn(`File not found: ${filePath}, URL: ${req.url}`);
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('404 Not Found');
-      } else {
-        res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end('500 Internal Server Error');
-        console.error(`Error stating file: ${filePath}`, err);
-      }
-    } else {
-      if (stats.isDirectory()) {
-        filePath = path.join(filePath, 'index.html');
-        fs.stat(filePath, (dirIndexErr, dirIndexStats) => {
-          if (dirIndexErr || !dirIndexStats.isFile()) {
-            res.writeHead(404, { 'Content-Type': 'text/plain' });
-            res.end('404 Not Found (Directory index not found)');
-            console.warn(`Directory index not found: ${filePath}`);
-          } else {
-            serveFile(filePath, res, 'text/html');
-          }
-        });
-      } else {
-        serveFile(filePath, res, getContentType(extname));
-      }
-    }
-  });
+    fs.readFile(filePath, (error, content) => {
+        if (error) {
+            if (error.code == 'ENOENT') {
+                // Try serving index.html for SPA-like routing (if a directory or non-file is requested)
+                fs.readFile(path.join(WEB_ROOT, 'index.html'), (err, idxContent) => {
+                    if (err) {
+                        res.writeHead(404, { 'Content-Type': 'text/html' });
+                        res.end('<h1>404 Not Found</h1><p>The requested resource was not found.</p>', 'utf-8');
+                    } else {
+                        res.writeHead(200, { 'Content-Type': 'text/html' });
+                        res.end(idxContent, 'utf-8');
+                    }
+                });
+            } else {
+                res.writeHead(500);
+                res.end('Sorry, check with the site admin for error: ' + error.code + ' ..\n');
+            }
+        } else {
+            res.writeHead(200, { 'Content-Type': contentType });
+            res.end(content, 'utf-8');
+        }
+    });
 });
 
-function getContentType(extname) {
-  return {
-    '.html': 'text/html',
-    '.css': 'text/css',
-    '.js': 'text/javascript',
-    '.json': 'application/json',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.svg': 'image/svg+xml',
-    '.mp3': 'audio/mpeg',
-    '.wav': 'audio/wav',
-    '.ico': 'image/x-icon',
-    '.woff': 'font/woff',
-    '.woff2': 'font/woff2',
-    '.ttf': 'font/ttf',
-    '.eot': 'application/vnd.ms-fontobject',
-    '.otf': 'font/otf',
-    '.webmanifest': 'application/manifest+json'
-  }[extname.toLowerCase()] || 'application/octet-stream';
+// --- WebSocket Server ---
+const wss = new WebSocket.Server({ server }); // Mounts WSS on the HTTP server
+
+function generateClientId() {
+    return Math.random().toString(36).substring(2, 15);
 }
 
-function serveFile(filePath, res, contentType) {
-  fs.readFile(filePath, (err, content) => {
-    if (err) {
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
-      res.end('500 Internal Server Error');
-      console.error(`Error reading file: ${filePath}`, err);
-    } else {
-      res.writeHead(200, { 'Content-Type': contentType });
-      res.end(content, 'utf-8');
+function identifyEspDeviceType(deviceName) {
+    if (!deviceName) return 'unknown_esp';
+    const lowerDeviceName = deviceName.toLowerCase();
+    for (const mapping of deviceTypeMapping) {
+        if (lowerDeviceName.includes(mapping.nameIncludes)) {
+            return mapping.type;
+        }
     }
-  });
+    return 'unknown_esp'; // Default if no mapping matches
 }
 
-// Create WebSocket server
-const wss = new WebSocket.Server({
-  server,
-  pingInterval: 2000, // ws library's built-in ping
-  pingTimeout: 3000   // ws library's built-in timeout for pong
-});
+function broadcastToWebClients(message, excludeClientId = null) {
+    const stringifiedMessage = JSON.stringify(message);
+    if (DEBUG && message.type !== 'sensor_data') { // Avoid flooding logs with sensor data
+        console.log(`🌐 Broadcasting to web clients (excluding ${excludeClientId || 'none'}):`, stringifiedMessage.substring(0, 100) + (stringifiedMessage.length > 100 ? '...' : ''));
+    }
+    clients.forEach((clientData, clientId) => {
+        if (clientData.type === 'web' && clientId !== excludeClientId && clientData.ws.readyState === WebSocket.OPEN) {
+            try {
+                clientData.ws.send(stringifiedMessage);
+            } catch (e) {
+                console.error(`Error sending message to web client ${clientId}:`, e);
+            }
+        }
+    });
+}
 
-// Client tracking
-const clients = new Map();
-let clientIdCounter = 0;
+function sendToClient(ws, message) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+            ws.send(JSON.stringify(message));
+        } catch (e) {
+            console.error(`Error sending message:`, e);
+        }
+    }
+}
 
-// ESP32 device tracking
-const espDevices = new Map(); // Key: sensorName, Value: { id, ws, lastSeen, connectionCount, ip }
-const espConnections = new Map(); // Key: sensorName, Value: WebSocket object (current active ws)
-let espIdCounter = 0;
+function handleEspConnection(ws, deviceName) {
+    const deviceType = identifyEspDeviceType(deviceName);
+    const existingDevice = espDevices.get(deviceName);
 
-// Timeout and Ping settings for our custom logic
-const PING_INTERVAL_MS = 2000;  // How often server sends its application-level pings
-const ESP_TIMEOUT_MS = 5000;    // Consider ESP disconnected if no message/pong for this duration
-                                // Should be > PING_INTERVAL_MS + typical network latency
+    if (existingDevice && existingDevice.ws && existingDevice.ws.readyState === WebSocket.OPEN) {
+        console.warn(`🔌⚠️ ESP device "${deviceName}" tried to connect again while already connected. Terminating old session.`);
+        existingDevice.ws.terminate(); // Terminate the old connection
+    }
+    
+    clearTimeout(existingDevice?.pingTimeoutId); // Clear any old timeout
 
-// Enhanced heartbeat function to track connection health (used by ws 'pong' event)
-function wsHeartbeat() {
-  this.isAlive = true; // ws library uses this for its ping/pong
-  this.lastPong = Date.now(); // Our custom tracking
+    const espClient = {
+        ws: ws,
+        name: deviceName,
+        type: deviceType,
+        isAlive: true,
+        lastPong: Date.now(),
+        pingTimeoutId: null
+    };
+    espDevices.set(deviceName, espClient);
+    ws.isAlive = true; // For ws library's heartbeat
+
+    console.log(`🔌✅ ESP device connected: ${deviceName} (Type: ${deviceType})`);
+    broadcastToWebClients({ type: 'esp_connected', name: deviceName, deviceType: deviceType });
+
+    // Start application-level ping for this ESP
+    function scheduleEspPing() {
+        clearTimeout(espClient.pingTimeoutId); // Clear previous timeout
+        espClient.pingTimeoutId = setTimeout(() => {
+            if (Date.now() - espClient.lastPong > ESP_RESPONSE_TIMEOUT + ESP_PING_INTERVAL) { // Check if pong is too old
+                console.log(`🔌❌ ESP device "${deviceName}" timed out (no pong). Terminating.`);
+                ws.terminate(); // This will trigger 'close' event for this ESP
+                return;
+            }
+            if (ws.readyState === WebSocket.OPEN) {
+                if (DEBUG) console.log(`💓 Sending app-level ping to ESP: ${deviceName}`);
+                sendToClient(ws, { type: 'ping', timestamp: Date.now() });
+                scheduleEspPing(); // Schedule next ping
+            }
+        }, ESP_PING_INTERVAL);
+    }
+    scheduleEspPing(); // Start the ping cycle
+}
+
+function handleEspDisconnection(deviceName, reason = "Unknown") {
+    const device = espDevices.get(deviceName);
+    if (device) {
+        clearTimeout(device.pingTimeoutId); // Stop pinging this device
+        espDevices.delete(deviceName);
+        console.log(`🔌❌ ESP device disconnected: ${deviceName}. Reason: ${reason}`);
+        broadcastToWebClients({ type: 'esp_disconnected', name: deviceName, reason: reason });
+    } else {
+        if (DEBUG) console.log(`🔌❓ Attempted to handle disconnect for unknown/already removed ESP: ${deviceName}`);
+    }
 }
 
 wss.on('connection', (ws, req) => {
-  const ip = req.socket.remoteAddress;
-  const uniqueClientId = `client-${clientIdCounter++}`;
+    const clientId = generateClientId();
+    ws.isAlive = true; // For ws library's heartbeat
 
-  ws.isAlive = true; // For ws library's ping/pong
-  ws.lastPong = Date.now(); // For our custom tracking
-  ws.on('pong', wsHeartbeat); // ws library's pong event
+    // Default to web client, can be overridden by ESP registration
+    const clientData = { ws: ws, type: 'web', isAlive: true };
+    clients.set(clientId, clientData);
 
-  clients.set(uniqueClientId, { ws, type: 'unknown', ip, id: uniqueClientId });
-  console.log(`➕ New connection (ID: ${uniqueClientId}) from ${ip}. Awaiting identification...`);
+    console.log(`🔗 Client connected: ${clientId} from ${req.socket.remoteAddress}`);
+    sendToClient(ws, { type: 'welcome', clientId: clientId, message: 'Welcome to CreaTune Server!' });
 
-  ws.on('message', (message) => {
-    ws.lastPong = Date.now(); // Any message from client updates lastPong
-    ws.isAlive = true; // Also for ws library
+    ws.on('pong', () => { // ws library's heartbeat pong
+        ws.isAlive = true;
+        const client = clients.get(clientId);
+        if (client && client.type === 'esp32') { // If it's an ESP, update its specific lastPong
+            const espDevice = espDevices.get(client.espDeviceName);
+            if (espDevice) {
+                espDevice.lastPong = Date.now();
+                 if (DEBUG) console.log(`💓 Received ws-pong from ESP: ${client.espDeviceName}`);
+            }
+        }
+    });
 
-    let data;
-    try {
-      data = JSON.parse(message);
-    } catch (e) {
-      console.error(`🚨 Received non-JSON message from Client ID ${uniqueClientId}:`, message.toString().substring(0,100));
-      return;
-    }
+    ws.on('message', (message) => {
+        let data;
+        try {
+            data = JSON.parse(message);
+            if (DEBUG && data.type !== 'sensor_data' && data.type !== 'pong') { // Avoid flooding logs
+                console.log(`📬 Received from ${clientData.type} client ${clientId || clientData.espDeviceName || 'Unknown'}:`, data);
+            }
+        } catch (e) {
+            console.error(`❌ Invalid JSON from client ${clientId}:`, message, e);
+            return;
+        }
 
-    const clientInfo = clients.get(uniqueClientId);
+        switch (data.type) {
+            case 'register_esp': // ESP identifies itself
+                if (data.name) {
+                    clientData.type = 'esp32'; // Re-classify this client
+                    clientData.espDeviceName = data.name; // Store ESP name for this client entry
+                    handleEspConnection(ws, data.name);
+                } else {
+                    console.warn(`⚠️ ESP registration attempt without a name from client ${clientId}.`);
+                }
+                break;
 
-    if (clientInfo.type === 'unknown') {
-      if (data.type === 'esp_handshake' && data.sensorName) {
-        clientInfo.type = 'esp';
-        clientInfo.sensorName = data.sensorName;
-        ws.deviceType = 'esp'; // Mark ws object directly for easier access in heartbeat
-        ws.sensorName = data.sensorName;
-        handleESPHandshake(ws, data.sensorName, clientInfo.id, ip);
-      } else {
-        clientInfo.type = 'web';
-        ws.deviceType = 'web';
-        console.log(`💻 Client ID ${clientInfo.id} identified as WEB CLIENT.`);
-        ws.send(JSON.stringify({ type: 'welcome', clientId: clientInfo.id, message: 'Connected to CreaTune Web Server' }));
-        sendESP32StatusToSingleClient(ws);
-      }
-    }
+            case 'sensor_data': // ESP sends sensor data
+                if (clientData.type === 'esp32' && clientData.espDeviceName) {
+                    // Add device name to the data for easier client-side identification
+                    const enrichedData = { ...data, deviceName: clientData.espDeviceName };
+                    broadcastToWebClients(enrichedData);
+                } else {
+                    console.warn(`⚠️ Sensor data from non-ESP or unidentified client ${clientId}:`, data);
+                }
+                break;
+            
+            case 'pong': // Application-level pong from ESP
+                if (clientData.type === 'esp32' && clientData.espDeviceName) {
+                    const espDevice = espDevices.get(clientData.espDeviceName);
+                    if (espDevice) {
+                        espDevice.lastPong = Date.now();
+                        if (DEBUG) console.log(`💓 Received app-pong from ESP: ${clientData.espDeviceName} (RTT: ${Date.now() - data.timestamp}ms)`);
+                    }
+                }
+                break;
 
-    if (clientInfo.type === 'esp') {
-      handleESP32Data(ws, data, clientInfo.sensorName);
-    } else if (clientInfo.type === 'web') {
-      if (data.type === 'get_esp_status') {
-        sendESP32StatusToSingleClient(ws);
-      } else if (data.type === 'pong') { // Our application-level pong
-        // lastPong already updated at start of message handler
-      } else {
-        console.log(`🌐 Received from Web Client ID ${clientInfo.id}:`, JSON.stringify(data).substring(0,100));
-      }
-    }
-  });
+            case 'get_esp_status': // Web client requests current ESP statuses
+                const statusList = Array.from(espDevices.values()).map(dev => ({
+                    name: dev.name,
+                    type: dev.type,
+                    connected: dev.ws.readyState === WebSocket.OPEN // Check current WebSocket state
+                }));
+                sendToClient(ws, { type: 'esp_status_list', devices: statusList });
+                break;
 
-  ws.on('close', (code, reason) => {
-    const clientInfo = clients.get(uniqueClientId);
-    if (clientInfo) {
-      if (clientInfo.type === 'esp' && clientInfo.sensorName) {
-        // Pass the reason for more informative logging
-        handleESP32Disconnect(clientInfo.sensorName, ws, `WebSocket closed (Code: ${code}, Reason: ${reason || 'N/A'})`);
-      } else if (clientInfo.type === 'web') {
-        console.log(`➖ Web Client ID ${clientInfo.id} disconnected.`);
-      } else {
-        console.log(`➖ Unknown Client ID ${clientInfo.id} disconnected before identification.`);
-      }
-      clients.delete(uniqueClientId);
-    }
-  });
+            default:
+                console.log(`❓ Unhandled message type "${data.type}" from client ${clientId}.`);
+        }
+    });
 
-  ws.on('error', (error) => {
-    const clientInfo = clients.get(uniqueClientId);
-    const idForLog = clientInfo ? (clientInfo.sensorName || `Client ID ${clientInfo.id}`) : `Unknown Client (ID ${uniqueClientId})`;
-    console.error(`🚫 WebSocket error for ${idForLog}:`, error.message);
-  });
+    ws.on('close', (code, reason) => {
+        const client = clients.get(clientId);
+        clients.delete(clientId);
+
+        if (client && client.type === 'esp32' && client.espDeviceName) {
+            handleEspDisconnection(client.espDeviceName, `Connection closed (Code: ${code}, Reason: ${reason || 'N/A'})`);
+        } else {
+            console.log(`🔗 Web client disconnected: ${clientId}. Code: ${code}, Reason: ${reason || 'N/A'}`);
+        }
+    });
+
+    ws.on('error', (error) => {
+        console.error(`❌ WebSocket error for client ${clientId}:`, error);
+        // 'close' will usually follow, so cleanup happens there.
+    });
 });
 
-function handleESPHandshake(ws, sensorName, clientId, ip) {
-  console.log(`🤝 ESP32 Handshake: ${sensorName} (Client ID: ${clientId}) from ${ip}`);
+// --- Heartbeat for ws Library ---
+const interval = setInterval(function ping() {
+    wss.clients.forEach(function each(ws) {
+        const clientEntry = Array.from(clients.values()).find(c => c.ws === ws);
+        const clientIdOrName = clientEntry ? (clientEntry.espDeviceName || clientEntry.clientId || 'Unknown') : 'Unknown WS instance';
 
-  if (espConnections.has(sensorName)) {
-    const oldWs = espConnections.get(sensorName);
-    if (oldWs && oldWs !== ws && oldWs.readyState === WebSocket.OPEN) {
-      console.warn(`⚠️  Duplicate ESP32 name '${sensorName}'. Closing older connection.`);
-      oldWs.send(JSON.stringify({ type: 'error', message: 'Replaced by new connection' }));
-      oldWs.terminate();
-    }
-  }
-
-  let deviceInfo = espDevices.get(sensorName);
-  if (!deviceInfo) {
-    deviceInfo = {
-      id: `ESP-${espIdCounter++}`,
-      lastSeen: Date.now(),
-      connectionCount: 0,
-      ip: ip
-    };
-    espDevices.set(sensorName, deviceInfo);
-    console.log(`✨ New ESP32 device registered: ${sensorName} (ID: ${deviceInfo.id})`);
-  }
-
-  deviceInfo.ws = ws;
-  deviceInfo.lastSeen = Date.now();
-  deviceInfo.connectionCount++;
-  deviceInfo.ip = ip;
-  espConnections.set(sensorName, ws);
-
-  ws.send(JSON.stringify({
-    type: 'handshake_ack',
-    message: `ESP32 ${sensorName} connected`,
-    espId: deviceInfo.id,
-    heartbeat_interval: PING_INTERVAL_MS, // Inform ESP about server's app-level ping
-    heartbeat_enabled: true
-  }));
-
-  broadcastToWebClients({ type: 'esp_connected', name: sensorName, id: deviceInfo.id, ip: deviceInfo.ip });
-  broadcastESPStatusUpdate();
-}
-
-function handleESP32Data(ws, data, sensorName) {
-  const deviceInfo = espDevices.get(sensorName);
-  if (deviceInfo) {
-    deviceInfo.lastSeen = Date.now(); // Update lastSeen on any data
-
-    if (data.type === 'heartbeat' || data.type === 'pong') { // ESP's own heartbeat or pong to server's app ping
-      // console.log(`💓 Heartbeat/Pong from ${sensorName}`);
-      return; // Don't broadcast these to web clients as sensor_data
-    }
-
-    // Ensure device_type is set for web client
-    if (!data.device_type) {
-      const lowerSensorName = sensorName.toLowerCase();
-      if (lowerSensorName.includes('soil') || lowerSensorName.includes('moisture')) {
-        data.device_type = 'soil';
-      } else if (lowerSensorName.includes('light')) {
-        data.device_type = 'light';
-      } else if (lowerSensorName.includes('temp')) {
-        data.device_type = 'temp';
-      } else {
-        data.device_type = lowerSensorName;
-      }
-    }
-    // Log actual data being sent, including the critical soil_condition
-    console.log(`📡 From ${sensorName} (type: ${data.device_type}): ${JSON.stringify(data).substring(0, 150)}`);
-
-    broadcastToWebClients({
-      type: 'sensor_data',
-      ...data,
-      sensor: sensorName, // Ensure sensorName is present
-      espId: deviceInfo.id
-    });
-  } else {
-    console.warn(`⚠️ Received data from unknown or disconnected ESP: ${sensorName}. Requesting handshake.`);
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'request_handshake', message: 'Identify yourself' }));
-    }
-  }
-}
-
-function handleESP32Disconnect(sensorName, wsInstance, reason = "Unknown reason") {
-  const currentConnection = espConnections.get(sensorName);
-  if (currentConnection === wsInstance) { // Only process if it's the currently tracked active connection
-    console.log(`🔌❌ ESP32 '${sensorName}' disconnected. Reason: ${reason}`);
-    espConnections.delete(sensorName);
-
-    // We don't delete from espDevices immediately, just mark as disconnected via status update
-    // This allows the client to know it *was* there.
-    // A separate cleanup mechanism could remove very old entries from espDevices if needed.
-
-    broadcastToWebClients({ type: 'esp_disconnected', name: sensorName, reason: reason });
-    broadcastESPStatusUpdate();
-  } else {
-    // console.log(`🔌 ESP32 '${sensorName}' (older/stale instance) disconnected. Reason: ${reason}`);
-  }
-}
-
-function broadcastToWebClients(data, excludeWs = null) {
-  clients.forEach((client) => {
-    if (client.type === 'web' && client.ws.readyState === WebSocket.OPEN) {
-      if (client.ws !== excludeWs) {
-        try {
-          client.ws.send(JSON.stringify(data));
-        } catch (e) {
-          console.error(`Error sending to web client ${client.id}:`, e.message);
+        if (ws.isAlive === false) {
+            if (DEBUG) console.log(`💔 Heartbeat: Client ${clientIdOrName} did not respond to ping. Terminating.`);
+            return ws.terminate();
         }
-      }
-    }
-  });
-}
-
-function sendESP32StatusToSingleClient(ws) {
-  const status = [];
-  espDevices.forEach((deviceInfo, sensorName) => {
-    status.push({
-      name: sensorName,
-      id: deviceInfo.id,
-      connected: espConnections.has(sensorName) && espConnections.get(sensorName).readyState === WebSocket.OPEN,
-      lastSeen: deviceInfo.lastSeen,
-      ip: deviceInfo.ip
+        ws.isAlive = false; // Expect a pong to set it back to true
+        try {
+            ws.ping(() => {}); // Send ws library ping
+        } catch (e) {
+            console.error(`Error sending ws ping to ${clientIdOrName}:`, e);
+            ws.terminate();
+        }
     });
-  });
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'esp_status_list', devices: status }));
-  }
-}
+}, HEARTBEAT_INTERVAL);
 
-function broadcastESPStatusUpdate() {
-  const status = [];
-  espDevices.forEach((deviceInfo, sensorName) => {
-    status.push({
-      name: sensorName,
-      id: deviceInfo.id,
-      connected: espConnections.has(sensorName) && espConnections.get(sensorName).readyState === WebSocket.OPEN,
-      lastSeen: deviceInfo.lastSeen,
-      ip: deviceInfo.ip
-    });
-  });
-  broadcastToWebClients({ type: 'esp_status_list', devices: status });
-}
-
-// Custom application-level heartbeat interval
-const applicationHeartbeatInterval = setInterval(() => {
-  const now = Date.now();
-  wss.clients.forEach((ws) => {
-    if (ws.deviceType === 'esp' && ws.sensorName) {
-      // Check our custom lastPong against ESP_TIMEOUT_MS
-      if (now - ws.lastPong > ESP_TIMEOUT_MS) {
-        console.warn(`⌛ ESP32 '${ws.sensorName}' application heartbeat timeout (${((now - ws.lastPong)/1000).toFixed(1)}s). Terminating.`);
-        handleESP32Disconnect(ws.sensorName, ws, `Application heartbeat timeout`);
-        ws.terminate();
-        return; // Terminated, no further action needed for this client in this iteration
-      }
-    } else if (ws.deviceType === 'web') {
-        // Optional: Timeout for web clients if needed, using CLIENT_TIMEOUT_MS
-        // if (now - ws.lastPong > CLIENT_TIMEOUT_MS) { ... terminate ... }
-    }
-
-    // Send application-level ping to all clients
-    if (ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
-      } catch (e) {
-        console.error('Failed to send application ping:', e.message);
-        // ws.terminate(); // Consider terminating if send fails
-      }
-    }
-  });
-}, PING_INTERVAL_MS);
-
-
-// ws library's built-in heartbeat check (supplements our custom one)
-// This checks if the client responded to ws.ping() with a ws.pong()
-const wsLibraryHeartbeatInterval = setInterval(() => {
-  wss.clients.forEach((ws) => {
-    if (ws.isAlive === false) {
-      const deviceId = ws.sensorName || (clients.get(Array.from(clients).find(c => c[1].ws === ws)?.[0])?.id || 'Unknown');
-      console.warn(`💔 Client '${deviceId}' failed ws library heartbeat check. Terminating.`);
-      if (ws.deviceType === 'esp' && ws.sensorName) {
-        handleESP32Disconnect(ws.sensorName, ws, "ws library heartbeat failed");
-      }
-      return ws.terminate();
-    }
-    ws.isAlive = false; // Expect a pong before next check
-    try {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.ping(); // ws library ping
-      }
-    } catch (e) {
-        console.error(`Error sending ws library ping to ${deviceId}:`, e.message);
-    }
-  });
-}, 10000); // Check ws library heartbeats less frequently, e.g., every 10s
-
-
-// Clean up intervals on server close
 wss.on('close', () => {
-  clearInterval(applicationHeartbeatInterval);
-  clearInterval(wsLibraryHeartbeatInterval);
-  // clearInterval(statusLogInterval); // if you add one
+    clearInterval(interval);
+    // clearInterval(statusLogInterval); // if you add one
 });
 
 // Optional: Status logging interval
 /*
 const statusLogInterval = setInterval(() => {
-  const totalESPInDeviceMap = espDevices.size;
-  const connectedESPCount = espConnections.size;
+  const totalESPInDeviceMap = espDevices.size; // This counts devices in our map, not necessarily live connections
+  let connectedESPCount = 0;
+  espDevices.forEach(dev => {
+      if (dev.ws && dev.ws.readyState === WebSocket.OPEN) connectedESPCount++;
+  });
   let webClientCount = 0;
   clients.forEach(client => {
-    if (client.type === 'web') webClientCount++;
+    if (client.type === 'web' && client.ws.readyState === WebSocket.OPEN) webClientCount++;
   });
-  console.log(`📊 Status: ${connectedESPCount}/${totalESPInDeviceMap} ESP32 devices connected, ${webClientCount} web clients.`);
+  console.log(`📊 Status: ${connectedESPCount} ESP32 devices connected, ${webClientCount} web clients. (ESP map size: ${totalESPInDeviceMap})`);
 }, 30000);
 */
 
 server.on('error', (error) => {
   if (error.code === 'EADDRINUSE') {
     console.error(`❌ ERROR: Port ${PORT} is already in use!`);
+    console.error('Please close the other application using this port or choose a different port.');
   } else {
     console.error(`❌ Server error: ${error.message}`);
   }
-  process.exit(1);
+  process.exit(1); // Exit if server can't start
 });
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', () => { // Listen on all available network interfaces
   console.log(`
   ╔═════════════════════════════════════════════════════════════╗
   ║  CreaTune WebSocket Server                                  ║
@@ -433,9 +339,9 @@ server.listen(PORT, '0.0.0.0', () => {
   Object.keys(networkInterfaces).forEach((ifaceName) => {
     networkInterfaces[ifaceName].forEach((iface) => {
       if (iface.family === 'IPv4' && !iface.internal) {
-        console.log(`    - http://${iface.address}:${PORT} (${ifaceName})`);
+        console.log(`    ➡️  http://${iface.address}:${PORT} (${ifaceName})`);
       }
     });
   });
-  console.log('');
+  console.log('Waiting for connections...');
 });
