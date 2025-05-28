@@ -1,21 +1,33 @@
 class SoilHandler {
     constructor() {
-        this.synth = null;
-        this.loop = null;
-        this.melody = null;
+        // Synths and Loops
+        this.toyPianoSynth = null;
+        this.insectSynth = null;
+        this.toyPianoLoop = null;
+        this.insectLoop = null;
+        this.insectLFO = null; // For insect sound modulation
+
+        // Audio Params
+        this.melody = null; // Kept for potential future use, but new patterns are primary
+        this.fadeDuration = 0.7; // seconds for fade in/out
+        this.toyPianoTargetVolume = -15; // dB
+        this.insectTargetVolume = -25; // dB
+
+        // State
         this.isActive = false;      // Sensor data indicates 'humid' or 'wet'
-        this.isPlaying = false;     // Audio is currently playing
+        this.isPlaying = false;     // Audio is considered "on" and playing/fading in
+        this.isFadingOut = false;   // True if audio is currently in the process of fading out
         this.isConnected = false;   // WebSocket connection to sensor is live
         this.audioEnabled = false;  // User has clicked the enable audio button
         this.debugMode = true;
+        this.stopTimeoutId = null; // To manage the timeout for stopping audio after fade
 
+        // DOM Elements
         this.soilCreatureVisual = document.querySelector('.soil-creature');
         this.frameBackground = document.querySelector('.framebackground');
         this.audioEnableButton = null;
-
-        // Optional UI elements
-        this.soilButton = document.getElementById('soil-button');
-        this.soilStatus = document.getElementById('soil-status');
+        this.soilButton = document.getElementById('soil-button'); // Optional
+        this.soilStatus = document.getElementById('soil-status'); // Optional
 
         if (!this.soilCreatureVisual) console.warn('💧 .soil-creature element not found.');
         if (!this.frameBackground) console.warn('💧 .framebackground element not found.');
@@ -54,8 +66,8 @@ class SoilHandler {
                     this.audioEnableButton.classList.add('audio-button-confirm');
                     setTimeout(() => this.audioEnableButton.classList.add('audio-button-hidden'), 1000);
 
-                    if (this.isActive && this.isConnected) this.startAudio();
-                    this.updateUI();
+                    // If conditions met, manageAudioAndVisuals will handle starting
+                    this.manageAudioAndVisuals();
                 } catch (e) {
                     console.error('Error starting AudioContext:', e);
                     this.audioEnableButton.textContent = 'Error Enabling Audio';
@@ -67,27 +79,78 @@ class SoilHandler {
     }
 
     initTone() {
-        if (this.synth) return;
+        if (this.toyPianoSynth) return; // Already initialized
         if (!window.Tone) {
             console.error('💧 Tone.js is not loaded.');
             return;
         }
         console.log('💧 Initializing Tone.js components for soil...');
-        this.synth = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: 'sine' },
-            envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.5 }
+
+        // Toy Piano Synth
+        this.toyPianoSynth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: 'triangle' }, // Softer than sine for this purpose
+            envelope: { attack: 0.005, decay: 0.3, sustain: 0.05, release: 0.2 },
+            volume: -Infinity // Start silent for fade-in
         }).toDestination();
-        const reverb = new Tone.Reverb({ decay: 1.5, wet: 0.3 }).toDestination();
-        this.synth.connect(reverb);
-        this.synth.volume.value = -12;
-        this.melody = [
-            { note: 'C4', dur: '8n', time: '0:0' }, { note: 'E4', dur: '8n', time: '0:0:2' },
-            { note: 'G4', dur: '8n', time: '0:1:0' }, { note: 'C5', dur: '4n', time: '0:1:2' }
-        ];
+        const reverb = new Tone.Reverb({ decay: 2.5, wet: 0.35 }).connect(this.toyPianoSynth.output);
+        // this.toyPianoSynth.connect(reverb); // Connect synth to reverb, then reverb to destination implicitly if not chained.
+                                          // Or, more explicitly: synth -> reverb -> destination.
+                                          // The above line connects reverb to synth's output, which is unusual.
+                                          // Correct chain:
+        this.toyPianoSynth.chain(reverb, Tone.Destination);
+
+
+        // Insect Synth - FMSynth for more complex, potentially metallic/buzzy sounds
+        this.insectSynth = new Tone.PolySynth(Tone.FMSynth, {
+            harmonicity: 2.5,
+            modulationIndex: 8,
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.01, decay: 0.05, sustain: 0.01, release: 0.1 },
+            modulation: { type: "square" },
+            modulationEnvelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.05 },
+            volume: -Infinity // Start silent
+        }).toDestination();
+
+        // LFO for insect sound modulation (e.g., pitch or filter, here modulationIndex)
+        this.insectLFO = new Tone.LFO({
+            frequency: "6Hz", // Modulate fairly quickly
+            min: 5,
+            max: 15,
+            type: "sine"
+        }).start().connect(this.insectSynth.modulationIndex);
+
+
+        this.createToyPianoPattern();
+        this.createInsectPattern();
+
         console.log('💧 Tone.js components initialized for soil.');
     }
 
+    createToyPianoPattern() {
+        const notes = ["C4", "E4", "G4", "A4", "C5", "D4", "F4"]; // A mix for gentle ambiance
+        this.toyPianoLoop = new Tone.Loop(time => {
+            const note = notes[Math.floor(Math.random() * notes.length)];
+            const velocity = Math.random() * 0.4 + 0.2; // Softer velocities
+            const duration = Tone.Time("4n").toSeconds() * (Math.random() * 0.5 + 0.75);
+            this.toyPianoSynth.triggerAttackRelease(note, duration, time, velocity);
+        }, "2n"); // Average interval, can be randomized further if desired
+        this.toyPianoLoop.humanize = "16n"; // Add slight timing variations
+    }
+
+    createInsectPattern() {
+        this.insectLoop = new Tone.Loop(time => {
+            const duration = Tone.Time("32n").toSeconds() * (Math.random() * 0.8 + 0.4);
+            const velocity = Math.random() * 0.15 + 0.05; // Very subtle
+            const pitch = ["A5", "C#6", "E6", "G#5"][Math.floor(Math.random() * 4)];
+            this.insectSynth.triggerAttackRelease(pitch, duration, time, velocity);
+        }, "3n"); // Irregular, faster rhythm
+        this.insectLoop.probability = 0.65; // Doesn't always trigger
+        this.insectLoop.humanize = "32n";
+    }
+
+
     setupListeners() {
+        // ... (setupListeners remains the same as your previous working version)
         if (!window.creatune) {
             console.error('💧 window.creatune not available.');
             return;
@@ -97,8 +160,7 @@ class SoilHandler {
         window.creatune.on('stateChange', (deviceType, state) => {
             if (deviceType === 'soil') {
                 if (this.debugMode) console.log(`💧 Soil stateChange event: sensor active = ${state.active}`);
-                // state.active is true if soil_condition is 'humid' or 'wet'
-                this.isActive = state.active; // Update internal sensor active state
+                this.isActive = state.active;
                 this.manageAudioAndVisuals();
             }
         });
@@ -115,7 +177,7 @@ class SoilHandler {
             if (deviceType === 'soil') {
                 console.log('💧 Soil sensor reported disconnected.');
                 this.isConnected = false;
-                this.isActive = false; // If disconnected, sensor cannot be considered active
+                this.isActive = false; 
                 this.manageAudioAndVisuals();
             }
         });
@@ -126,25 +188,35 @@ class SoilHandler {
             this.isActive = initialState.active;
             if (this.debugMode) console.log(`💧 SoilHandler: Initial state - Connected: ${this.isConnected}, SensorActive: ${this.isActive}`);
         }
-        this.updateUI(); // Initial UI based on potentially stale state, will update on new events
+        this.updateUI();
         console.log('💧 SoilHandler: WebSocket listeners set up.');
     }
     
     manageAudioAndVisuals() {
-        // Determine if audio should be playing based on all conditions
         const shouldPlayAudio = this.audioEnabled && this.isConnected && this.isActive;
 
-        if (shouldPlayAudio && !this.isPlaying) {
-            this.startAudio();
-        } else if (!shouldPlayAudio && this.isPlaying) {
-            this.stopAudio();
+        if (shouldPlayAudio) {
+            // If not currently playing and not in the middle of fading out, start.
+            // Or if it was fading out but now should play, override fade out and start.
+            if (!this.isPlaying || this.isFadingOut) {
+                this.startAudio();
+            }
+        } else {
+            // If it is currently playing and not already fading out, stop.
+            if (this.isPlaying && !this.isFadingOut) {
+                this.stopAudio();
+            }
         }
-        // Always update UI to reflect current states
-        this.updateUI();
+        // If neither start nor stop is called, but UI might need update due to isConnected/isActive changing
+        // without affecting isPlaying (e.g. sensor becomes dry but audio was already off and not fading).
+        if (!this.isPlaying && !this.isFadingOut) {
+             this.updateUI();
+        }
     }
 
-
     updateUI() {
+        // Visuals fade based on CSS transition tied to 'active' class.
+        // 'active' class is tied to 'isPlaying' (which means audio is on or fading in).
         if (this.soilCreatureVisual) {
             this.soilCreatureVisual.classList.toggle('active', this.isPlaying);
         }
@@ -161,54 +233,90 @@ class SoilHandler {
             else if (this.isActive) this.soilStatus.textContent = 'Soil: Active (Humid/Wet)';
             else this.soilStatus.textContent = 'Soil: Inactive (Dry)';
         }
-        if (this.debugMode) console.log(`💧 UI Update: Connected=${this.isConnected}, SensorActive=${this.isActive}, AudioPlaying=${this.isPlaying}`);
+        if (this.debugMode) console.log(`💧 UI Update: Connected=${this.isConnected}, SensorActive=${this.isActive}, AudioPlaying=${this.isPlaying}, FadingOut=${this.isFadingOut}`);
     }
 
     startAudio() {
-        // Pre-conditions already checked by manageAudioAndVisuals
-        if (this.isPlaying || !this.audioEnabled || !this.isConnected || !this.isActive) {
-             // If somehow called directly without meeting conditions, ensure UI is correct
-            if (!this.isPlaying && (!this.audioEnabled || !this.isConnected || !this.isActive)) {
-                // If it's not playing AND conditions are not met, ensure it stays stopped.
-            } else if (this.isPlaying) {
-                // If it is playing, but conditions are no longer met, it should be stopped by manageAudioAndVisuals
-            }
-            this.updateUI();
+        if (this.isPlaying && !this.isFadingOut) return; // Already playing and not fading out
+
+        // If it was fading out, cancel the scheduled stop
+        if (this.isFadingOut) {
+            if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
+            this.isFadingOut = false;
+            console.log('💧 Cancelled fade out, starting fade in.');
+        }
+
+        // Ensure pre-conditions are met (audio enabled, connected, sensor active)
+        if (!this.audioEnabled || !this.isConnected || !this.isActive) {
+            if (this.debugMode) console.log(`💧 Start audio called, but pre-conditions not met (Enabled:${this.audioEnabled}, Connected:${this.isConnected}, SensorActive:${this.isActive})`);
+            // Ensure it's fully stopped if conditions aren't met
+            if (this.isPlaying || this.isFadingOut) this.stopAudio(); // This will handle fade out if it was playing
+            else this.updateUI(); // Just update UI if it was already off
             return;
         }
-        if (!this.synth) { this.initTone(); if (!this.synth) return; }
 
-        console.log('💧 Attempting to start soil audio...');
-        Tone.Transport.bpm.value = 100;
-        if (this.loop) this.loop.dispose();
-        this.loop = new Tone.Part((time, value) => {
-            this.synth.triggerAttackRelease(value.note, value.dur, time);
-        }, this.melody).start(0);
-        this.loop.loop = true; this.loop.loopEnd = '1m';
-        Tone.Transport.start();
-        this.isPlaying = true;
-        console.log('💧 Soil audio started.');
+        if (!this.toyPianoSynth) { this.initTone(); if (!this.toyPianoSynth) return; }
+
+        console.log('💧 Attempting to start soil audio with fade-in...');
+        this.toyPianoSynth.volume.rampTo(this.toyPianoTargetVolume, this.fadeDuration, Tone.now());
+        this.insectSynth.volume.rampTo(this.insectTargetVolume, this.fadeDuration, Tone.now());
+
+        if (Tone.Transport.state !== "started") Tone.Transport.start();
+        if (this.toyPianoLoop && this.toyPianoLoop.state !== "started") this.toyPianoLoop.start(0);
+        if (this.insectLoop && this.insectLoop.state !== "started") this.insectLoop.start(0);
+        
+        this.isPlaying = true; // Now it's officially "playing" (or fading in)
+        this.isFadingOut = false;
+        console.log('💧 Soil audio started/fading in.');
         this.updateUI();
     }
 
     stopAudio() {
-        if (!this.isPlaying && !this.loop) { // Already stopped or never started
-            this.isPlaying = false; // Ensure state is correct
-            this.updateUI();
+        // If not playing and not currently fading out, nothing to do.
+        if (!this.isPlaying && !this.isFadingOut) {
+            this.updateUI(); // Ensure UI is consistent
             return;
         }
-        console.log('💧 Attempting to stop soil audio...');
-        if (this.loop) {
-            this.loop.stop(0); this.loop.dispose(); this.loop = null;
-        }
-        // Consider global Tone.Transport.stop() implications if other sounds exist
-        // if (Tone.Transport.state === 'started') Tone.Transport.stop();
-        this.isPlaying = false;
-        console.log('💧 Soil audio stopped.');
-        this.updateUI();
+        // If already in the process of fading out, don't restart the process.
+        if (this.isFadingOut) return;
+
+        console.log('💧 Attempting to stop soil audio with fade-out...');
+        this.isFadingOut = true;
+        this.isPlaying = false; // Mark as "not playing" for UI and logic checks
+
+        // Ramp volumes down
+        this.toyPianoSynth.volume.rampTo(-Infinity, this.fadeDuration, Tone.now());
+        this.insectSynth.volume.rampTo(-Infinity, this.fadeDuration, Tone.now());
+
+        // Clear any previous timeout to prevent multiple executions
+        if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
+
+        this.stopTimeoutId = setTimeout(() => {
+            if (this.toyPianoLoop && this.toyPianoLoop.state === "started") this.toyPianoLoop.stop(0);
+            if (this.insectLoop && this.insectLoop.state === "started") this.insectLoop.stop(0);
+            
+            // Consider stopping transport only if no other sounds depend on it.
+            // For now, assume these loops are the main users for this handler.
+            // A more robust system might count active parts on the transport.
+            // if (Tone.Transport.state === "started") {
+            //    let activeSources = 0;
+            //    if (this.toyPianoLoop && this.toyPianoLoop.state === "started") activeSources++;
+            //    if (this.insectLoop && this.insectLoop.state === "started") activeSources++;
+            //    // Add other sources if any
+            //    if (activeSources === 0) Tone.Transport.stop();
+            // }
+
+            console.log('💧 Soil audio fully stopped after fade.');
+            this.isFadingOut = false; 
+            // this.isPlaying is already false
+            this.updateUI(); // Final UI update
+        }, this.fadeDuration * 1000 + 50); // Add a small buffer to ms for ramp completion
+
+        this.updateUI(); // Update UI immediately to reflect that it's stopping (creature starts fading out)
     }
 }
 
+// DOMContentLoaded and export remain the same
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🌱 DOMContentLoaded: Preparing Soil Handler...');
     const ensureCreatuneAndTone = () => {
