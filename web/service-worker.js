@@ -115,6 +115,9 @@ self.addEventListener('fetch', event => {
             // Check if response is valid to cache
             if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
               // Don't cache error responses or opaque responses unless intended
+              // For 'basic' type, it means same-origin requests.
+              // For opaque responses (cross-origin, no CORS), you might get status 0, which is not cacheable by default.
+              // If you need to cache opaque responses, you'd handle it differently, but usually not recommended.
               return networkResponse;
             }
 

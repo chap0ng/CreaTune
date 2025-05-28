@@ -340,7 +340,6 @@ body {
   /* (hover: none) and (pointer: coarse) helps target touch devices */
 
   body {
-    /* Optional: prevent any accidental scrollbars if frame is truly edge-to-edge */
     overflow: hidden;
   }
 
@@ -363,6 +362,6 @@ body {
     font-size: 16px; /* Slightly smaller */
     padding: 10px 15px;
     top: 10px;
-    right: 10px;
+    right: 10px; 
   }
 }
