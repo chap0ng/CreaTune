@@ -10,7 +10,7 @@ class CreaTuneClient {
         // !!! CRUCIAL: SET YOUR PHONE'S ACTUAL WI-FI IP ADDRESS AND PORT HERE !!!
         // This is the IP address your Termux server is reachable on from your local network.
         // Example: '192.168.1.100:8080'
-        this.serverHostOverride = '198.168.0.100:8080'; // <--- REPLACE THIS!
+        this.serverHostOverride = '192.168.0.100:8080'; // <--- REPLACE THIS!
 
         this.deviceStates = {
             soil: {
