@@ -130,144 +130,104 @@ body {
 }
 
 /* ==========================================================================
-   FRAME BACKGROUNDS & STATES - FIXED FOR STABILITY
+   FRAME BACKGROUNDS & STATES - CONSOLIDATED
    ========================================================================== */
 
 .framebackground {
   grid-area: framebackground;
-  background-color: var(--warm-beige);
+  background-color: var(--warm-beige); /* Default background */
   border: none;
-  will-change: margin-top;
+  will-change: margin-top; /* For frame resizing */
   position: relative;
   overflow: hidden;
   
-  /* ✅ CRITICAL: Smooth transitions to prevent flickering */
-  transition: background-color 0.8s ease-in-out;
+  /* Smooth transitions for background changes */
+  transition: background-color 0.8s ease-in-out, background-image 0.8s ease-in-out;
   
-  /* ✅ Performance optimizations */
   transform: translateZ(0);
   backface-visibility: hidden;
 }
 
-/* ESP32 Connection States */
-.framebackground.soil {
-  background-image: url('images/soil-background.jpg');
+/* This is the active rule for soil connection, used by soil.js */
+.framebackground.soil-connected-bg {
+  background-image: url('images/soil-background.jpg'); /* Make sure this path is correct */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  /* background-color: var(--sage-green); */ /* Alternative or fallback if image fails */
 }
 
+/* Other device-specific backgrounds (if needed by JS) */
 .framebackground.temp {
-  background-color: var(--coral-red);
+  background-color: var(--coral-red); /* Example */
 }
 
 .framebackground.light {
-  background-color: var(--coral-red);
+  background-color: var(--coral-red); /* Example */
 }
 
-/* ✅ FIXED: Soil background - stable transition */
+/* This .soil-background class provides an alternative style (color + gradient) if applied by JS */
+/* It's distinct from .soil-connected-bg which uses an image */
 .framebackground.soil-background {
-  /* Change background color smoothly instead of abrupt sprite */
   background-color: var(--sage-green);
-  
-  /* Add subtle texture overlay if you want */
   background-image: 
     radial-gradient(circle at 25% 25%, rgba(142,164,125,0.3) 2px, transparent 2px),
     radial-gradient(circle at 75% 75%, rgba(142,164,125,0.2) 1px, transparent 1px);
   background-size: 30px 30px, 15px 15px;
   background-position: 0 0, 15px 15px;
-  
-  /* ✅ Remove conflicting sprite properties that were causing instability */
-  /* width: 64px; height: 64px; - REMOVED */
-  /* background-image: url('sprite/soil-background.png'); - COMMENTED OUT */
-  /* background-size: 64px 64px; - REMOVED */
-  /* animation: grid-animation 2s steps(4) 5s; - REMOVED */
-  
-  /* Keep z-index for layering */
   z-index: 1;
-  
-  /* ✅ Smooth transition */
-  transition: 
-    background-color 0.8s ease-in-out,
-    background-image 0.6s ease-in-out;
+  /* transition already handled by base .framebackground */
 }
-
-/* Alternative: If you want to keep the sprite but make it stable */
-/*
-.framebackground.soil-background {
-  background-color: var(--sage-green);
-  position: relative;
-}
-
-.framebackground.soil-background::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 64px;
-  height: 64px;
-  background-image: url('sprite/soil-background.png');
-  background-size: 64px 64px;
-  opacity: 0.8;
-  z-index: 1;
-  transition: opacity 0.5s ease-in-out;
-}
-*/
 
 /* ==========================================================================
-   CREATURES - FIXED FOR STABILITY & CENTERED
+   CREATURES - CONSOLIDATED
    ========================================================================== */
 
 .idle-creature, .soil-creature {
   position: absolute;
-  top: 50%;                    /* ✅ Perfect center - removed +10px offset */
-  left: 50%;                   /* ✅ Perfect center */
-  transform: translate(-50%, -50%) translateZ(0);  /* ✅ Single transform rule */
-  width: min(40vw, 35vh);      /* ✅ Made bigger - was 30vw, 20vh */
-  height: min(40vw, 35vh);     /* ✅ Made bigger for better visibility */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) translateZ(0);
+  width: min(40vw, 35vh);
+  height: min(40vw, 35vh);
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  display: none;
+  display: none; /* Default state: hidden */
   z-index: 5;
   
-  /* ✅ CRITICAL: Smooth transitions to prevent flickering */
-  opacity: 0;
+  opacity: 0; /* Default state: transparent */
   transition: 
     opacity 0.6s ease-in-out,
     transform 0.4s ease-in-out;
   
-  /* ✅ Performance optimizations */
   will-change: opacity, transform;
   backface-visibility: hidden;
 }
 
 .soil-creature {
   background-image: url('sprites/creatures/soil-creature.png');
-  background-color: transparent;
+  background-color: transparent; /* Ensure no conflicting background color */
 }
 
-/* ✅ FIXED: Stable creature activation */
-.soil-creature.active {
-  display: block;
+.soil-creature.active { /* This class is toggled by soil.js when audio is playing */
+  display: block; /* Show when active */
   opacity: 1;
-  
-  /* ✅ Subtle idle animation for life */
   animation: soilCreatureIdle 4s ease-in-out infinite;
 }
 
-/* ✅ IMPROVED: Smooth creature idle animation with perfect centering */
 @keyframes soilCreatureIdle {
   0%, 100% { 
     transform: translate(-50%, -50%) translateY(0px) scale(1) translateZ(0);
     filter: brightness(1);
   }
   50% { 
-    transform: translate(-50%, -50%) translateY(-5px) scale(1.03) translateZ(0);  /* ✅ Slightly more movement */
+    transform: translate(-50%, -50%) translateY(-5px) scale(1.03) translateZ(0);
     filter: brightness(1.05);
   }
 }
 
-/* ✅ IMPROVED: Creature sound reaction with perfect centering */
-.soil-creature.reacting {
+.soil-creature.reacting { /* Optional class for specific reactions */
   animation: soilCreatureReact 0.8s ease-out;
 }
 
@@ -277,7 +237,7 @@ body {
     filter: brightness(1);
   }
   30% { 
-    transform: translate(-50%, -50%) scale(1.2) translateZ(0);  /* ✅ Bigger reaction */
+    transform: translate(-50%, -50%) scale(1.2) translateZ(0);
     filter: brightness(1.2) contrast(1.1);
   }
   100% { 
@@ -287,7 +247,7 @@ body {
 }
 
 /* ==========================================================================
-   ANIMATIONS - KEPT YOUR ORIGINAL ONES
+   ANIMATIONS (Original frame animations)
    ========================================================================== */
 
 @keyframes frametop {
@@ -352,72 +312,27 @@ body {
   transform: translateY(-20px);
 }
 
-
 /* ==========================================================================
-   FRAME BACKGROUND - SOIL CONNECTED STATE
-   ========================================================================== */
-
-.framebackground.soil-connected-bg {
-  /* Using the image you already have defined for .soil */
-  background-image: url('images/soil-background.jpg'); /* Make sure this path is correct */
-  background-size: cover; /* Or your preferred size */
-  background-position: center;
-  background-repeat: no-repeat;
-  /* background-color: var(--sage-green); */ /* Alternative or fallback */
-}
-
-/* Ensure default .framebackground transition applies */
-.framebackground {
-  /* ... other .framebackground styles ... */
-  transition: background-image 0.8s ease-in-out, background-color 0.8s ease-in-out; /* Ensure background-image is part of transition */
-}
-
-
-/* ==========================================================================
-   SOIL CREATURE - VISIBILITY (already mostly handled by your .active class)
-   ========================================================================== */
-
-/* Your existing .soil-creature styles already set display: none and opacity: 0 */
-/* Your existing .soil-creature.active styles set display: block and opacity: 1 */
-/* No changes needed here if .soil-creature.active is correctly applied by JS when audio plays */
-
-.soil-creature {
-  /* ... your existing .soil-creature styles ... */
-  display: none; /* Default state */
-  opacity: 0;
-  transition: opacity 0.6s ease-in-out, transform 0.4s ease-in-out; /* Ensure smooth transition */
-}
-
-.soil-creature.active {
-  display: block; /* Show when active */
-  opacity: 1;
-  /* Your existing animation for .active can remain: */
-  /* animation: soilCreatureIdle 4s ease-in-out infinite; */
-}
-
-
-/* ==========================================================================
-   RESPONSIVE ADJUSTMENTS - BIGGER CREATURES
+   RESPONSIVE ADJUSTMENTS - CREATURE SIZE
    ========================================================================== */
 
 @media (max-width: 768px) {
-  .soil-creature {
-    width: min(35vw, 30vh);    /* ✅ Bigger on mobile - was 25vw, 15vh */
+  .soil-creature { /* Also applies to .idle-creature if it shares structure */
+    width: min(35vw, 30vh);
     height: min(35vw, 30vh);
   }
 }
 
 @media (max-height: 500px) {
-  .soil-creature {
-    width: min(30vw, 25vh);    /* ✅ Bigger on short screens - was 20vw, 12vh */
+  .soil-creature { /* Also applies to .idle-creature */
+    width: min(30vw, 25vh);
     height: min(30vw, 25vh);
   }
 }
 
-/* ✅ NEW: Extra large screens - make creature even more prominent */
 @media (min-width: 1200px) {
-  .soil-creature {
-    width: min(35vw, 40vh);    /* ✅ Even bigger on large screens */
+  .soil-creature { /* Also applies to .idle-creature */
+    width: min(35vw, 40vh);
     height: min(35vw, 40vh);
   }
 }

@@ -1,67 +1,41 @@
-// websocket-client.js
-// Enhanced WebSocket client with stable state management and robust connection handling
-
 class CreaTuneClient {
     constructor() {
         this.ws = null;
         this.isConnected = false;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5; // Increased for more resilience
-        this.reconnectDelay = 1000;
+        this.maxReconnectAttempts = 5;
+        this.reconnectDelay = 1000; // Initial delay
         this.clientId = null;
 
-        // Device state tracking
         this.deviceStates = {
             soil: {
                 connected: false,
-                active: false,        // Clean on/off state based on stability
-                lastRawData: null,
-                lastStateChange: 0,   // Timestamp of the last stable state change
-                stateHistory: []      // History of raw 'shouldBeActive' states
-            },
-            light: {
-                connected: false,
-                active: false,
+                active: false, // Based on 'humid' or 'wet'
                 lastRawData: null,
                 lastStateChange: 0,
                 stateHistory: []
             },
-            temp: {
-                connected: false,
-                active: false,
-                lastRawData: null,
-                lastStateChange: 0,
-                stateHistory: []
-            }
+            // Add other devices here if needed (e.g., light, temp)
         };
 
-        // Stability settings
-        this.stabilityRequiredReadings = 3;  // How many consistent readings to confirm a state
-        this.maxHistoryLength = 5;           // Max readings to keep for stability check
-        this.minStateChangeInterval = 2000;  // Minimum ms between active/inactive state changes
+        this.stabilityRequiredReadings = 3;
+        this.maxHistoryLength = 5;
+        this.minStateChangeInterval = 1000; // ms
 
-        this.callbacks = {}; // Changed from array to object for named event types
-        // No auto-init here, will be called by DOMContentLoaded
+        this.callbacks = {};
+        // init() will be called by DOMContentLoaded
     }
 
     init() {
         console.log('🔌 Initializing CreaTune WebSocket Client...');
         this.connect();
-        // window.creatune = this; // This will be set in the DOMContentLoaded listener
     }
 
     connect() {
         try {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            let wsUrl;
-
-            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                wsUrl = `${protocol}//localhost:${window.location.port || '8080'}`;
-                console.log(`🔗 Attempting WebSocket connection (localhost): ${wsUrl}`);
-            } else {
-                wsUrl = `${protocol}//${window.location.host}`;
-                console.log(`🔗 Attempting WebSocket connection (remote): ${wsUrl}`);
-            }
+            const wsUrl = `${protocol}//${window.location.host}`; // Assumes server is on same host/port
+            console.log(`🔗 Attempting WebSocket connection: ${wsUrl}`);
 
             this.ws = new WebSocket(wsUrl);
 
@@ -69,15 +43,14 @@ class CreaTuneClient {
                 console.log('✅ WebSocket connected successfully.');
                 this.isConnected = true;
                 this.reconnectAttempts = 0;
-                this.reconnectDelay = 1000; // Reset delay on successful connection
-                // Server should send a 'welcome' message with clientId
+                this.reconnectDelay = 1000;
+                this.notifyCallbacks('websocketOpen');
             };
 
             this.ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    // Debug all received messages (uncomment when needed)
-                    // console.log('📥 Received message:', data);
+                    // console.log('📥 Received message:', data); // Uncomment for deep debug
                     this.handleMessage(data);
                 } catch (error) {
                     console.error('❌ Error parsing message:', event.data, error);
@@ -85,21 +58,21 @@ class CreaTuneClient {
             };
 
             this.ws.onclose = (event) => {
-                console.log(`🔌❌ WebSocket disconnected (Code: ${event.code}, Reason: "${event.reason}")`);
+                console.log(`🔌❌ WebSocket disconnected (Code: ${event.code}, Reason: "${event.reason || 'N/A'}")`);
                 this.isConnected = false;
-                this.markAllDisconnected(); // Ensure all devices are marked as disconnected
+                this.markAllDisconnected(); // Mark internal states and notify listeners
+                this.notifyCallbacks('websocketClose');
                 this.attemptReconnect();
             };
 
             this.ws.onerror = (error) => {
-                console.error('🚫 WebSocket error:', error);
-                // onclose will usually follow an error, so reconnection is handled there
-                this.isConnected = false;
+                console.error('🚫 WebSocket error:', error.message || 'Unknown error');
+                this.isConnected = false; // onclose will usually follow
             };
 
         } catch (error) {
             console.error('❌ Failed to create WebSocket connection:', error);
-            this.attemptReconnect(); // Try to reconnect if initial connection fails
+            this.attemptReconnect();
         }
     }
 
@@ -107,47 +80,32 @@ class CreaTuneClient {
         switch (data.type) {
             case 'welcome':
                 this.clientId = data.clientId;
-                console.log(`🎉 Welcome! Client ID: ${this.clientId}. Requesting ESP status...`);
-                // Optionally, request current ESP status from server upon connection
-                // if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                //    this.ws.send(JSON.stringify({ type: 'get_esp_status' }));
-                // }
+                console.log(`🎉 Welcome! Client ID: ${this.clientId}.`);
+                // Optionally request initial ESP status
+                // this.sendMessage({ type: 'get_esp_status' });
                 break;
 
-            case 'ping':
-                // Respond to server heartbeat with pong
-                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.send(JSON.stringify({
-                        type: 'pong',
-                        timestamp: data.timestamp,
-                        response_time: Date.now()
-                    }));
-                }
+            case 'ping': // Server's application-level ping
+                this.sendMessage({ type: 'pong', timestamp: data.timestamp, response_time: Date.now() });
                 break;
 
             case 'sensor_data':
                 this.processSensorData(data);
                 break;
 
-            case 'esp_status': // If server sends a list of currently connected ESPs
-                console.log('📡 ESP Status received:', data.devices);
-                break;
-
-            case 'esp_status_list': // Updated status list format
+            case 'esp_status_list':
                 console.log('📡 ESP Status List received:', data.devices);
                 if (Array.isArray(data.devices)) {
-                    data.devices.forEach(device => {
-                        const deviceType = this.identifyDeviceTypeByName(device.name);
+                    data.devices.forEach(deviceStatus => {
+                        const deviceType = this.identifyDeviceTypeByName(deviceStatus.name);
                         if (deviceType && this.deviceStates[deviceType]) {
-                            // Update connection state based on server's knowledge
-                            if (device.connected && !this.deviceStates[deviceType].connected) {
-                                console.log(`📡 ${deviceType.toUpperCase()} marked as connected from server status.`);
-                                this.deviceStates[deviceType].connected = true;
+                            const localDevice = this.deviceStates[deviceType];
+                            if (deviceStatus.connected && !localDevice.connected) {
+                                localDevice.connected = true;
                                 this.notifyCallbacks('connected', deviceType);
-                            } else if (!device.connected && this.deviceStates[deviceType].connected) {
-                                console.log(`🔌❌ ${deviceType.toUpperCase()} marked as disconnected from server status.`);
-                                this.deviceStates[deviceType].connected = false;
-                                this.deviceStates[deviceType].active = false;
+                            } else if (!deviceStatus.connected && localDevice.connected) {
+                                localDevice.connected = false;
+                                localDevice.active = false; // If disconnected, it can't be active
                                 this.notifyCallbacks('disconnected', deviceType);
                             }
                         }
@@ -155,17 +113,16 @@ class CreaTuneClient {
                 }
                 break;
 
-            case 'esp_connected': // Message when a new ESP connects
+            case 'esp_connected':
                 const connectedDeviceType = this.identifyDeviceTypeByName(data.name);
                 if (connectedDeviceType && this.deviceStates[connectedDeviceType]) {
-                    console.log(`🔌✅ ${connectedDeviceType.toUpperCase()} connected to server.`);
-                    // We'll wait for actual data from the device before marking it active
+                    console.log(`🔌✅ ${connectedDeviceType.toUpperCase()} connected to server (name: ${data.name}).`);
                     this.deviceStates[connectedDeviceType].connected = true;
                     this.notifyCallbacks('connected', connectedDeviceType);
                 }
                 break;
 
-            case 'esp_disconnected': // Message from server indicating an ESP has disconnected
+            case 'esp_disconnected':
                 this.handleESPDisconnection(data);
                 break;
 
@@ -178,24 +135,22 @@ class CreaTuneClient {
         const deviceType = this.identifyDeviceType(data);
 
         if (!deviceType || !this.deviceStates[deviceType]) {
-            console.warn(`❓ Unknown or unconfigured device type for data:`, data);
+            console.warn(`❓ Unknown or unconfigured device type for sensor data:`, data);
             return;
         }
 
         const device = this.deviceStates[deviceType];
 
-        // Mark as connected if not already (first data implies connection)
-        if (!device.connected) {
+        if (!device.connected) { // First data implies connection if not already marked
             device.connected = true;
             console.log(`📡 ${deviceType.toUpperCase()} now considered connected (received data).`);
             this.notifyCallbacks('connected', deviceType);
         }
 
         device.lastRawData = data;
-        const shouldBeActive = this.shouldBeActive(deviceType, data);
+        const shouldBeActiveNow = this.shouldBeActive(deviceType, data);
 
-        // Update state history
-        device.stateHistory.push(shouldBeActive);
+        device.stateHistory.push(shouldBeActiveNow);
         if (device.stateHistory.length > this.maxHistoryLength) {
             device.stateHistory.shift();
         }
@@ -204,56 +159,34 @@ class CreaTuneClient {
 
         if (stableState !== null && stableState !== device.active) {
             const timeSinceLastChange = Date.now() - device.lastStateChange;
-
             if (timeSinceLastChange >= this.minStateChangeInterval) {
-                const previousActiveState = device.active; // Capture current active state before changing it
+                const previousActiveState = device.active;
                 device.active = stableState;
                 device.lastStateChange = Date.now();
                 console.log(`🔄 ${deviceType.toUpperCase()} STABLE STATE CHANGE: ${previousActiveState} → ${device.active}`);
                 this.notifyCallbacks('stateChange', deviceType, {
                     active: device.active,
                     rawData: data,
-                    previousState: previousActiveState // Send the actual previous state
+                    previousState: previousActiveState
                 });
-            } else {
-                // console.log(`⏳ ${deviceType} state change blocked - too soon.`);
             }
         }
-        
-        // Always notify about raw data, even if state didn't change
-        this.notifyCallbacks('data', deviceType, data);
+        this.notifyCallbacks('data', deviceType, data); // Notify raw data regardless of state change
     }
 
     shouldBeActive(deviceType, data) {
-        // Define activation logic per device
         switch (deviceType) {
             case 'soil':
-                // Handle all possible soil data formats
-                if (data.soil_condition) { 
+                if (data.soil_condition) {
                     return data.soil_condition === 'humid' || data.soil_condition === 'wet';
-                } else if (data.moisture_app_value !== undefined) { 
-                    return data.moisture_app_value > 0.4; 
-                } else if (data.voltage !== undefined) {
-                    // ESP32 soil data often sends voltage
-                    return data.voltage > 0.4;
-                } else if (data.raw_value !== undefined) {
-                    // ESP32 sometimes sends raw sensor value
-                    return data.raw_value < 700; // Assuming lower values are wetter soil
                 }
+                // Fallbacks (less ideal if soil_condition is always sent)
+                else if (data.moisture_app_value !== undefined) return data.moisture_app_value > 0.3;
+                else if (data.voltage !== undefined) return data.voltage > 0.4;
+                else if (data.raw_value !== undefined) return data.raw_value < 700 && data.raw_value > 0;
+                console.warn(`💧 Soil: No recognizable activity fields in data:`, data);
                 return false;
-                
-            case 'light':
-                if (data.lightLevel !== undefined) {
-                    return data.lightLevel > 500;
-                }
-                return false;
-                
-            case 'temp':
-                if (data.temperature !== undefined) {
-                    return data.temperature > 25;
-                }
-                return false;
-                
+            // Add other device types if needed
             default:
                 return false;
         }
@@ -261,115 +194,90 @@ class CreaTuneClient {
 
     getStableState(device) {
         if (device.stateHistory.length < this.stabilityRequiredReadings) {
-            return null; // Not enough data for a stable assessment
+            return null;
         }
         const recentReadings = device.stateHistory.slice(-this.stabilityRequiredReadings);
         const isConsistent = recentReadings.every(reading => reading === recentReadings[0]);
         return isConsistent ? recentReadings[0] : null;
     }
 
-    identifyDeviceType(data) {
-        // FIXED: Better detection for ESP32 soil moisture data
-        
-        // Check for explicit device_type field
+    identifyDeviceType(data) { // From sensor_data message
         if (data.device_type && this.deviceStates[data.device_type.toLowerCase()]) {
             return data.device_type.toLowerCase();
         }
-        
-        // Check sensor name
-        if (data.sensor) {
+        if (data.sensor) { // ESP32 sends 'sensor' field with SENSOR_NAME
             const sensorLower = data.sensor.toLowerCase();
             if (sensorLower.includes('soil') || sensorLower.includes('moisture')) return 'soil';
-            if (sensorLower.includes('light') || sensorLower.includes('lux')) return 'light';
+            if (sensorLower.includes('light')) return 'light';
             if (sensorLower.includes('temp')) return 'temp';
         }
-        
-        // Fallback to checking specific fields from ESP32
-        if (data.soil_condition !== undefined || 
-            data.moisture_app_value !== undefined || 
-            data.moisture !== undefined ||
-            data.raw_value !== undefined || 
-            data.voltage !== undefined) {
+        // Fallback for soil if specific fields are present
+        if (data.soil_condition !== undefined || data.moisture_app_value !== undefined || data.voltage !== undefined || data.raw_value !== undefined) {
             return 'soil';
         }
-        
-        if (data.lightLevel !== undefined || data.lux !== undefined) return 'light';
-        if (data.temperature !== undefined || data.temp !== undefined) return 'temp';
-        
         return null;
     }
-    
-    identifyDeviceTypeByName(name) { // Used by esp_disconnected if name is provided
+
+    identifyDeviceTypeByName(name) { // From esp_connected/disconnected messages
         if (!name) return null;
         const nameLower = name.toLowerCase();
-        if (nameLower.includes('soil')) return 'soil';
+        if (nameLower.includes('soil') || nameLower.includes('moisture')) return 'soil';
         if (nameLower.includes('light')) return 'light';
         if (nameLower.includes('temp')) return 'temp';
         return null;
     }
 
-    handleESPDisconnection(data) { // data typically { type: 'esp_disconnected', name: 'ESP_SOIL' }
-        const deviceType = this.identifyDeviceTypeByName(data.name); // Server should send a name/identifier
+    handleESPDisconnection(data) {
+        const deviceType = this.identifyDeviceTypeByName(data.name);
         if (deviceType && this.deviceStates[deviceType]) {
             const device = this.deviceStates[deviceType];
-            if (device.connected || device.active) { // Only act if it was considered connected or active
-                console.log(`🔌❌ ${deviceType.toUpperCase()} reported disconnected by server.`);
+            if (device.connected || device.active) {
+                console.log(`🔌❌ ${deviceType.toUpperCase()} reported disconnected by server (name: ${data.name}, reason: ${data.reason || 'N/A'}).`);
                 device.connected = false;
-                device.active = false; // Ensure it's marked inactive
-                device.stateHistory = []; // Clear history
-                // device.lastStateChange = Date.now(); // Optional: mark time of this "change"
-                
-                // Notify listeners about the disconnection.
-                // Using a small timeout can help prevent issues if listeners try to immediately update UI
-                // that might be in the process of other changes.
-                setTimeout(() => {
-                    this.notifyCallbacks('disconnected', deviceType);
-                }, 50); 
+                device.active = false;
+                device.stateHistory = [];
+                this.notifyCallbacks('disconnected', deviceType);
             }
         } else {
-            console.warn(`❓ Received ESP disconnection for unknown or unconfigured device:`, data.name);
+            console.warn(`❓ Received ESP disconnection for unknown device name:`, data.name);
         }
     }
 
     markAllDisconnected() {
-        console.log('🔌❌ WebSocket connection lost. Marking all devices as disconnected.');
+        console.log('🔌❌ Client-side: Marking all devices as disconnected due to WebSocket closure.');
         Object.keys(this.deviceStates).forEach(deviceType => {
             const device = this.deviceStates[deviceType];
-            if (device.connected || device.active) { // Only act if it was considered connected or active
+            if (device.connected || device.active) {
                 device.connected = false;
-                device.active = false; // Ensure it's marked inactive
+                device.active = false;
                 device.stateHistory = [];
-                // device.lastStateChange = Date.now(); // Optional
-
-                // Notify for each device that was connected
-                setTimeout(() => {
-                     this.notifyCallbacks('disconnected', deviceType);
-                }, 50);
+                this.notifyCallbacks('disconnected', deviceType);
             }
         });
     }
 
     attemptReconnect() {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error(`❌ Max reconnection attempts (${this.maxReconnectAttempts}) reached. Please check server or refresh.`);
-            this.notifyCallbacks('reconnectFailed'); // Notify UI about permanent failure
+            console.error(`❌ Max reconnection attempts (${this.maxReconnectAttempts}) reached.`);
+            this.notifyCallbacks('reconnectFailed');
             return;
         }
         this.reconnectAttempts++;
-        const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts -1), 30000); // Exponential backoff
-        
+        const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1), 30000);
         console.log(`🔄 Attempting to reconnect in ${(delay / 1000).toFixed(1)}s (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-        
-        setTimeout(() => {
-            this.connect();
-        }, delay);
+        setTimeout(() => this.connect(), delay);
     }
 
-    // --- Public API for event subscription ---
-    on(eventType, callback) {
-        if (!this.callbacks[eventType]) {
-            this.callbacks[eventType] = [];
+    sendMessage(message) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(message));
+        } else {
+            console.warn('Cannot send message, WebSocket not open.');
         }
+    }
+
+    on(eventType, callback) {
+        if (!this.callbacks[eventType]) this.callbacks[eventType] = [];
         this.callbacks[eventType].push(callback);
     }
 
@@ -381,7 +289,6 @@ class CreaTuneClient {
 
     notifyCallbacks(eventType, ...args) {
         if (this.callbacks[eventType]) {
-            // console.log(`🔔 Notifying ${this.callbacks[eventType].length} callbacks for '${eventType}' with args:`, ...args);
             this.callbacks[eventType].forEach(callback => {
                 try {
                     callback(...args);
@@ -392,15 +299,9 @@ class CreaTuneClient {
         }
     }
 
-    // --- Public API for getting state ---
     getDeviceState(deviceType) {
         const device = this.deviceStates[deviceType];
-        return device ? {
-            connected: device.connected,
-            active: device.active,
-            lastStateChange: device.lastStateChange,
-            lastRawData: device.lastRawData
-        } : null;
+        return device ? { ...device } : null; // Return a copy
     }
 
     getConnectedDevices() {
@@ -410,32 +311,29 @@ class CreaTuneClient {
     getActiveDevices() {
         return Object.keys(this.deviceStates).filter(key => this.deviceStates[key].active);
     }
-    
-    // --- Debug ---
+
     getDebugInfo() {
         return {
             wsConnected: this.isConnected,
             clientId: this.clientId,
             reconnectAttempts: this.reconnectAttempts,
-            deviceStates: JSON.parse(JSON.stringify(this.deviceStates)), // Deep copy for safety
+            deviceStates: JSON.parse(JSON.stringify(this.deviceStates)),
             connectedDeviceTypes: this.getConnectedDevices(),
             activeDeviceTypes: this.getActiveDevices()
         };
     }
 }
 
-// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 DOMContentLoaded: Initializing CreaTune System...');
-    if (!window.creatune) { // Ensure it's only initialized once
+    if (!window.creatune) {
         window.creatune = new CreaTuneClient();
-        window.creatune.init(); // Start the connection process
+        window.creatune.init();
     } else {
         console.log('ℹ️ CreaTuneClient already initialized.');
     }
 });
 
-// Export for potential module usage (though primarily designed for global window.creatune)
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = CreaTuneClient;
 }
