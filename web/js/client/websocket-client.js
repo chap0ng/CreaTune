@@ -3,14 +3,12 @@ class CreaTuneClient {
         this.ws = null;
         this.isConnected = false;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 10; // Max attempts before stopping
-        this.reconnectDelay = 1000;    // Initial delay in ms
+        this.maxReconnectAttempts = 10; // Max attempts
+        this.reconnectDelay = 1000;    // Initial delay
         this.clientId = null;
 
-        // !!! CRUCIAL: SET YOUR PHONE'S ACTUAL WI-FI IP ADDRESS AND PORT HERE !!!
-        // This is the IP address your Termux server is reachable on from your local network.
-        // Example: '192.168.0.100:8080'
-        this.serverHostOverride = '192.168.0.100:8080'; // <--- REPLACE THIS WITH YOUR ACTUAL PHONE IP!
+        // !!! IMPORTANT: SET YOUR PHONE'S ACTUAL WI-FI IP ADDRESS AND PORT HERE !!!
+        this.serverHostOverride = '192.168.0.100:8080'; // <--- ENSURE THIS IS YOUR ACTUAL PHONE IP!
 
         this.deviceStates = {
             soil: {
@@ -18,28 +16,27 @@ class CreaTuneClient {
                 active: false,
                 lastRawData: null,
                 lastStateChange: 0,
-                stateHistory: [] // To store recent true/false activity states
+                stateHistory: []
             },
-            // Add other devices here if needed, e.g.:
             // light: { connected: false, active: false, lastRawData: null, lastStateChange: 0, stateHistory: [] },
             // temp: { connected: false, active: false, lastRawData: null, lastStateChange: 0, stateHistory: [] },
         };
 
-        // Parameters for stabilizing sensor readings
-        this.stabilityRequiredReadings = 3; // Number of consistent readings to confirm state change
-        this.maxHistoryLength = 5;          // Max number of readings to keep for stability check
-        this.minStateChangeInterval = 1000; // Minimum time (ms) between state change notifications
+        this.stabilityRequiredReadings = 3;
+        this.maxHistoryLength = 5;
+        this.minStateChangeInterval = 1000; // ms
 
-        this.callbacks = {}; // For event listeners like on('data', callback)
-        this.debug = true;  // Enable/disable console logs easily
+        this.callbacks = {};
+        this.debug = true; // Enable/disable console logs easily
     }
 
     init() {
         if (this.debug) console.log('🔌 Initializing CreaTune WebSocket Client...');
         this.connect();
-        this.setupBrowserEventListeners();
+        this.setupBrowserEventListeners(); // <--- ADDED THIS CALL
     }
 
+    // <--- ADDED THIS ENTIRE METHOD ---
     setupBrowserEventListeners() {
         if (this.debug) console.log('🔗 Setting up browser event listeners for network and visibility.');
 
@@ -79,26 +76,27 @@ class CreaTuneClient {
             }
         });
     }
+    // --- END OF ADDED METHOD ---
 
     connect() {
         try {
+            // Prevent multiple concurrent connection attempts if one is already in progress
             if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
                 if (this.debug) console.log('🔗 WebSocket connection attempt already in progress. Skipping.');
                 return;
             }
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            let targetHost = window.location.host;
+            let targetHost = window.location.host; // Default target
 
-            // Override for PWA context (installed app where window.location.host is localhost)
-            if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
-                this.serverHostOverride && this.serverHostOverride.toLowerCase() !== 'your_phone_wifi_ip_address:8080') { // Check against placeholder
+            if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && this.serverHostOverride && this.serverHostOverride.toLowerCase() !== 'your_phone_wifi_ip_address:8080') {
                 targetHost = this.serverHostOverride;
                 if (this.debug && (this.reconnectAttempts === 0 || !this.isConnected)) console.log(`🔗 Using serverHostOverride for WebSocket: ${targetHost} (PWA/localhost context)`);
             }
             
             const wsUrl = `${protocol}//${targetHost}`;
             
+            // Updated logging to include attempt count
             if (this.debug) console.log(`🔗 Attempting WebSocket connection to: ${wsUrl} (Attempt: ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
 
             this.ws = new WebSocket(wsUrl);
@@ -109,13 +107,12 @@ class CreaTuneClient {
                 this.reconnectAttempts = 0;
                 this.reconnectDelay = 1000; // Reset delay on successful connection
                 this.notifyCallbacks('websocketOpen');
-                this.sendMessage({ type: 'get_esp_status' }); // Request initial ESP status
+                this.sendMessage({ type: 'get_esp_status' });
             };
 
             this.ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    // if (this.debug) console.log('📥 Received message:', data); // Can be too verbose
                     this.handleMessage(data);
                 } catch (error) {
                     console.error('❌ Error parsing message:', event.data, error);
@@ -125,12 +122,13 @@ class CreaTuneClient {
             this.ws.onclose = (event) => {
                 if (this.debug) console.log(`🔌❌ WebSocket disconnected. Code: ${event.code}, Reason: "${event.reason || 'N/A'}", Clean: ${event.wasClean}.`);
                 this.isConnected = false;
-                this.markAllDisconnected(); // This will notify SoilHandler etc.
+                this.markAllDisconnected();
+                // Pass event details to callbacks
                 this.notifyCallbacks('websocketClose', { code: event.code, reason: event.reason, wasClean: event.wasClean });
                 this.attemptReconnect();
             };
 
-            this.ws.onerror = (errorEvent) => {
+            this.ws.onerror = (errorEvent) => { // Changed 'error' to 'errorEvent' for clarity
                 // The error event itself doesn't give much info, onclose usually follows with details.
                 if (this.debug) console.error('🚫 WebSocket error event occurred. See following close event for details.', errorEvent);
                 // this.isConnected = false; // onclose will handle this and trigger reconnect
@@ -157,32 +155,39 @@ class CreaTuneClient {
                 this.processSensorData(data);
                 break;
 
+            // <--- REVISED 'esp_status_list' LOGIC ---
             case 'esp_status_list':
                 if (this.debug) console.log('📡 ESP Status List received:', data.devices);
                 if (Array.isArray(data.devices)) {
                     const serverReportedDeviceTypes = new Set();
 
+                    // Update states based on the server's list
                     data.devices.forEach(deviceStatusFromServer => {
                         const deviceType = this.identifyDeviceTypeByName(deviceStatusFromServer.name);
                         if (deviceType && this.deviceStates[deviceType]) {
-                            serverReportedDeviceTypes.add(deviceType);
+                            serverReportedDeviceTypes.add(deviceType); // Keep track of types reported by server
+
                             const localDeviceState = this.deviceStates[deviceType];
                             const wasConnectedLocally = localDeviceState.connected;
                             const isConnectedOnServer = deviceStatusFromServer.connected;
 
-                            localDeviceState.connected = isConnectedOnServer;
+                            localDeviceState.connected = isConnectedOnServer; // Update local state from server
 
                             if (isConnectedOnServer && !wasConnectedLocally) {
+                                // Device is now connected (according to server), but wasn't locally
                                 if (this.debug) console.log(`📡 ${deviceType.toUpperCase()} now marked connected via status list.`);
                                 this.notifyCallbacks('connected', deviceType);
                             } else if (!isConnectedOnServer && wasConnectedLocally) {
+                                // Device is now disconnected (according to server), but was connected locally
                                 if (this.debug) console.log(`📡 ${deviceType.toUpperCase()} now marked disconnected via status list.`);
-                                localDeviceState.active = false;
+                                localDeviceState.active = false; // If disconnected, it cannot be active
                                 this.notifyCallbacks('disconnected', deviceType);
                             }
                         }
                     });
 
+                    // Check for any devices that the client thought were connected,
+                    // but were NOT in the server's status list. These should now be marked disconnected.
                     Object.keys(this.deviceStates).forEach(localDeviceType => {
                         const localDeviceState = this.deviceStates[localDeviceType];
                         if (localDeviceState.connected && !serverReportedDeviceTypes.has(localDeviceType)) {
@@ -194,6 +199,7 @@ class CreaTuneClient {
                     });
                 }
                 break;
+            // --- END OF REVISED 'esp_status_list' ---
 
             case 'esp_connected':
                 const connectedDeviceType = this.identifyDeviceTypeByName(data.name);
@@ -223,17 +229,15 @@ class CreaTuneClient {
 
         const device = this.deviceStates[deviceType];
 
-        // If we receive data, and the device wasn't marked as connected, mark it now.
         if (!device.connected) {
-            device.connected = true; // Assume connected if we get data
+            device.connected = true;
             if (this.debug) console.log(`📡 ${deviceType.toUpperCase()} now considered connected (received data).`);
             this.notifyCallbacks('connected', deviceType);
         }
 
-        device.lastRawData = data; // Store the latest raw data
+        device.lastRawData = data;
         const shouldBeActiveNow = this.shouldBeActive(deviceType, data);
 
-        // Update state history for stability check
         device.stateHistory.push(shouldBeActiveNow);
         if (device.stateHistory.length > this.maxHistoryLength) {
             device.stateHistory.shift();
@@ -241,7 +245,6 @@ class CreaTuneClient {
 
         const stableState = this.getStableState(device);
 
-        // Check if stable state is different from current active state and if min interval passed
         if (stableState !== null && stableState !== device.active) {
             const timeSinceLastChange = Date.now() - device.lastStateChange;
             if (timeSinceLastChange >= this.minStateChangeInterval) {
@@ -256,28 +259,20 @@ class CreaTuneClient {
                 });
             }
         }
-        // Always notify raw data if there are listeners for it
         this.notifyCallbacks('data', deviceType, data);
     }
 
     shouldBeActive(deviceType, data) {
-        // Define activation logic based on sensor data
         switch (deviceType) {
             case 'soil':
-                // Prioritize explicit soil_condition if available
                 if (data.soil_condition) {
                     return data.soil_condition === 'humid' || data.soil_condition === 'wet';
                 }
-                // Fallback to other potential fields
-                if (data.moisture_app_value !== undefined) return data.moisture_app_value > 0.3; // Example threshold
-                if (data.voltage !== undefined) return data.voltage > 0.4; // Example threshold
-                if (data.raw_value !== undefined) return data.raw_value < 700 && data.raw_value > 0; // Example for some sensors
+                if (data.moisture_app_value !== undefined) return data.moisture_app_value > 0.3;
+                if (data.voltage !== undefined) return data.voltage > 0.4; // Adjust based on your sensor
+                if (data.raw_value !== undefined) return data.raw_value < 700 && data.raw_value > 0; // Adjust
                 if (this.debug) console.warn(`💧 Soil: No recognizable activity fields in data:`, data);
-                return false; // Default to inactive if no criteria met
-            // Add cases for 'light', 'temp' etc. if needed
-            // case 'light':
-            //     if (data.lux !== undefined) return data.lux < 100; // Example: active if dark
-            //     return false;
+                return false;
             default:
                 return false;
         }
@@ -285,7 +280,7 @@ class CreaTuneClient {
 
     getStableState(device) {
         if (device.stateHistory.length < this.stabilityRequiredReadings) {
-            return null; // Not enough data for a stable state
+            return null;
         }
         const recentReadings = device.stateHistory.slice(-this.stabilityRequiredReadings);
         const isConsistent = recentReadings.every(reading => reading === recentReadings[0]);
@@ -293,32 +288,25 @@ class CreaTuneClient {
     }
 
     identifyDeviceType(data) {
-        // Try to identify device type from data payload
         if (data.device_type && this.deviceStates[data.device_type.toLowerCase()]) {
             return data.device_type.toLowerCase();
         }
-        if (data.sensor) { // Common field from ESPs
+        if (data.sensor) {
             const sensorLower = data.sensor.toLowerCase();
             if (sensorLower.includes('soil') || sensorLower.includes('moisture')) return 'soil';
-            // if (sensorLower.includes('light') || sensorLower.includes('lux')) return 'light';
-            // if (sensorLower.includes('temp') || sensorLower.includes('dht')) return 'temp';
+            // if (sensorLower.includes('light')) return 'light';
         }
-        // Fallback checks based on unique data fields
         if (data.soil_condition !== undefined || data.moisture_app_value !== undefined || data.voltage !== undefined || data.raw_value !== undefined) {
             return 'soil';
         }
-        // if (data.lux !== undefined) return 'light';
-        // if (data.temperature !== undefined && data.humidity !== undefined) return 'temp';
-        return null; // Cannot identify
+        return null;
     }
 
     identifyDeviceTypeByName(name) {
-        // Identify device type from its registered name (e.g., "ESP32-Soil")
         if (!name) return null;
         const nameLower = name.toLowerCase();
         if (nameLower.includes('soil') || nameLower.includes('moisture')) return 'soil';
         // if (nameLower.includes('light')) return 'light';
-        // if (nameLower.includes('temp')) return 'temp';
         return null;
     }
 
@@ -326,11 +314,11 @@ class CreaTuneClient {
         const deviceType = this.identifyDeviceTypeByName(data.name);
         if (deviceType && this.deviceStates[deviceType]) {
             const device = this.deviceStates[deviceType];
-            if (device.connected || device.active) { // Only update if there was a change
+            if (device.connected || device.active) {
                 if (this.debug) console.log(`🔌❌ ${deviceType.toUpperCase()} reported disconnected by server (name: ${data.name}, reason: ${data.reason || 'N/A'}).`);
                 device.connected = false;
-                device.active = false; // If disconnected, it cannot be active
-                device.stateHistory = []; // Clear history
+                device.active = false;
+                device.stateHistory = [];
                 this.notifyCallbacks('disconnected', deviceType);
             }
         } else {
@@ -342,19 +330,20 @@ class CreaTuneClient {
         if (this.debug) console.log('🔌❌ Client-side: Marking all devices as disconnected due to WebSocket closure or explicit call.');
         Object.keys(this.deviceStates).forEach(deviceType => {
             const device = this.deviceStates[deviceType];
-            if (device.connected || device.active) {
+            if (device.connected || device.active) { // Only notify if there was a change
                 const wasConnected = device.connected;
                 const wasActive = device.active;
                 device.connected = false;
                 device.active = false;
                 device.stateHistory = [];
-                if (wasConnected || wasActive) { // Only notify if there was a change
+                if (wasConnected || wasActive) { // Only notify if there was a state change
                     this.notifyCallbacks('disconnected', deviceType);
                 }
             }
         });
     }
 
+    // <--- REVISED attemptReconnect METHOD ---
     attemptReconnect() {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
             const targetForLog = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && this.serverHostOverride && this.serverHostOverride.toLowerCase() !== 'your_phone_wifi_ip_address:8080'
@@ -365,8 +354,8 @@ class CreaTuneClient {
             return;
         }
         this.reconnectAttempts++;
-        // Exponential backoff, but ensure it doesn't grow too quickly initially
-        const delay = Math.min(this.reconnectDelay * Math.pow(1.3, this.reconnectAttempts - 1), 30000); // Slower backoff, max 30s
+        // Exponential backoff, gentler increase
+        const delay = Math.min(this.reconnectDelay * Math.pow(1.3, this.reconnectAttempts - 1), 30000);
         
         const targetForLog = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && this.serverHostOverride && this.serverHostOverride.toLowerCase() !== 'your_phone_wifi_ip_address:8080'
             ? this.serverHostOverride
@@ -375,14 +364,16 @@ class CreaTuneClient {
         if (this.debug) console.log(`🔄 Attempting to reconnect to ${targetForLog} in ${(delay / 1000).toFixed(1)}s (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
         
         setTimeout(() => {
+            // Before attempting to connect, check if we somehow got connected in the meantime
             if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
                 if (this.debug) console.log('🔄 Reconnect timer fired, but WebSocket is already open. Aborting this reconnect attempt.');
-                this.reconnectAttempts = 0;
+                this.reconnectAttempts = 0; // Reset as we are connected
                 return;
             }
             this.connect();
         }, delay);
     }
+    // --- END OF REVISED attemptReconnect ---
 
     sendMessage(message) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -392,15 +383,13 @@ class CreaTuneClient {
                 console.error('❌ Error sending WebSocket message:', error);
             }
         } else {
+            // Updated warning message
             if (this.debug) console.warn('⚠️ Cannot send message, WebSocket not open or connecting.');
         }
     }
 
-    // Event listener methods
     on(eventType, callback) {
-        if (!this.callbacks[eventType]) {
-            this.callbacks[eventType] = [];
-        }
+        if (!this.callbacks[eventType]) this.callbacks[eventType] = [];
         this.callbacks[eventType].push(callback);
     }
 
@@ -423,24 +412,24 @@ class CreaTuneClient {
     }
 
     getDeviceState(deviceType) {
-        const type = deviceType.toLowerCase();
+        const type = deviceType.toLowerCase(); // Ensure consistent casing
         const device = this.deviceStates[type];
-        return device ? { ...device } : null; // Return a copy to prevent direct modification
+        return device ? { ...device } : null; // Return a copy
     }
 }
 
-// Global instance initialization
+// Global instance
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 DOMContentLoaded: Initializing CreaTune System...');
     if (!window.creatune) {
         window.creatune = new CreaTuneClient();
-        window.creatune.init(); // This now also calls setupBrowserEventListeners
+        window.creatune.init();
     } else {
         console.log('ℹ️ CreaTuneClient already initialized.');
     }
 });
 
-// For potential Node.js environment (testing, etc.) - not typically used in browser context for this file
+// For potential Node.js environment
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = CreaTuneClient;
 }

@@ -4,7 +4,7 @@
   "description": "Interactive musical experience with ESP32 sensor integration",
   "start_url": "./index.html",
   "display": "fullscreen",
-  "orientation": "landscape",
+  "orientation": "landscape-primary",
   "scope": "./",
   "lang": "en-US",
   "dir": "ltr",
