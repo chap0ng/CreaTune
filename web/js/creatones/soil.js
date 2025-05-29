@@ -8,9 +8,9 @@ class SoilHandler {
         this.insectLFO = null;
 
         // Audio Params
-        this.fadeDuration = 0.4; // Duration for fade in/out (seconds)
-        this.toyPianoTargetVolume = -3; // Target volume in dB
-        this.insectTargetVolume = -6;   // Target volume in dB
+        this.fadeDuration = 2; // Duration for fade in/out (seconds)
+        this.toyPianoTargetVolume = 6; // Target volume in dB
+        this.insectTargetVolume = 3;   // Target volume in dB
 
         // State
         this.isActive = false;      // Sensor state (e.g., soil is wet)
