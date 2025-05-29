@@ -3,26 +3,19 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, orientation=landscape"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, orientation=landscape"/>
   
-  <!-- Force landscape orientation -->
   <meta name="screen-orientation" content="landscape">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
   <title>CreaTune</title>
   
-  <!-- PWA Manifest -->
-  <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json">
   
-  <!-- PWA Meta Tags -->
-  <meta name="theme-color" content="#e6695a">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#2c3e50"> <!-- Updated theme color -->
   <meta name="apple-mobile-web-app-title" content="CreaTune">
   
-  <!-- PWA Icons -->
   <link rel="apple-touch-icon" href="icons/icon-192x192.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512x512.png">
@@ -41,40 +34,42 @@
     <div class="framebottom"></div>
     <div class="corner4"></div>
     <div class="framebackground">
-      <!-- Background content -->
+      <!-- Background content will be styled by CSS -->
     </div>
     <div class="idle-creature"></div>
     <div class="soil-creature"></div>
-    <div class="light-creature"></div>
+    <div class="light-creature"></div> <!-- ADDED LIGHT CREATURE DIV -->
   </div>
+
+  <button id="audio-enable-button" class="audio-button">Start Audio</button>
+  <div id="debug-overlay" class="debug-overlay" style="display: none;">Debug Info Here</div>
+
 
   <!-- Audio library -->
   <script src="js/other/Tone.js"></script>
-
-  <!-- Audio library -->
-  <!--<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script> -->
   
   <!-- Core system scripts -->
   <script src="js/client/websocket-client.js"></script>
 
   <!-- Frame and UI scripts -->
-  <script src="js/other/frame-slider.js"></script>
+  <script src="js/other/frame-slider.js"></script> <!-- Ensure this path is correct -->
+  <script src="js/other/audio-enabler.js"></script> <!-- For managing audio context start -->
+
 
   <!-- Creatures handlers -->
   <script src="js/creatones/soil.js"></script>
+  <script src="js/creatones/light.js"></script> <!-- ADDED LIGHT.JS SCRIPT -->
 
   <!-- Service Worker Registration -->
   <script>
-    // Register service worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./service-worker.js')
-          .then(registration => console.log('✅ Service Worker registered'))
+          .then(registration => console.log('✅ Service Worker registered with scope:', registration.scope))
           .catch(error => console.error('❌ Service Worker registration failed:', error));
       });
     }
   </script>
 
 </body>
-
 </html>

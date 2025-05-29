@@ -1,7 +1,6 @@
-// service-worker.js
-const CACHE_NAME = 'CreaTune-cache-v7'; // Incremented cache version
+const CACHE_NAME = 'CreaTune-cache-v9'; // Incremented cache version
 const urlsToCache = [
-  './', // Essential for the root
+  './',
   './index.html',
   './styles.css',
   './manifest.json',
@@ -9,63 +8,58 @@ const urlsToCache = [
   // Core scripts
   './js/client/websocket-client.js',
   './js/creatones/soil.js',
-  // './js/creatones/light.js', // Uncomment if this file exists and is needed offline
-  // './js/creatones/creature-hidder.js', // Uncomment if this file exists and is needed offline
-  './js/other/frame-slider.js', // Corrected path
-  './js/other/Tone.js', // Caching local Tone.js as used in index.html
+  './js/creatones/light.js', // ADDED LIGHT.JS
+  './js/other/frame-slider.js',
+  './js/other/Tone.js',
+  './js/other/audio-enabler.js',
 
-  // Images
-  './images/creature.png',
-  './images/soil-background.jpg',
 
-  // Sprites (adjust paths if these specific files exist)
+  // Images & Sprites
+  './images/creature.png', // Assuming this is the idle creature
+  './images/soil-background.jpg', // Default background
   './sprites/creatures/soil-creature.png',
-  // './sprites/backgrounds/soil-background.png', // Example: if you have this file
-  // './sprites/creatures/light-creature.png', // Uncomment if this file exists and is needed offline
-  // './sprites/creatures/idle-creature.png', // Uncomment if this file exists and is needed offline
+  './sprites/creatures/light-creature.png', // ADDED
+  './sprites/backgrounds/soil-background.png', // Specific soil background if used
 
   // Icons
   './icons/icon-192x192.png',
   './icons/icon-512x512.png'
 ];
 
-// Install event - cache assets
 self.addEventListener('install', event => {
   console.log(`🔧 Service Worker installing: ${CACHE_NAME}`);
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log(`📦 Cache opened: ${CACHE_NAME}`);
-        return cache.addAll(urlsToCache)
-          .then(() => {
-            console.log('✅ All specified files cached successfully in:', CACHE_NAME);
-          })
-          .catch(error => {
-            console.error(`❌ Cache.addAll failed for ${CACHE_NAME}:`, error);
-            // For debugging, try to see which URL might have caused it
-            // This often happens if one of the URLs in urlsToCache returns a 404 or other error
-            urlsToCache.forEach(url => {
-              fetch(url).then(res => {
-                if (!res.ok) {
-                  console.error(`Failed to fetch for caching: ${url} - Status: ${res.status}`);
+        return Promise.all(
+          urlsToCache.map(url => {
+            return fetch(url, { cache: 'no-store' }) // Fetch fresh versions during install
+              .then(response => {
+                if (!response.ok) {
+                  throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
                 }
-              }).catch(fetchErr => {
-                console.error(`Network error trying to fetch for caching: ${url}`, fetchErr);
+                return cache.put(url, response);
+              })
+              .catch(error => {
+                console.error(`❌ Failed to cache ${url}:`, error);
+                // Optionally, don't let one failed asset break the entire cache install
+                // For critical assets, you might want it to fail.
               });
-            });
-          });
+          })
+        ).then(() => {
+            console.log('✅ All specified files attempted to cache in:', CACHE_NAME);
+        });
       })
       .then(() => {
-        self.skipWaiting(); // Force activate immediately
+        self.skipWaiting();
       })
       .catch(error => {
-        // This catch is for errors in caches.open or the skipWaiting part
         console.error(`❌ Cache install process failed for ${CACHE_NAME}:`, error);
       })
   );
 });
 
-// Activate event - clean up old caches
 self.addEventListener('activate', event => {
   console.log(`⚡ Service Worker activating: ${CACHE_NAME}`);
   event.waitUntil(
@@ -80,50 +74,43 @@ self.addEventListener('activate', event => {
       );
     }).then(() => {
       console.log(`✅ Service Worker activated: ${CACHE_NAME}`);
-      return self.clients.claim(); // Take control immediately
+      return self.clients.claim();
     })
   );
 });
 
-// Fetch event - serve from cache when offline, with better error handling
 self.addEventListener('fetch', event => {
-  // Skip WebSocket requests
-  if (event.request.url.startsWith('ws://') || event.request.url.startsWith('wss://')) {
-    return; // Let WebSocket requests pass through normally
+  const url = new URL(event.request.url);
+
+  // Skip WebSocket requests and non-GET requests
+  if (url.protocol === 'ws:' || url.protocol === 'wss:' || event.request.method !== 'GET') {
+    return;
   }
-  
-  // Skip non-GET requests
-  if (event.request.method !== 'GET') {
-    return; // Only cache GET requests
-  }
-  
+
   event.respondWith(
     caches.match(event.request)
-      .then(response => {
-        // Cache hit - return the response
-        if (response) {
+      .then(cachedResponse => {
+        // Cache hit - return response
+        if (cachedResponse) {
           // console.log('📂 Serving from cache:', event.request.url);
-          return response;
+          return cachedResponse;
         }
-        
+
         // Not in cache - fetch from network
         // console.log('🌐 Fetching from network:', event.request.url);
-        const fetchRequest = event.request.clone();
-        
-        return fetch(fetchRequest).then(
+        return fetch(event.request).then(
           networkResponse => {
-            // Check if response is valid to cache
+            // Check if we received a valid response
             if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-              // Don't cache error responses or opaque responses unless intended
-              // For 'basic' type, it means same-origin requests.
-              // For opaque responses (cross-origin, no CORS), you might get status 0, which is not cacheable by default.
-              // If you need to cache opaque responses, you'd handle it differently, but usually not recommended.
               return networkResponse;
             }
 
-            // Clone the response to cache it
+            // IMPORTANT: Clone the response. A response is a stream
+            // and because we want the browser to consume the response
+            // as well as the cache consuming the response, we need
+            // to clone it so we have two streams.
             const responseToCache = networkResponse.clone();
-            
+
             caches.open(CACHE_NAME)
               .then(cache => {
                 // console.log('💾 Caching new resource:', event.request.url);
@@ -134,20 +121,16 @@ self.addEventListener('fetch', event => {
           }
         ).catch(error => {
           console.error('🚫 Fetch failed for:', event.request.url, error);
-          
           // Fallback for offline navigation to HTML pages
-          if (event.request.mode === 'navigate' && event.request.url.endsWith('.html')) {
+          if (event.request.mode === 'navigate' && event.request.headers.get('accept').includes('text/html')) {
             console.log('↩️ Offline fallback to index.html for navigation request.');
             return caches.match('./index.html');
           }
-          
-          // You can add more specific fallbacks for other asset types if needed
-          // For example, a placeholder image or a generic "offline" message for JS/CSS.
-          // For now, it will just fail if not in cache and network fails.
-          return new Response(`Network error: ${error.message}. Resource not available offline.`, {
-            status: 408, // Request Timeout
-            headers: { 'Content-Type': 'text/plain' },
-          });
+          // For other types of requests, you might want to return a specific offline response or nothing
+          // return new Response("Offline. Please check your connection.", {
+          //   status: 503, // Service Unavailable
+          //   headers: { 'Content-Type': 'text/plain' }
+          // });
         });
       })
   );
