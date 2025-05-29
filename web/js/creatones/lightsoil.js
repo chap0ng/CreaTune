@@ -28,7 +28,7 @@ class LightSoilHandler {
         this.padReverb = null;
         this.padLoop = null;
         this.fadeDuration = 2.0; // Longer fade for pads
-        this.basePadVolume = 3; // dB, fairly loud for "bright"
+        this.basePadVolume = 5; // dB, fairly loud for "bright"
         // --- End Tone.js components ---
 
         // --- DOM Elements ---
