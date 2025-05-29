@@ -242,11 +242,11 @@ body {
 .light-creature,
 .lightsoil-creature { /* ADDED .lightsoil-creature */
   position: absolute; 
-  top: 150px;
-  left: 250px;
+  top: 50%;
+  left: 50%;
   transform: translate(-50%, -50%) translateZ(0);
-  width: min(60vw, 35vh);
-  height: min(60vw, 35vh); 
+  width: min(70vw, 40vh);
+  height: min(70vw, 40vh); 
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
