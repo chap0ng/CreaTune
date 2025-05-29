@@ -1,269 +1,245 @@
-/*
-  lightTune.ino
-  ESP32 I2C light sensor data sender for CreaTune application
-  For DFRobot B-LUX-V30B I2C Light Sensor
-*/
-
 #include <WiFi.h>
-#include <WebSocketsClient.h>
 #include <ArduinoJson.h>
-#include <Wire.h>                   // For I2C communication
-#include <DFRobot_B_LUX_V30B.h>     // DFRobot B-LUX-V30B library
-#include "config.h"           // Use the config file
-
-// Create a DFRobot_B_LUX_V30B_I2C object using the default I2C address 0x4A
-DFRobot_B_LUX_V30B_I2C bLux(&Wire); 
+#include <WebSocketsClient.h>
+#include <Wire.h>                 // For I2C communication
+#include "DFRobot_B_LUX_V30B.h" // Make sure this library is installed
+#include "config.h"             // Your configuration file
 
 WebSocketsClient webSocket;
+DFRobot_B_LUX_V30B bLux(SENSOR_ENABLE_PIN); // Initialize with the enable pin from config.h
+
 unsigned long lastSendTime = 0;
-unsigned long lastConnectionAttempt = 0;
-const unsigned long connectionRetryInterval = 3000;
+float currentLux = 0;
+String currentLightCondition = "unknown";
+float currentLightAppValue = 0.0;
+bool serverConnected = false;
 
-unsigned long lastHeartbeatTime = 0;
-int heartbeatInterval = 2000;
-bool heartbeatEnabled = true;
-
-const int NUM_READINGS = 3; 
-float lightReadings[NUM_READINGS];
-int readIndex = 0;
-float totalLight = 0;
-float averageLight = 0;
-bool sensorInitialized = false;
-
-void connectToWiFi();
-void webSocketEvent(WStype_t type, uint8_t *payload, size_t length);
+// Function declarations
+void connectWiFi();
+void connectWebSocket();
+void webSocketEvent(WStype_t type, uint8_t * payload, size_t length);
 void sendSensorData();
+void sendHandshake();
 void sendHeartbeat();
-float readLightLevel(); 
-float lightToAppValue(float luxValue, String &condition);
-
+void readLightSensor();
+String getLightCondition(float lux);
+float calculateLightAppValue(float lux);
 
 void setup() {
-  Serial.begin(9600); // Changed to 9600 for consistency, can be 115200
-  Serial.println("\nCreaSense DFRobot B-LUX-V30B Sensor - Starting up... (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧");
+  Serial.begin(9600); // Or 115200 if you prefer
+  while (!Serial);    // Wait for serial connection
 
   pinMode(STATUS_LED, OUTPUT);
-  digitalWrite(STATUS_LED, LOW);
+  digitalWrite(STATUS_LED, LOW); // LED off initially
 
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-  Serial.println("I2C interface initialized.");
+  Serial.println("LightSensor Booting Up...");
 
-  // Initialize the B-LUX-V30B sensor
-  // The begin() function returns 0 on success.
-  if (bLux.begin() == 0) {
-    Serial.println("DFRobot B-LUX-V30B Sensor Initialized Successfully!");
-    // Set the integration time (e.g., 100ms for a good balance)
-    // Options: eTIME_50MS, eTIME_100MS, eTIME_200MS, eTIME_400MS, eTIME_800MS
-    bLux.setIntegTime(bLux.eTIME_100MS); 
-    Serial.print("Integration time set to: ");
-    Serial.print(bLux.getIntegTime());
-    Serial.println(" ms");
-    sensorInitialized = true;
+  // Initialize I2C for the sensor
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN); // Using pins from config.h
+
+  if (bLux.begin() != 0) { // DFRobot libraries often return 0 on success
+    Serial.println("Failed to initialize B-LUX-V30B sensor! Check wiring, I2C address, and ensure SENSOR_ENABLE_PIN in config.h is correct.");
+    // Consider a visual indicator like rapid LED blinking
+    while (1) {
+      digitalWrite(STATUS_LED, !digitalRead(STATUS_LED));
+      delay(100);
+    }
   } else {
-    Serial.println("Error initializing DFRobot B-LUX-V30B Sensor! Check wiring. (╥﹏╥)");
-    // Halt or enter an error state
-    while(1) { digitalWrite(STATUS_LED, !digitalRead(STATUS_LED)); delay(100); } 
+    Serial.println("B-LUX-V30B sensor initialized.");
+    // Optional: Set sensor parameters if needed, e.g., integration time or gain
+    // Refer to DFRobot_B_LUX_V30B library examples for manual configuration if defaults aren't optimal.
+    // Example: bLux.setIntegTime(bLux.eIntegTime100ms);
+    // Example: bLux.setGain(bLux.eGain1x);
   }
 
-  for (int i = 0; i < NUM_READINGS; i++) {
-    lightReadings[i] = 0.0;
-  }
-
-  connectToWiFi();
-  
-  Serial.print("WebSocket Server: "); Serial.print(WEBSOCKET_HOST); Serial.print(":"); Serial.println(WEBSOCKET_PORT);
-  
-  webSocket.begin(WEBSOCKET_HOST, WEBSOCKET_PORT, WEBSOCKET_PATH);
-  webSocket.onEvent(webSocketEvent);
-  webSocket.setReconnectInterval(2000);
-  webSocket.enableHeartbeat(2000, 1500, 2); 
-  
-  Serial.print("Sensor Name: "); Serial.println(SENSOR_NAME);
-  Serial.print("Reading Interval: "); Serial.print(READING_INTERVAL); Serial.println("ms");
-  Serial.println("DFRobot B-LUX-V30B I2C Ambient Light Sensor connected. ฅ(^•ﻌ•^)ฅ");
+  connectWiFi();
+  connectWebSocket();
 }
 
 void loop() {
-  if (WiFi.status() != WL_CONNECTED) {
-    unsigned long currentMillis = millis();
-    if (currentMillis - lastConnectionAttempt > connectionRetryInterval) {
-      Serial.println("WiFi disconnected! Reconnecting... (´；ω；`)");
-      connectToWiFi();
-      lastConnectionAttempt = currentMillis;
-    }
-    digitalWrite(STATUS_LED, LOW);
+  webSocket.loop();
+
+  if (serverConnected && millis() - lastSendTime > READING_INTERVAL) {
+    readLightSensor();
+    sendSensorData();
+    lastSendTime = millis();
+  }
+
+  // Simple heartbeat mechanism
+  static unsigned long lastHeartbeatTime = 0;
+  if (serverConnected && millis() - lastHeartbeatTime > 30000) { // Send heartbeat every 30s
+    sendHeartbeat();
+    lastHeartbeatTime = millis();
+  }
+  digitalWrite(STATUS_LED, serverConnected ? HIGH : LOW); // LED ON if connected to WebSocket
+}
+
+void connectWiFi() {
+  Serial.print("Connecting to WiFi: ");
+  Serial.println(WIFI_SSID);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) { // Try for ~15 seconds
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi connected!");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
   } else {
-    webSocket.loop();
-    unsigned long currentTime = millis();
-    
-    if (sensorInitialized && (currentTime - lastSendTime >= READING_INTERVAL)) {
-      sendSensorData();
-      lastSendTime = currentTime;
-      digitalWrite(STATUS_LED, HIGH); delay(100); digitalWrite(STATUS_LED, LOW);
-    }
-    
-    if (heartbeatEnabled && currentTime - lastHeartbeatTime >= heartbeatInterval) {
-      sendHeartbeat();
-    }
+    Serial.println("\nFailed to connect to WiFi. Restarting in 10 seconds...");
+    delay(10000);
+    ESP.restart();
   }
 }
 
-float readLightLevel() {
-  if (!sensorInitialized) {
-    Serial.println("B-LUX-V30B sensor not initialized. Cannot read.");
-    return -1.0; // Indicate error
-  }
+void connectWebSocket() {
+  Serial.print("Connecting to WebSocket server: ");
+  Serial.print(WEBSOCKET_HOST);
+  Serial.print(":");
+  Serial.println(WEBSOCKET_PORT);
 
-  float lux = bLux.getLux(); // Read lux value from B-LUX-V30B
-
-  // The library doesn't explicitly state error return values for getLux() other than what begin() checks.
-  // We assume a valid positive float or zero is returned on success.
-  // Add any specific error checks if the library documentation provides them for getLux().
-  // For now, we'll rely on begin() for major errors.
-
-  // Smoothing
-  totalLight = totalLight - lightReadings[readIndex];
-  lightReadings[readIndex] = lux;
-  totalLight = totalLight + lightReadings[readIndex];
-  readIndex = (readIndex + 1) % NUM_READINGS;
-  averageLight = totalLight / NUM_READINGS;
-
-  Serial.print("Light Lux: "); Serial.print(lux, 2); 
-  Serial.print(" | Avg Lux: "); Serial.print(averageLight, 2);
-  
-  return averageLight; 
-}
-
-// Maps lux value to an app-compatible range (0.0-1.0) and determines condition
-float lightToAppValue(float luxValue, String &condition) {
-  float appValue;
-
-  if (luxValue <= LUX_DARK_MAX) {
-    condition = "dark";
-    appValue = map(luxValue * 100, 0, LUX_DARK_MAX * 100, 0, 20) / 100.0; 
-  } else if (luxValue <= LUX_DIM_MAX) {
-    condition = "dim";
-    appValue = map(luxValue * 100, LUX_DIM_MIN * 100, LUX_DIM_MAX * 100, 21, 40) / 100.0; 
-  } else if (luxValue <= LUX_BRIGHT_MAX) {
-    condition = "bright";
-    appValue = map(luxValue * 100, LUX_BRIGHT_MIN * 100, LUX_BRIGHT_MAX * 100, 41, 60) / 100.0; 
-  } else if (luxValue <= LUX_VERYBRIGHT_MAX) {
-    condition = "very_bright";
-    appValue = map(luxValue * 100, LUX_VERYBRIGHT_MIN * 100, LUX_VERYBRIGHT_MAX * 100, 61, 80) / 100.0; 
-  } else { 
-    condition = "extremely_bright";
-    appValue = constrain(map(luxValue * 100, (LUX_VERYBRIGHT_MAX + 0.01) * 100, (LUX_VERYBRIGHT_MAX + 1000) * 100, 81, 100) / 100.0, 0.81, 1.0); 
-  }
-  
-  appValue = constrain(appValue, 0.0, 1.0);
-
-  Serial.print(" | Condition: "); Serial.print(condition);
-  Serial.print(" | AppVal: "); Serial.println(appValue, 2);
-  return appValue;
-}
-
-void sendSensorData() {
-  float currentLux = readLightLevel();
-  if (currentLux < 0.0 && sensorInitialized) { // Check for negative if readLightLevel indicates error
-      Serial.println("Error reading light level, not sending data.");
-      return;
-  }
-
-
-  String lightCondition = "unknown";
-  float appValue = lightToAppValue(currentLux, lightCondition);
-
-  StaticJsonDocument<256> doc;
-  doc["sensor"] = SENSOR_NAME;
-  doc["raw_value"] = currentLux; 
-  doc["light_app_value"] = appValue;
-  doc["voltage"] = appValue; 
-  doc["light_condition"] = lightCondition;
-  doc["timestamp"] = millis();
-  doc["type"] = "sensor_data";
-  
-  String jsonString;
-  serializeJson(doc, jsonString);
-  
-  Serial.print("Sending data: "); Serial.println(jsonString);
-  webSocket.sendTXT(jsonString);
-}
-
-void sendHeartbeat() {
-  if (!webSocket.isConnected() || !heartbeatEnabled) return;
-  
-  StaticJsonDocument<128> doc;
-  doc["type"] = "heartbeat";
-  doc["sensorName"] = SENSOR_NAME;
-  doc["uptime"] = millis();
-  
-  String jsonString;
-  serializeJson(doc, jsonString);
-  webSocket.sendTXT(jsonString);
-  lastHeartbeatTime = millis();
+  webSocket.begin(WEBSOCKET_HOST, WEBSOCKET_PORT, WEBSOCKET_PATH);
+  webSocket.onEvent(webSocketEvent);
+  webSocket.setReconnectInterval(5000); // Try to reconnect every 5 seconds
 }
 
 void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
-  String jsonString;
   switch (type) {
     case WStype_DISCONNECTED:
-      Serial.println("WebSocket Disconnected (；一_一)");
+      Serial.println("[WSc] Disconnected from server.");
+      serverConnected = false;
+      // digitalWrite(STATUS_LED, LOW); // Handled in loop()
       break;
     case WStype_CONNECTED:
-      Serial.println("WebSocket Connected! (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧");
-      {
-        StaticJsonDocument<200> handshake;
-        handshake["type"] = "esp_handshake";
-        handshake["sensorName"] = SENSOR_NAME;
-        serializeJson(handshake, jsonString);
-        webSocket.sendTXT(jsonString);
-        Serial.println("Light Handshake sent! (•̀ᴗ•́)و");
-      }
+      Serial.print("[WSc] Connected to server: ");
+      Serial.println((char *)payload); // Server might send a welcome message
+      serverConnected = true;
+      // digitalWrite(STATUS_LED, HIGH); // Handled in loop()
+      sendHandshake(); // Send handshake upon connection
       break;
     case WStype_TEXT:
-      Serial.printf("Received text: %s\n", payload);
-      {
-        StaticJsonDocument<512> doc;
-        DeserializationError error = deserializeJson(doc, payload);
-        if (!error) {
-          if (doc.containsKey("type") && strcmp(doc["type"], "handshake_ack") == 0) {
-            Serial.println("✅ Light Handshake acknowledged!");
-            if (doc.containsKey("heartbeat_interval")) {
-              heartbeatInterval = doc["heartbeat_interval"];
-              Serial.printf("📢 Setting light heartbeat interval to %d ms\n", heartbeatInterval);
-            }
-            if (doc.containsKey("heartbeat_enabled")) {
-              heartbeatEnabled = doc["heartbeat_enabled"];
-              Serial.printf("📢 Light Heartbeat %s\n", heartbeatEnabled ? "enabled" : "disabled");
-            }
-            if (sensorInitialized) sendSensorData(); 
-            sendHeartbeat();  
-          }
-        } else {
-          Serial.print("❌ JSON parsing failed: "); Serial.println(error.c_str());
-        }
-      }
+      Serial.print("[WSc] Received text: ");
+      Serial.println((char *)payload);
+      // Handle any messages from server if needed (e.g., commands, acknowledgments)
       break;
-    case WStype_PING: Serial.println("Ping received"); break;
-    case WStype_PONG: Serial.println("Pong received"); break;
-    case WStype_ERROR: Serial.println("WebSocket Error! (╥﹏╥)"); break;
+    case WStype_BIN:
+      Serial.println("[WSc] Received binary data.");
+      // Handle binary data if needed
+      break;
+    case WStype_ERROR:
+      Serial.println("[WSc] Error.");
+      break;
+    case WStype_FRAGMENT_TEXT_START:
+    case WStype_FRAGMENT_BIN_START:
+    case WStype_FRAGMENT:
+    case WStype_FRAGMENT_FIN:
+      // These are part of fragmented messages, usually handled by the library.
+      // Serial.printf("[WSc] Fragment Event: %d\n", type);
+      break;
+    default:
+      Serial.printf("[WSc] Unknown Event: %d\n", type);
+      break;
   }
 }
 
-void connectToWiFi() {
-  Serial.println("Connecting to WiFi... (｀・ω・´)");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  int retries = 0;
-  while (WiFi.status() != WL_CONNECTED && retries < 20) {
-    digitalWrite(STATUS_LED, HIGH); delay(150);
-    digitalWrite(STATUS_LED, LOW); delay(150);
-    Serial.print(".");
-    retries++;
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi connected! (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧");
-    Serial.print("IP: "); Serial.println(WiFi.localIP());
+void sendHandshake() {
+  if (!serverConnected) return;
+  StaticJsonDocument<200> doc; // Adjust size if more fields are added
+  doc["type"] = "esp_handshake";
+  doc["sensorName"] = SENSOR_NAME;
+  doc["device_type"] = "light"; // Explicitly state device type
+
+  String output;
+  serializeJson(doc, output);
+  if (webSocket.sendTXT(output)) {
+    Serial.print("Sent Handshake: ");
+    Serial.println(output);
   } else {
-    Serial.println("\nWiFi failed... (；一_一)");
+    Serial.println("Error sending handshake.");
+  }
+}
+
+void readLightSensor() {
+  currentLux = bLux.getAmbientLight(); // Corrected method name
+
+  // Check for error reading (DFRobot library might return negative on error)
+  if (currentLux < 0) {
+    Serial.println("Error reading lux value or sensor not ready. Using last valid or 0.");
+    // Optionally, you could decide not to update currentLux here,
+    // or set it to a specific error indicator if your downstream logic handles it.
+    // For now, we'll keep the previous value or default to 0 if it was the first read.
+    // If it's the very first read and it fails, currentLux will remain 0.0 as initialized.
+  }
+  currentLightCondition = getLightCondition(currentLux);
+  currentLightAppValue = calculateLightAppValue(currentLux);
+
+  Serial.printf("Lux: %.2f, Condition: %s, AppValue: %.2f\n", currentLux, currentLightCondition.c_str(), currentLightAppValue);
+}
+
+String getLightCondition(float lux) {
+  if (lux <= LUX_EXTREMELY_DARK_MAX) return "extremely_dark";
+  if (lux <= LUX_DARK_MAX) return "dark";
+  if (lux <= LUX_DIM_MAX) return "dim";
+  if (lux <= LUX_BRIGHT_MAX) return "bright";
+  if (lux <= LUX_VERY_BRIGHT_MAX) return "very_bright";
+  return "extremely_bright";
+}
+
+float calculateLightAppValue(float lux) {
+  // Ensure lux is positive before taking log for normalization
+  float effectiveLux = max(lux, MIN_RELEVANT_LUX); // Use MIN_RELEVANT_LUX to avoid log(0) or log(negative)
+  
+  float logLux = log10(effectiveLux);
+  float logMin = log10(MIN_RELEVANT_LUX);
+  float logMax = log10(MAX_RELEVANT_LUX);
+
+  // Avoid division by zero if logMin equals logMax (e.g., if MIN_RELEVANT_LUX == MAX_RELEVANT_LUX)
+  if (logMax - logMin == 0) {
+    return (logLux >= logMin) ? 1.0f : 0.0f; // Or handle as an error/default
+  }
+
+  float normalized = (logLux - logMin) / (logMax - logMin);
+  
+  // Clamp the value between 0.0 and 1.0
+  return max(0.0f, min(1.0f, normalized));
+}
+
+void sendSensorData() {
+  if (!serverConnected) return;
+
+  StaticJsonDocument<256> doc; // Sufficient size for the data
+  doc["type"] = "sensor_data";
+  doc["sensor"] = SENSOR_NAME;      // From config.h
+  doc["device_type"] = "light";     // Explicitly state device type
+  doc["lux"] = currentLux;
+  doc["light_condition"] = currentLightCondition;
+  doc["light_app_value"] = currentLightAppValue;
+
+  String output;
+  serializeJson(doc, output);
+  if (webSocket.sendTXT(output)) {
+    Serial.print("Sent Data: ");
+    Serial.println(output);
+  } else {
+    Serial.println("Error sending data via WebSocket.");
+  }
+}
+
+void sendHeartbeat() {
+  if (!serverConnected) return;
+  StaticJsonDocument<128> doc;
+  doc["type"] = "heartbeat";
+  doc["sensorName"] = SENSOR_NAME;
+  doc["device_type"] = "light";
+
+  String output;
+  serializeJson(doc, output);
+  if (webSocket.sendTXT(output)) {
+    // Serial.print("Sent Heartbeat: "); Serial.println(output); // Can be noisy, uncomment if needed for debugging
+  } else {
+    Serial.println("Error sending heartbeat.");
   }
 }
