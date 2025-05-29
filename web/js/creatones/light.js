@@ -1,29 +1,22 @@
 class LightHandler {
     constructor() {
-        // Synths and Loops
         this.ambientSynth = null;
         this.sparkleSynth = null;
         this.mainLoop = null;
         this.sparkleLoop = null;
 
-        // Audio Params
         this.fadeDuration = 0.8;
-        // Base target volumes before appValue modulation and master adjustment
-        this.baseAmbientTargetVolume = 3; // Initial base for FMSynth (adjust by ear)
-        this.baseSparkleTargetVolume = 6; // Initial base for PluckSynth (adjust by ear)
+        this.baseAmbientTargetVolume = -18; // Corrected: Negative dB value
+        this.baseSparkleTargetVolume = -22; // Corrected: Negative dB value
 
-        // --- Conceptual Master Adjustment Factors ---
-        // You can change these values to quickly affect the overall sound
-        this.masterVolumeAdjustment = 0;    // Additive dB adjustment (e.g., +3 for louder, -3 for softer)
-        this.masterFMBrightnessFactor = 1.0; // Multiplicative factor for FM modulationIndex & harmonicity (e.g., 1.2 for brighter, 0.8 for duller)
-        this.masterDelayFeedbackFactor = 1.0; // Multiplicative factor for delay feedback (e.g., 1.1 for more feedback)
-        // --------------------------------------------
+        this.masterVolumeAdjustment = 0;
+        this.masterFMBrightnessFactor = 1.0;
+        this.masterDelayFeedbackFactor = 1.0;
 
-        // State
         this.isActive = false;
         this.isPlaying = false;
         this.isFadingOut = false;
-        this.isConnected = false;
+        // this.isConnected is general server connection, use deviceStates.light.connected for specific device
         this.audioEnabled = false;
         this.toneInitialized = false;
         this.debugMode = true;
@@ -31,12 +24,10 @@ class LightHandler {
 
         this.currentLightCondition = "dark";
         this.currentLightAppValue = 0.0;
-        this.deviceStates = { // To store device-specific connection status
+        this.deviceStates = { // Local copy for convenience, actual state from websocket-client
             light: { connected: false }
         };
 
-
-        // DOM Elements
         this.lightCreatureVisual = document.querySelector('.light-creature');
         this.frameBackground = document.querySelector('.framebackground');
         this.audioEnableButton = document.getElementById('audio-enable-button');
@@ -51,10 +42,9 @@ class LightHandler {
     initializeWhenReady() {
         const checkDependencies = () => {
             if (window.Tone && window.creatune && this.audioEnableButton) {
-                if (this.debugMode) console.log('💡 LightHandler: Core Dependencies (Tone, window.creatune, AudioButton) ready.');
+                if (this.debugMode) console.log('💡 LightHandler: Core Dependencies ready.');
                 this.setupListeners();
-                this.updateUI(); // Initial UI update
-                // Check if audio context is already running (e.g., from another handler)
+                this.updateUI();
                 if (Tone.context.state === 'running') {
                     this.handleAudioContextRunning();
                 }
@@ -78,19 +68,18 @@ class LightHandler {
     initTone() {
         if (this.toneInitialized) return;
         if (!window.Tone || !this.audioEnabled) {
-            if (this.debugMode) console.warn(`💡 Cannot initTone. Tone loaded: ${!!window.Tone}, AudioEnabled: ${this.audioEnabled}`);
+            if (this.debugMode) console.warn(`💡 LightHandler: Cannot initTone. Tone loaded: ${!!window.Tone}, AudioEnabled: ${this.audioEnabled}`);
             return;
         }
         if (Tone.context.state !== 'running') {
-            if (this.debugMode) console.warn('💡 AudioContext not running for LightHandler. Deferring Tone component initialization.');
+            if (this.debugMode) console.warn('💡 LightHandler: AudioContext not running. Deferring Tone component initialization.');
             return;
         }
 
-        if (this.debugMode) console.log('💡 Initializing Tone.js components for light (Gamelan/Piano style)...');
+        if (this.debugMode) console.log('💡 LightHandler: Initializing Tone.js components (Gamelan/Piano style)...');
         try {
             const sharedReverb = new Tone.Reverb({ decay: 4, wet: 0.25 }).toDestination();
             const sharedDelay = new Tone.FeedbackDelay("4n.", Math.min(0.9, 0.45 * this.masterDelayFeedbackFactor)).connect(sharedReverb);
-
 
             this.ambientSynth = new Tone.PolySynth(Tone.FMSynth, {
                 harmonicity: Math.max(0.5, 2.0 * this.masterFMBrightnessFactor),
@@ -114,11 +103,11 @@ class LightHandler {
             this.createSparklePattern();
 
             this.toneInitialized = true;
-            if (this.debugMode) console.log('💡 Tone.js components for light (Gamelan/Piano style) initialized successfully.');
+            if (this.debugMode) console.log('💡 LightHandler: Tone.js components initialized successfully.');
             this.manageAudioAndVisuals();
 
         } catch (error) {
-            console.error('❌ Error during LightHandler Tone.js component initialization:', error);
+            console.error('❌ LightHandler: Error during Tone.js component initialization:', error);
             this.toneInitialized = false;
             if (this.ambientSynth) { this.ambientSynth.dispose(); this.ambientSynth = null; }
             if (this.sparkleSynth) { this.sparkleSynth.dispose(); this.sparkleSynth = null; }
@@ -152,66 +141,57 @@ class LightHandler {
 
     setupListeners() {
         if (!window.creatune) {
-            console.error('💡 window.creatune (WebSocket client) not available for LightHandler.');
+            console.error('💡 LightHandler: window.creatune (WebSocket client) not available.');
             return;
         }
         if (this.debugMode) console.log('💡 LightHandler: Setting up WebSocket listeners...');
 
         window.creatune.on('stateChange', (deviceType, state) => {
             if (deviceType === 'light') {
-                if (this.debugMode) console.log(`💡 Light stateChange: active=${state.active}, condition=${state.rawData.light_condition}, appValue=${state.rawData.light_app_value}`);
+                if (this.debugMode) console.log(`💡 LightHandler stateChange: active=${state.active}, condition=${state.rawData.light_condition}, appValue=${state.rawData.light_app_value}`);
                 this.isActive = state.active;
                 this.currentLightCondition = state.rawData.light_condition || "dark";
                 this.currentLightAppValue = state.rawData.light_app_value || 0.0;
-                // this.updateSoundParameters(); // Called by manageAudioAndVisuals
+                this.deviceStates.light.connected = true; // If we get a state change, it must be connected
                 this.manageAudioAndVisuals();
             }
         });
         window.creatune.on('data', (deviceType, data) => {
             if (deviceType === 'light') {
-                // Only update if data is fresh and different enough, or simply update
+                if (this.debugMode) console.log(`💡 LightHandler data: condition=${data.light_condition}, appValue=${data.light_app_value}`);
                 this.currentLightCondition = data.light_condition || this.currentLightCondition;
                 this.currentLightAppValue = data.light_app_value !== undefined ? data.light_app_value : this.currentLightAppValue;
-                this.updateSoundParameters(); // Update sound params on new data
+                this.deviceStates.light.connected = true; // If we get data, it must be connected
+                this.updateSoundParameters();
             }
         });
         window.creatune.on('connected', (deviceType) => {
-            if (deviceType === 'light' || deviceType === 'server') {
-                this.isConnected = window.creatune.isConnected; // General server connection
-                if (deviceType === 'light') this.deviceStates.light.connected = true;
-                if (this.debugMode) console.log(`💡 LightHandler: ${deviceType} connected. Server connected: ${this.isConnected}, Light device connected: ${this.deviceStates.light.connected}`);
-
-                if (Tone.context.state === 'running') {
-                    this.handleAudioContextRunning(); // Ensures Tone is init if context is running
-                } else {
-                     this.manageAudioAndVisuals(); // Update UI even if context not running
-                }
+            if (deviceType === 'light') {
+                if (this.debugMode) console.log(`💡 LightHandler: Light device connected.`);
+                this.deviceStates.light.connected = true;
+                if (Tone.context.state === 'running') this.handleAudioContextRunning();
+                else this.manageAudioAndVisuals(); // Update UI even if context not running
             }
         });
         window.creatune.on('disconnected', (deviceType) => {
-            if (deviceType === 'light' || deviceType === 'server') {
-                this.isConnected = window.creatune.isConnected;
-                if (deviceType === 'light') this.deviceStates.light.connected = false;
-                if (this.debugMode) console.log(`💡 LightHandler: ${deviceType} disconnected. Server connected: ${this.isConnected}, Light device connected: ${this.deviceStates.light.connected}`);
-                
-                this.isActive = false; // Assume sensor is inactive if its connection drops or server drops
+            if (deviceType === 'light') {
+                if (this.debugMode) console.log(`💡 LightHandler: Light device disconnected.`);
+                this.deviceStates.light.connected = false;
+                this.isActive = false;
                 this.manageAudioAndVisuals();
             }
         });
         
-        // Global audio enabled listener
         document.addEventListener('creaTuneAudioEnabled', () => {
             if (this.debugMode) console.log("💡 LightHandler detected creaTuneAudioEnabled event.");
             this.handleAudioContextRunning();
         });
-        document.addEventListener('creaTuneAudioDisabled', () => { // Optional: handle explicit disable
+        document.addEventListener('creaTuneAudioDisabled', () => {
             if (this.debugMode) console.log("💡 LightHandler detected creaTuneAudioDisabled event.");
             this.audioEnabled = false;
             this.manageAudioAndVisuals();
         });
 
-
-        // Initial state check from websocket-client
         const wsClientInitialState = window.creatune.getDeviceState('light');
         if (wsClientInitialState) {
             this.deviceStates.light.connected = wsClientInitialState.connected;
@@ -220,9 +200,8 @@ class LightHandler {
                 this.currentLightCondition = wsClientInitialState.lastRawData.light_condition || "dark";
                 this.currentLightAppValue = wsClientInitialState.lastRawData.light_app_value || 0.0;
             }
-            if (this.debugMode) console.log(`💡 Light initial state from wsClient: Connected=${this.deviceStates.light.connected}, Active=${this.isActive}, Condition=${this.currentLightCondition}`);
+            if (this.debugMode) console.log(`💡 LightHandler initial state from wsClient: Connected=${this.deviceStates.light.connected}, Active=${this.isActive}, Condition=${this.currentLightCondition}`);
         }
-        this.isConnected = window.creatune.isConnected; // General server connection status
         this.updateUI();
     }
 
@@ -230,21 +209,20 @@ class LightHandler {
         if (!this.toneInitialized || !this.audioEnabled) return;
 
         if (this.ambientSynth) {
-            const dynamicVolumePart = this.currentLightAppValue * 10; // How much appValue affects volume
+            const dynamicVolumePart = this.currentLightAppValue * 10;
             const targetVolume = this.isActive ? this.baseAmbientTargetVolume + dynamicVolumePart + this.masterVolumeAdjustment : -Infinity;
             this.ambientSynth.volume.linearRampTo(targetVolume, 0.5);
         }
 
         if (this.sparkleLoop && this.sparkleSynth) {
             let probability = 0;
-            let sparkleVolMod = 0; // Modifier based on condition
-
+            let sparkleVolMod = 0;
             switch (this.currentLightCondition) {
                 case 'dim': probability = 0.1; sparkleVolMod = -6; break;
                 case 'bright': probability = 0.25; sparkleVolMod = -2; break;
                 case 'very_bright': probability = 0.45; sparkleVolMod = 0; break;
                 case 'extremely_bright': probability = 0.65; sparkleVolMod = +3; break;
-                default: probability = 0.05; sparkleVolMod = -10; // For 'dark' or 'extremely_dark'
+                default: probability = 0.05; sparkleVolMod = -10;
             }
             this.sparkleLoop.probability = this.isActive ? probability : 0;
             const targetSparkleVol = this.isActive ? this.baseSparkleTargetVolume + sparkleVolMod + this.masterVolumeAdjustment : -Infinity;
@@ -260,15 +238,11 @@ class LightHandler {
     }
 
     manageAudioAndVisuals() {
-        // Ensure audioEnabled reflects the current Tone.context.state
-        if (Tone.context.state !== 'running') {
-            this.audioEnabled = false;
-        } else {
-            this.audioEnabled = true; // This might have been set by creaTuneAudioEnabled
-        }
+        if (Tone.context.state !== 'running') this.audioEnabled = false;
+        else this.audioEnabled = true;
 
         if (!this.audioEnabled) {
-            if (this.isPlaying || this.isFadingOut) this.stopAudio(true); // Force stop
+            if (this.isPlaying || this.isFadingOut) this.stopAudio(true);
             if (this.debugMode) console.log(`💡 LightHandler: AudioContext not running or audio disabled. Audio remains off.`);
             this.updateUI();
             return;
@@ -276,26 +250,24 @@ class LightHandler {
         
         if (!this.toneInitialized) {
             if (this.debugMode) console.log(`💡 LightHandler: Tone not initialized. Attempting initTone.`);
-            this.initTone(); // This will only run if audioEnabled is true and context is running
-            if (!this.toneInitialized) { // Check again after attempt
+            this.initTone();
+            if (!this.toneInitialized) {
                  if (this.debugMode) console.log(`💡 LightHandler: initTone failed or deferred. Cannot manage audio yet.`);
                  this.updateUI();
                  return;
             }
         }
 
-        // Determine if audio should be playing based on sensor and connection state
         const shouldPlayAudio = this.deviceStates.light.connected && this.isActive;
 
-
         if (shouldPlayAudio) {
-            if (!this.isPlaying || this.isFadingOut) { // If not playing OR if it was fading out
+            if (!this.isPlaying || this.isFadingOut) {
                 this.startAudio();
-            } else { // Already playing, just ensure parameters are up-to-date
+            } else {
                 this.updateSoundParameters();
             }
         } else {
-            if (this.isPlaying && !this.isFadingOut) { // If playing and NOT already fading out
+            if (this.isPlaying && !this.isFadingOut) {
                 this.stopAudio();
             }
         }
@@ -304,23 +276,18 @@ class LightHandler {
 
     updateUI() {
         if (this.lightCreatureVisual) {
-            // Creature is 'active' visually if its device is connected and sensor is active,
-            // and audio is playing (or supposed to be playing if enabled)
             const showCreature = this.deviceStates.light.connected && this.isActive;
             this.lightCreatureVisual.classList.toggle('active', showCreature);
-            
-            // Update condition class regardless of 'active' state for visual feedback
             this.lightCreatureVisual.classList.remove('light-dark', 'light-dim', 'light-bright', 'light-very-bright', 'light-extremely-bright');
-            if (this.deviceStates.light.connected) { // Only add condition class if device is connected
+            if (this.deviceStates.light.connected) {
                 this.lightCreatureVisual.classList.add(`light-${this.currentLightCondition.replace('_', '-')}`);
             }
         }
         if (this.frameBackground) {
             const frameActive = this.deviceStates.light.connected && this.isActive;
             this.frameBackground.classList.toggle('light-active-bg', frameActive);
-            
             this.frameBackground.classList.remove('light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg');
-            if (this.deviceStates.light.connected) { // Only add condition class if device is connected
+            if (this.deviceStates.light.connected) {
                  this.frameBackground.classList.add(`light-${this.currentLightCondition.replace('_', '-')}-bg`);
             }
         }
@@ -328,69 +295,62 @@ class LightHandler {
 
     startAudio() {
         if (!this.audioEnabled || !this.toneInitialized) {
-            if (this.debugMode) console.warn("💡 Attempted to startAudio (Light), but audio system not ready.");
+            if (this.debugMode) console.warn("💡 LightHandler: Attempted to startAudio, but audio system not ready.");
             this.updateUI(); return;
         }
-        if (this.isFadingOut) { // If it was fading out, cancel the fade and resume
-            if (this.debugMode) console.log('💡 Cancelling fade-out (Light) to start/resume audio.');
+        if (this.isFadingOut) {
+            if (this.debugMode) console.log('💡 LightHandler: Cancelling fade-out to start/resume audio.');
             if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
             this.isFadingOut = false;
-            // Volumes will be set by updateSoundParameters
         }
         if (this.isPlaying) {
-            if (this.debugMode) console.log("💡 startAudio (Light) called, but already playing. Ensuring volumes.");
-            this.updateSoundParameters(); // Ensure params are current
+            if (this.debugMode) console.log("💡 LightHandler: startAudio called, but already playing. Ensuring volumes.");
+            this.updateSoundParameters();
             this.updateUI(); return;
         }
         
-        // Conditions for starting fresh
         if (!this.deviceStates.light.connected || !this.isActive) {
-            if (this.debugMode) console.log(`💡 Start audio (Light) conditions not met (DeviceConnected:${this.deviceStates.light.connected}, SensorActive:${this.isActive}).`);
-            // this.stopAudio(); // No need to call stop if not playing
+            if (this.debugMode) console.log(`💡 LightHandler: Start audio conditions not met (DeviceConnected:${this.deviceStates.light.connected}, SensorActive:${this.isActive}).`);
             this.updateUI(); return;
         }
         if (!this.ambientSynth || !this.sparkleSynth || !this.mainLoop || !this.sparkleLoop) {
-            console.error("💡 Critical: Synths/Loops not available in startAudio (Light). Attempting re-init.");
-            this.initTone(); // Try to re-initialize
+            console.error("💡 LightHandler: Critical: Synths/Loops not available in startAudio. Attempting re-init.");
+            this.initTone();
              if (!this.ambientSynth || !this.sparkleSynth || !this.mainLoop || !this.sparkleLoop) {
-                console.error("💡 Critical: Re-init failed. Cannot start audio.");
+                console.error("💡 LightHandler: Critical: Re-init failed. Cannot start audio.");
                 return;
              }
         }
 
-        if (this.debugMode) console.log('💡 Starting light audio...');
+        if (this.debugMode) console.log('💡 LightHandler: Starting audio...');
         this.isPlaying = true;
         this.isFadingOut = false;
-
-        this.updateSoundParameters(); // Set initial volumes and params
-
+        this.updateSoundParameters();
         if (Tone.Transport.state !== "started") Tone.Transport.start();
         if (this.mainLoop.state !== "started") this.mainLoop.start(0);
         if (this.sparkleLoop.state !== "started") this.sparkleLoop.start(0);
-
-        if (this.debugMode) console.log('💡 Light audio started.');
+        if (this.debugMode) console.log('💡 LightHandler: Audio started.');
         this.updateUI();
     }
 
     stopAudio(force = false) {
         if (!this.audioEnabled || !this.toneInitialized) {
             this.isPlaying = false; this.isFadingOut = false;
-            if (this.debugMode && !force) console.warn("💡 Attempted to stopAudio (Light), but audio system not ready.");
+            if (this.debugMode && !force) console.warn("💡 LightHandler: Attempted to stopAudio, but audio system not ready.");
             this.updateUI(); return;
         }
-        if (!this.isPlaying && !this.isFadingOut && !force) { // Already fully stopped
-            if (this.debugMode) console.log("💡 stopAudio (Light) called, but already stopped.");
+        if (!this.isPlaying && !this.isFadingOut && !force) {
+            if (this.debugMode) console.log("💡 LightHandler: stopAudio called, but already stopped.");
             this.updateUI(); return;
         }
-        if (this.isFadingOut && !force) { // Already in the process of fading out
-            if (this.debugMode) console.log("💡 stopAudio (Light) called, but already fading out.");
+        if (this.isFadingOut && !force) {
+            if (this.debugMode) console.log("💡 LightHandler: stopAudio called, but already fading out.");
             return;
         }
 
-        if (this.debugMode) console.log(`💡 Stopping light audio ${force ? '(forced)' : '(with fade-out)'}...`);
-        this.isPlaying = false; // Visuals should reflect that it's stopping
+        if (this.debugMode) console.log(`💡 LightHandler: Stopping audio ${force ? '(forced)' : '(with fade-out)'}...`);
+        this.isPlaying = false;
         this.isFadingOut = true;
-
         const fadeTime = force ? 0.01 : this.fadeDuration;
 
         if (this.ambientSynth) {
@@ -406,32 +366,25 @@ class LightHandler {
         this.stopTimeoutId = setTimeout(() => {
             if (this.mainLoop && this.mainLoop.state === "started") this.mainLoop.stop(0);
             if (this.sparkleLoop && this.sparkleLoop.state === "started") this.sparkleLoop.stop(0);
-            
-            // Reset volumes to -Infinity in case rampTo didn't complete or for next start
             if (this.ambientSynth) this.ambientSynth.volume.value = -Infinity;
             if (this.sparkleSynth) this.sparkleSynth.volume.value = -Infinity;
-
             this.isFadingOut = false;
-            // isPlaying is already false
-            if (this.debugMode) console.log('💡 Light audio fully stopped and loops cleared.');
+            if (this.debugMode) console.log('💡 LightHandler: Audio fully stopped and loops cleared.');
             this.updateUI();
-        }, force ? 10 : (this.fadeDuration * 1000 + 100)); // Ensure loops stop after fade
-        
-        this.updateUI(); // Update UI immediately to reflect stopping state
+        }, force ? 10 : (this.fadeDuration * 1000 + 100));
+        this.updateUI();
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     const initLightHandler = () => {
-        // Ensure global dependencies are available
         if (window.creatune && window.Tone && document.getElementById('audio-enable-button')) {
-            if (!window.lightHandlerInstance) { // Create instance only once
+            if (!window.lightHandlerInstance) {
                 window.lightHandlerInstance = new LightHandler();
                 if (window.lightHandlerInstance.debugMode) console.log('💡 Light Handler instance created.');
             }
         } else {
-            // Use a temporary instance for debugMode check if main instance not yet created
-            const tempDebugMode = (window.lightHandlerInstance && window.lightHandlerInstance.debugMode !== undefined) ? window.lightHandlerInstance.debugMode : new LightHandler().debugMode;
+            const tempDebugMode = (window.lightHandlerInstance && window.lightHandlerInstance.debugMode !== undefined) ? window.lightHandlerInstance.debugMode : true; // Default to true if instance not yet created
             if (tempDebugMode) console.log('💡 Waiting for LightHandler dependencies (DOMContentLoaded)...');
             setTimeout(initLightHandler, 100);
         }
@@ -439,7 +392,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initLightHandler();
 });
 
-// For potential Node.js/module usage (optional)
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = LightHandler;
 }
