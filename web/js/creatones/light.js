@@ -6,8 +6,8 @@ class LightHandler {
         this.sparkleLoop = null;
 
         this.fadeDuration = 0.8;
-        this.baseAmbientTargetVolume = -18; // Corrected: Negative dB value
-        this.baseSparkleTargetVolume = -22; // Corrected: Negative dB value
+        this.baseAmbientTargetVolume = 9; // Corrected: Negative dB value
+        this.baseSparkleTargetVolume = 6; // Corrected: Negative dB value
 
         this.masterVolumeAdjustment = 0;
         this.masterFMBrightnessFactor = 1.0;
