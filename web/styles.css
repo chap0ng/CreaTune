@@ -1,192 +1,420 @@
-/* General Reset and Body Styles */
-body, html {
-  margin: 0;
+/* ==========================================================================
+   IMPORTS & VARIABLES
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+:root {
+  /* Primary Colors */
+  --warm-yellow: #f6c052;
+  --steel-blue: #699bc8;
+  --sage-green: #8ea47d;
+  --warm-beige: #f5eee0;
+  --dark-slate: #2d3142;
+  --coral-red: #e6695a;
+
+  /* Accent Colors (example, adjust as needed) */
+  --primary-accent: var(--steel-blue);
+  --secondary-accent: var(--sage-green);
+  
+  /* UI Element Colors (example, adjust as needed) */
+  --light-gray: #e0e0e0;
+  --medium-gray: #c0c0c0;
+  --dark-gray: #a0a0a0;
+
+  /* Blended Colors (from your original list) */
+  --yellow-blue: #a0ab8d;
+  --blue-green: #79a397;
+  --yellow-green: #bea867;
+  --all-three: #8fa082;
+}
+
+/* ==========================================================================
+   BASE STYLES
+   ========================================================================== */
+
+* {
+  margin: 0; /* Changed from 1px for a cleaner reset */
   padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'VT323', monospace;
+  line-height: 1.6;
+  color: var(--dark-slate);
+  background-color: var(--warm-beige);
+  font-size: 20px; /* Base font size */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh; 
+  margin: 0; 
+  overflow: auto; /* Allows body to scroll if content (including padding) exceeds viewport */
+  padding-top: 0px;    /* Approx 2cm */
+  padding-bottom: 0px; /* Approx 2cm */
+  padding-left: 50px;   /* Approx 1cm */
+  padding-right: 50px;  /* Approx 1cm */
+  box-sizing: border-box; 
+}
+
+/* ==========================================================================
+   MAIN LAYOUT
+   ========================================================================== */
+
+.frameidle {
+  display: grid;
+  grid-template-columns: 20px 1fr 20px; /* Left border, content, right border */
+  grid-template-rows: 20px 1fr 20px;    /* Top border, content, bottom border */
+  grid-template-areas:
+    "corner1   frametop   corner2"
+    "frameleft framebackground frameright"
+    "corner3   framebottom  corner4";
+  
+  /* Responsive scaling with fixed aspect ratio */
+  aspect-ratio: 2412 / 1080; /* Target aspect ratio (approx 20:9) */
   width: 100%;
   height: 100%;
-  overflow: hidden; /* Prevent scrollbars */
-  background-color: #2c3e50; /* Dark blue-grey background */
-  font-family: 'Arial', sans-serif;
-  color: #ecf0f1; /* Light text color */
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  -webkit-tap-highlight-color: transparent; /* Disable tap highlight on mobile */
+  max-width: 100%; 
+  max-height: 100%;
+
+  margin: auto; /* Ensures centering if it doesn't fill one dimension after aspect ratio adjustment */
+  padding: 30px; 
+  position: relative; 
+  /* Optional: Add a shadow to distinguish the frame */
+  /* box-shadow: 0 0 15px rgba(0,0,0,0.1); */
 }
 
-/* Frame Styles */
-.frameidle {
-  position: relative;
-  width: 95vmin; /* Responsive width based on viewport smaller dimension */
-  height: 95vmin; /* Responsive height */
-  max-width: 800px; /* Max size */
-  max-height: 800px; /* Max size */
-  border: 10px solid #e6695a; /* Coral border */
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-  background-color: #34495e; /* Slightly lighter blue-grey for frame interior */
-  overflow: hidden; /* Creatures should not go outside the frame */
-  border-radius: 15px; /* Rounded corners for the frame */
+/* ==========================================================================
+   FRAME COMPONENTS (Borders, Corners)
+   ========================================================================== */
+
+.corner1 { grid-area: corner1; background-color: var(--coral-red); }
+.frametop { 
+  grid-area: frametop; 
+  background-color: var(--steel-blue);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none; /* For frame-slider.js interaction */
+  cursor: ns-resize;   /* For frame-slider.js interaction */
+}
+.corner2 { grid-area: corner2; background-color: var(--coral-red); }
+.frameleft { grid-area: frameleft; background-color: var(--steel-blue); }
+.frameright { grid-area: frameright; background-color: var(--steel-blue); }
+.corner3 { grid-area: corner3; background-color: var(--coral-red); }
+.framebottom { grid-area: framebottom; background-color: var(--steel-blue); }
+.corner4 { grid-area: corner4; background-color: var(--coral-red); }
+
+
+/* Performance optimizations from your original CSS */
+.frametop, .corner1, .corner2 {
+  will-change: transform;
+  transform: translateZ(0); /* Promote to own layer */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.frameleft, .frameright, .framebackground { /* framebackground added here */
+  will-change: margin-top; /* If frame-slider.js modifies this */
 }
 
-.corner1, .corner2, .corner3, .corner4,
-.frametop, .framebottom, .frameleft, .frameright {
-  position: absolute;
-  background-color: #c0392b; /* Darker coral for frame elements */
-  z-index: 10; /* Above background, below creatures */
-}
 
-.corner1 { top: -5px; left: -5px; width: 30px; height: 30px; border-radius: 10px 0 0 0; }
-.corner2 { top: -5px; right: -5px; width: 30px; height: 30px; border-radius: 0 10px 0 0; }
-.corner3 { bottom: -5px; left: -5px; width: 30px; height: 30px; border-radius: 0 0 0 10px; }
-.corner4 { bottom: -5px; right: -5px; width: 30px; height: 30px; border-radius: 0 0 10px 0; }
-
-.frametop { top: -5px; left: 25px; right: 25px; height: 10px; }
-.framebottom { bottom: -5px; left: 25px; right: 25px; height: 10px; }
-.frameleft { left: -5px; top: 25px; bottom: 25px; width: 10px; }
-.frameright { right: -5px; top: 25px; bottom: 25px; width: 10px; }
+/* ==========================================================================
+   FRAME BACKGROUND & STATES
+   ========================================================================== */
 
 .framebackground {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background-image: url('../images/soil-background.jpg'); /* Default background */
-  background-size: cover;
-  background-position: center;
-  transition: background-image 1s ease-in-out, background-color 1s ease-in-out;
-  z-index: 1;
+  grid-area: framebackground;
+  background-color: var(--warm-beige); /* Default background */
+  border: none;
+  position: relative; /* For positioning creatures inside */
+  overflow: hidden;   /* To contain creatures */
+  display: flex;      /* To help center creatures if they are direct children */
+  justify-content: center;
+  align-items: center;
+  
+  /* Smooth transitions for background changes */
+  transition: background-color 0.8s ease-in-out, background-image 0.8s ease-in-out;
+  
+  transform: translateZ(0); /* Promote to own layer */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
-/* Creature Styles */
-.idle-creature,
+/* Active rule for soil connection, used by soil.js */
+.framebackground.soil-connected-bg {
+  background-image: url('../images/soil-background.jpg'); /* Corrected path assuming images is sibling to js/css */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Other device-specific backgrounds (if needed by JS) */
+.framebackground.temp-active-bg { /* Example: more specific class name */
+  background-color: var(--coral-red); 
+}
+
+.framebackground.light-active-bg { /* Example: more specific class name */
+  background-color: var(--warm-yellow); /* Example */
+}
+
+/* Dotted pattern for soil from your original CSS */
+.framebackground.soil-pattern-bg { /* Example: more specific class name */
+  background-color: var(--sage-green); /* Base color */
+  background-image: 
+    radial-gradient(circle at 25% 25%, rgba(142,164,125,0.3) 2px, transparent 2px),
+    radial-gradient(circle at 75% 75%, rgba(142,164,125,0.2) 1px, transparent 1px);
+  background-size: 30px 30px, 15px 15px;
+  background-position: 0 0, 15px 15px;
+}
+
+
+/* ==========================================================================
+   CREATURES
+   ========================================================================== */
+
+.idle-creature, 
 .soil-creature,
-.light-creature {
-  position: absolute;
+.light-creature { /* Added .light-creature for consistency */
+  /* Positioned absolutely within .framebackground (which is their parent in HTML and a grid area) */
+  position: absolute; 
   top: 50%;
   left: 50%;
-  width: 150px; /* Adjust size as needed */
-  height: 150px; /* Adjust size as needed */
+  transform: translate(-50%, -50%) translateZ(0); /* translateZ(0) for hardware acceleration */
+  
+  width: min(50vw, 35vh); /* Default size, adjust as needed, responsive to viewport */
+  height: min(50vw, 35vh); 
+  
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  transform: translate(-50%, -50%);
-  opacity: 0; /* Hidden by default */
-  display: none; /* Hidden by default, JS will make it block */
-  transition: opacity 0.5s ease-in-out;
-  z-index: 5; /* Above background */
-  image-rendering: pixelated; /* For pixel art if used */
+  
+  display: none; /* Hidden by default, JS adds .active to show */
+  opacity: 0;    /* Start fully transparent for fade-in */
+  z-index: 5;    /* Ensure creatures are above .framebackground content */
+  
+  transition: 
+    opacity 0.6s ease-in-out,
+    transform 1s ease-in-out; /* Smooth transitions for appearing/disappearing and animations */
+  
+  will-change: opacity, transform; /* Hint to browser for optimization */
+  backface-visibility: hidden; /* Prevent flickering during transforms */
+  -webkit-backface-visibility: hidden;
 }
 
-.idle-creature {
-  background-image: url('../images/creature.png'); /* Your default idle creature sprite */
-  /* display: block; 
-  opacity: 1; */ /* Idle creature is visible by default if no other active */
-}
+/* Specific creature images */
 
 .soil-creature {
-  background-image: url('../sprites/creatures/soil-creature.png');
-}
-
-.light-creature {
-  background-image: url('../sprites/creatures/light-creature.png');
+  background-image: url('../sprites/creatures/soil-creature.png'); /* Corrected path */
 }
 
 /* Active state for creatures (controlled by JS) */
-.idle-creature.active, /* JS might toggle this if needed */
+.idle-creature.active,
 .soil-creature.active,
-.light-creature.active {
+.light-creature.active { 
   display: block; /* Make visible */
   opacity: 1;     /* Fade in */
 }
 
-/* Soil Creature Animations */
-.soil-creature.active {
-  animation: soilWiggle 3s ease-in-out infinite;
+/* Soil Creature Animations (from your original CSS) */
+.soil-creature.active { /* Apply idle animation when active */
+  animation: soilCreatureIdle 4s ease-in-out infinite;
 }
 
-@keyframes soilWiggle {
-  0%, 100% { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
-  25% { transform: translate(-50%, -50%) rotate(-5deg) scale(1.05); }
-  75% { transform: translate(-50%, -50%) rotate(5deg) scale(0.95); }
+@keyframes soilCreatureIdle {
+  0%, 100% { 
+    transform: translate(-50%, -50%) translateY(0px) scale(1) translateZ(0);
+    filter: brightness(1);
+  }
+  50% { 
+    transform: translate(-50%, -50%) translateY(-5px) scale(1.03) translateZ(0);
+    filter: brightness(1.05);
+  }
 }
 
-/* Light Creature Animations */
+.soil-creature.reacting { /* Apply reaction animation when .reacting class is added */
+  animation: soilCreatureReact 0.8s ease-out forwards; /* forwards keeps the end state */
+}
+
+@keyframes soilCreatureReact {
+  0% { 
+    transform: translate(-50%, -50%) scale(1) translateZ(0);
+    filter: brightness(1);
+  }
+  30% { 
+    transform: translate(-50%, -50%) scale(1.2) translateZ(0);
+    filter: brightness(1.2) contrast(1.1);
+  }
+  100% { 
+    transform: translate(-50%, -50%) scale(1) translateZ(0);
+    filter: brightness(1);
+  }
+}
+/* ==========================================================================
+   LIGHT CREATURE - SPECIFIC STYLES & ANIMATIONS
+   ========================================================================== */
+
+.light-creature {
+  /* Define the image for the light creature */
+  background-image: url('../sprites/creatures/light-creature.png'); /* Ensure this path is correct */
+}
+
 .light-creature.active {
-  animation: lightPulse 4s ease-in-out infinite;
+  /* Apply an idle animation when the light creature is active */
+  animation: lightCreaturePulse 4s ease-in-out infinite;
 }
 
-@keyframes lightPulse {
+@keyframes lightCreaturePulse {
   0%, 100% {
-    transform: translate(-50%, -50%) scale(1);
-    filter: brightness(100%) opacity(0.9);
+    transform: translate(-50%, -50%) scale(1) translateZ(0); /* Maintain translateZ for consistency */
+    filter: brightness(1);
   }
   50% {
-    transform: translate(-50%, -50%) scale(1.08);
-    filter: brightness(120%) opacity(1);
+    transform: translate(-50%, -50%) scale(1.05) translateY(-3px) translateZ(0); /* Slight lift and scale */
+    filter: brightness(1.1);
   }
 }
 
-/* Light condition specific styles for the creature visual */
-.light-creature.light-dark { filter: brightness(0.6) saturate(0.5) opacity(0.7); }
-.light-creature.light-dim { filter: brightness(0.8) saturate(0.8); animation-duration: 5s; }
-.light-creature.light-bright { filter: brightness(1.1) saturate(1.1) drop-shadow(0 0 5px yellow); animation-duration: 3s; }
-.light-creature.light-very-bright { filter: brightness(1.3) saturate(1.3) drop-shadow(0 0 10px gold); animation-duration: 2s; }
-.light-creature.light-extremely-bright { filter: brightness(1.5) saturate(1.5) drop-shadow(0 0 15px orange); animation-duration: 1.5s; }
+/* Light condition specific visual styles for the creature itself */
+/* These classes are added by light.js based on data.light_condition */
 
-
-/* Frame Background changes based on active creature/state */
-.framebackground.soil-active-bg {
-  background-image: url('../sprites/backgrounds/soil-background.png'); /* Specific soil background */
-  /* Or a color: background-color: #8B4513;  SaddleBrown */
+.light-creature.light-dark {
+  filter: brightness(0.7) saturate(0.6);
+  opacity: 0.8; /* Slightly more subdued in the dark */
 }
 
-.framebackground.light-active-bg {
-  /* Base for light active, specific conditions override */
-  background-color: #424242; /* Default dark if no specific condition matches */
+.light-creature.light-dim {
+  filter: brightness(0.9) saturate(0.8);
+  animation-duration: 5s; /* Slower pulse for dim light */
 }
-.framebackground.light-dark-bg { background-color: #212121; } /* Very dark grey */
-.framebackground.light-dim-bg { background-color: #4a545c; } /* Cool dim blue/grey */
-.framebackground.light-bright-bg { background-color: #f7c548; } /* Warm yellow */
-.framebackground.light-very-bright-bg { background-color: #ffeda0; } /* Brighter yellow */
-.framebackground.light-extremely-bright-bg { background-color: #fffacd; } /* Lemon chiffon / very bright */
 
+.light-creature.light-bright {
+  /* Active state already applies a base brightness in animation */
+  /* This can be used for more pronounced effects if needed */
+  filter: brightness(1.1) drop-shadow(0 0 3px var(--warm-yellow)); /* Subtle glow */
+  animation-duration: 3.5s;
+}
 
-/* Audio Enable Button */
-.audio-button {
+.light-creature.light-very-bright {
+  filter: brightness(1.2) drop-shadow(0 0 6px var(--warm-yellow));
+  animation-duration: 2.5s; /* Faster pulse */
+}
+
+.light-creature.light-extremely-bright {
+  filter: brightness(1.3) drop-shadow(0 0 9px var(--coral-red)); /* Intense glow, maybe different color */
+  animation-duration: 1.8s; /* Very fast pulse */
+}
+
+.framebackground.light-dark-bg {
+  background-color: var(--dark-slate); /* Darker background for dark conditions */
+}
+
+.framebackground.light-dim-bg {
+  background-color: var(--steel-blue); /* Cool, dim color */
+}
+
+.framebackground.light-bright-bg {
+  background-color: var(--warm-yellow); /* This is likely the same as your .light-active-bg */
+}
+
+.framebackground.light-very-bright-bg {
+  background-color: #f8d07a; /* A lighter shade of warm-yellow, or define a new variable */
+}
+
+.framebackground.light-extremely-bright-bg {
+  background-color: #fadf9b; /* Even lighter, approaching beige but still warm */
+}
+
+/* ==========================================================================
+   AUDIO ENABLE BUTTON
+   ========================================================================== */
+#audio-enable-button {
   position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 10px 20px;
-  font-size: 16px;
-  color: white;
-  background-color: #e6695a; /* Coral */
-  border: none;
+  top: 20px; /* Position from top-right */
+  right: 20px;
+  padding: 12px 20px;
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  color: var(--dark-slate);
+  background-color: var(--warm-yellow); 
+  border: 2px solid var(--dark-slate);
   border-radius: 5px;
   cursor: pointer;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-  z-index: 1000;
-  transition: background-color 0.3s ease;
-}
-.audio-button:hover {
-  background-color: #c0392b; /* Darker coral */
-}
-.audio-button.hidden {
-  display: none;
+  z-index: 10000; /* Very high z-index to be on top */
+  transition: opacity 0.5s ease-in-out, background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 3px 3px 0px var(--dark-slate); /* Pixel art shadow */
 }
 
-/* Debug Overlay */
-.debug-overlay {
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    background-color: rgba(0,0,0,0.7);
-    color: #0f0;
-    padding: 10px;
-    border-radius: 5px;
-    font-family: monospace;
-    font-size: 12px;
-    z-index: 2000;
-    max-height: 200px;
-    overflow-y: auto;
-    pointer-events: none; /* Allow clicks to pass through */
+#audio-enable-button:hover {
+  background-color: #f8c96a; /* Slightly lighter yellow */
+  transform: translateY(-2px) translateX(-1px); /* Slight lift effect */
+  box-shadow: 5px 5px 0px var(--dark-slate); /* Shadow moves with button */
+}
+
+#audio-enable-button.audio-button-confirm {
+  background-color: var(--sage-green); 
+  color: var(--warm-beige);
+  /* border-color: var(--dark-slate); */ /* Already set */
+  /* box-shadow: 3px 3px 0px var(--dark-slate); */ /* Already set */
+}
+
+#audio-enable-button.audio-button-error {
+  background-color: var(--coral-red); 
+  color: var(--warm-beige);
+  /* border-color: var(--dark-slate); */ /* Already set */
+  /* box-shadow: 3px 3px 0px var(--dark-slate); */ /* Already set */
+}
+
+#audio-enable-button.audio-button-hidden {
+  opacity: 0;
+  pointer-events: none; /* Prevent interaction when hidden */
+  transform: translateY(-20px); /* Animate out upwards */
+}
+
+/* ==========================================================================
+   RESPONSIVE ADJUSTMENTS - CREATURE SIZE (from your original CSS)
+   ========================================================================== */
+
+@media (max-width: 768px) { /* Primarily for portrait phone views */
+  .idle-creature, .soil-creature, .light-creature {
+    width: min(35vw, 30vh);
+    height: min(35vw, 30vh);
+  }
+}
+
+@media (max-height: 500px) { /* Primarily for very short viewport heights */
+  .idle-creature, .soil-creature, .light-creature {
+    width: min(30vw, 25vh);
+    height: min(30vw, 25vh);
+  }
+}
+
+@media (min-width: 1200px) { /* For larger screens / desktops */
+  .idle-creature, .soil-creature, .light-creature {
+    width: min(35vw, 40vh); /* Can be slightly larger on big screens */
+    height: min(35vw, 40vh);
+  }
+}
+
+/* ==========================================================================
+   FULLSCREEN HORIZONTAL FOR PHONES (like Nothing Phone 2a)
+   ========================================================================== */
+@media (orientation: landscape) and (hover: none) and (pointer: coarse) {
+  body {
+    overflow: hidden; /* Prevent scrolling on landscape touch devices */
+  }
+
+  /* .frameidle rules for aspect ratio and 100% width/height are sufficient */
+  
+  .idle-creature, .soil-creature, .light-creature {
+    /* Adjust creature size for landscape phone view */
+    width: min(50vw, 40vh); /* Can be wider in landscape */
+    height: min(50vw, 40vh); 
+  }
+
+  #audio-enable-button {
+    font-size: 16px; 
+    padding: 10px 15px;
+    top: 10px; /* Closer to edge on smaller screen */
+    right: 10px; 
+  }
 }
