@@ -23,6 +23,14 @@ const urlsToCache = [
   './sprites/creatures/lightsoil-creature.png', // <<< ADDED LIGHTSOIL-CREATURE.PNG
   // './images/lightsoil-background.jpg', // <<< ADD IF YOU USE A SPECIFIC BACKGROUND IMAGE FOR LIGHTSOIL
   './sprites/backgrounds/soil-background.png',
+  './sprites/frame/frameropeh.png',
+  './sprites/frame/frameropel.png',
+  './sprites/frame/knotbotleft.png',
+  './sprites/frame/knotbotright.png',
+  './sprites/frame/knottopleft.png',
+  './sprites/frame/knottopright.png',
+
+
 
   // Icons
   './icons/icon-192x192.png',

@@ -78,28 +78,106 @@ body {
   max-height: 100%;
   margin: auto;
   padding: 30px; 
-  position: relative; 
+  position: relative;
+  background-color: var(--warm-beige);
+  z-index: 5; /*ensure it sits above other content*/
 }
 
 /* ==========================================================================
    FRAME COMPONENTS (Borders, Corners)
    ========================================================================== */
 
-.corner1 { grid-area: corner1; background-color: var(--coral-red); }
+
 .frametop { 
   grid-area: frametop; 
-  background-color: var(--steel-blue);
+  background-color: var(--warm-beige);
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
   cursor: ns-resize;
+  background-image: url(sprites/frame/frameropeh.png);
+  background-size: 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: center;
 }
-.corner2 { grid-area: corner2; background-color: var(--coral-red); }
-.frameleft { grid-area: frameleft; background-color: var(--steel-blue); }
-.frameright { grid-area: frameright; background-color: var(--steel-blue); }
-.corner3 { grid-area: corner3; background-color: var(--coral-red); }
-.framebottom { grid-area: framebottom; background-color: var(--steel-blue); }
-.corner4 { grid-area: corner4; background-color: var(--coral-red); }
+
+/* Frame Sides & Bottom */
+.frameleft { 
+  grid-area: frameleft; 
+  background-color: var(--warm-beige);
+  background-image: url(sprites/frame/frameropel.png); 
+  background-size: 60%; /* Stretch to fill width (20px) and height (1fr) */
+  background-position: center; 
+  background-repeat: no-repeat; 
+}
+.frameright { 
+  grid-area: frameright; 
+  background-color: var(--warm-beige);
+  background-image: url(sprites/frame/frameropel.png); 
+  background-size: 60%; /* Stretch to fill width (20px) and height (1fr) */
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.framebottom { 
+  grid-area: framebottom; 
+  background-color: var(--warm-beige);
+  background-image: url(sprites/frame/frameropeh.png);
+  background-size: 100%; /* Stretch to fill width (1fr) and height (20px) */
+  background-position: center;
+  background-repeat: no-repeat; 
+}
+
+/* Frame Corners */
+.corner1 { 
+  grid-area: corner1; 
+  background-color: var(--warm-beige);
+  background-image: url(sprites/frame/knottopleft.png);
+  height: 90%; 
+  width: 90%;
+  background-size: 100% 100%; /* Explicitly 100% width and 100% height */
+  background-position: center;
+  background-repeat: repeat; /* Assuming corners are meant to tile if image is smaller */
+  display: flex; 
+}
+.corner2 { 
+  grid-area: corner2; 
+  background-color: var(--warm-beige);
+  background-image: url(sprites/frame/knottopright.png);
+  height: 90%; 
+  width: 90%;
+  margin-left: 2px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: repeat;
+  display: flex; 
+}
+.corner3 { 
+  /*bottom left corner*/
+  grid-area: corner3; 
+  background-color: var(--warm-beige);
+  background-image: url(sprites/frame/knotbotleft.png);
+  height: 90%; 
+  width: 90%;
+  background-size: 100% 100%;
+  margin-top: 2px;
+  background-position: center;
+  background-repeat: repeat;
+  display: flex; 
+}
+.corner4 { 
+  grid-area: corner4; 
+  background-color: var(--warm-beige);
+  background-image: url(sprites/frame/knotbotright.png);
+  height: 90%; 
+  width: 90%;
+  background-size: 100% 100%;
+  margin-top: 2px;
+  margin-left: 2px;
+  background-position: center;
+  background-repeat: repeat;
+  display: flex; 
+}
 
 /* Performance optimizations */
 .frametop, .corner1, .corner2 {
