@@ -34,7 +34,7 @@
    ========================================================================== */
 
 * {
-  margin: 0; /* Changed from 1px for a cleaner reset */
+  margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
@@ -50,7 +50,7 @@ body {
   justify-content: center;
   min-height: 100vh; 
   margin: 0; 
-  overflow: auto; /* Allows body to scroll if content (including padding) exceeds viewport */
+  overflow: auto;
   padding-top: 0px;
   padding-bottom: 0px;
   padding-left: 50px;
@@ -64,25 +64,21 @@ body {
 
 .frameidle {
   display: grid;
-  grid-template-columns: 20px 1fr 20px; /* Left border, content, right border */
-  grid-template-rows: 20px 1fr 20px;    /* Top border, content, bottom border */
+  grid-template-columns: 20px 1fr 20px;
+  grid-template-rows: 20px 1fr 20px;
   grid-template-areas:
     "corner1   frametop   corner2"
     "frameleft framebackground frameright"
     "corner3   framebottom  corner4";
   
-  /* Responsive scaling with fixed aspect ratio */
-  aspect-ratio: 2412 / 1080; /* Target aspect ratio (approx 20:9) */
-  width: 100%; /* Fill available width */
-  height: 100%; /* Fill available height, aspect-ratio will constrain this */
+  aspect-ratio: 2412 / 1080;
+  width: 100%;
+  height: 100%;
   max-width: 100%; 
   max-height: 100%;
-
-  margin: auto; /* Ensures centering */
+  margin: auto;
   padding: 30px; 
   position: relative; 
-  /* Optional: Add a shadow to distinguish the frame */
-  /* box-shadow: 0 0 15px rgba(0,0,0,0.1); */
 }
 
 /* ==========================================================================
@@ -95,8 +91,8 @@ body {
   background-color: var(--steel-blue);
   user-select: none;
   -webkit-user-select: none;
-  touch-action: none; /* For frame-slider.js interaction */
-  cursor: ns-resize;   /* For frame-slider.js interaction */
+  touch-action: none;
+  cursor: ns-resize;
 }
 .corner2 { grid-area: corner2; background-color: var(--coral-red); }
 .frameleft { grid-area: frameleft; background-color: var(--steel-blue); }
@@ -105,18 +101,16 @@ body {
 .framebottom { grid-area: framebottom; background-color: var(--steel-blue); }
 .corner4 { grid-area: corner4; background-color: var(--coral-red); }
 
-
 /* Performance optimizations */
 .frametop, .corner1, .corner2 {
   will-change: transform;
-  transform: translateZ(0); /* Promote to own layer */
+  transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
-.frameleft, .frameright, .framebackground { /* framebackground added here */
-  will-change: margin-top; /* If frame-slider.js modifies this */
+.frameleft, .frameright, .framebackground {
+  will-change: margin-top;
 }
-
 
 /* ==========================================================================
    FRAME BACKGROUND & STATES
@@ -124,31 +118,26 @@ body {
 
 .framebackground {
   grid-area: framebackground;
-  background-color: var(--warm-beige); /* Default background */
+  background-color: var(--warm-beige);
   border: none;
-  position: relative; /* For positioning creatures inside */
-  overflow: hidden;   /* To contain creatures */
-  display: flex;      /* To help center creatures if they are direct children */
+  position: relative;
+  overflow: hidden;
+  display: flex;
   justify-content: center;
   align-items: center;
-  
-  /* Smooth transitions for background changes */
   transition: background-color 0.8s ease-in-out, background-image 0.8s ease-in-out;
-  
-  transform: translateZ(0); /* Promote to own layer */
+  transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
 
-/* Active rule for soil connection, used by soil.js */
 .framebackground.soil-connected-bg {
-  background-image: url('../images/soil-background.jpg'); /* Path assuming images is sibling to js/css */
+  background-image: url('../images/soil-background.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
 }
 
-/* Other device-specific backgrounds (if needed by JS) */
 .framebackground.temp-active-bg { 
   background-color: var(--coral-red); 
 }
@@ -157,9 +146,8 @@ body {
   background-color: var(--warm-yellow); 
 }
 
-/* Dotted pattern for soil */
 .framebackground.soil-pattern-bg { 
-  background-color: var(--sage-green); /* Base color */
+  background-color: var(--sage-green);
   background-image: 
     radial-gradient(circle at 25% 25%, rgba(142,164,125,0.3) 2px, transparent 2px),
     radial-gradient(circle at 75% 75%, rgba(142,164,125,0.2) 1px, transparent 1px);
@@ -167,36 +155,31 @@ body {
   background-position: 0 0, 15px 15px;
 }
 
-
 /* ==========================================================================
    CREATURES
    ========================================================================== */
 
 .idle-creature, 
 .soil-creature,
-.light-creature {
+.light-creature,
+.lightsoil-creature { /* ADDED .lightsoil-creature */
   position: absolute; 
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%) translateZ(0); /* translateZ(0) for hardware acceleration */
-  
-  width: min(50vw, 35vh); /* Default size, responsive to viewport */
+  transform: translate(-50%, -50%) translateZ(0);
+  width: min(50vw, 35vh);
   height: min(50vw, 35vh); 
-  
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  
-  display: none; /* Hidden by default, JS adds .active to show */
-  opacity: 0;    /* Start fully transparent for fade-in */
-  z-index: 5;    /* Ensure creatures are above .framebackground content */
-  
+  display: none;
+  opacity: 0;
+  z-index: 5;
   transition: 
     opacity 0.6s ease-in-out,
-    transform 1s ease-in-out; /* Smooth transitions */
-  
-  will-change: opacity, transform; /* Hint to browser for optimization */
-  backface-visibility: hidden; /* Prevent flickering during transforms */
+    transform 1s ease-in-out;
+  will-change: opacity, transform;
+  backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
 
@@ -209,16 +192,21 @@ body {
   background-image: url('../sprites/creatures/light-creature.png');
 }
 
+.lightsoil-creature { /* NEW CREATURE STYLE */
+  background-image: url('../sprites/creatures/lightsoil-creature.png'); /* <<<--- UPDATE THIS PATH */
+}
+
 /* Active state for creatures (controlled by JS) */
 .idle-creature.active,
 .soil-creature.active,
-.light-creature.active { 
-  display: block; /* Make visible */
-  opacity: 1;     /* Fade in */
+.light-creature.active,
+.lightsoil-creature.active { /* ADDED .lightsoil-creature.active */
+  display: block;
+  opacity: 1;
 }
 
 /* Soil Creature Animations */
-.soil-creature.active { /* Apply idle animation when active */
+.soil-creature.active {
   animation: soilCreatureIdle 4s ease-in-out infinite;
 }
 
@@ -233,8 +221,8 @@ body {
   }
 }
 
-.soil-creature.reacting { /* Apply reaction animation when .reacting class is added */
-  animation: soilCreatureReact 0.8s ease-out forwards; /* forwards keeps the end state */
+.soil-creature.reacting {
+  animation: soilCreatureReact 0.8s ease-out forwards;
 }
 
 @keyframes soilCreatureReact {
@@ -318,6 +306,39 @@ body {
   background-color: #fadf9b; /* Even lighter warm yellow */
 }
 
+/* LightSoil condition specific background styles */ /* NEW SECTION */
+.framebackground.lightsoil-active-bg {
+  /* Define a unique background for when both light and soil are active */
+  /* Example: could be a blend, a new image, or a complex gradient */
+  background-color: var(--all-three); /* Using the blended color as an example */
+  /* Or an image:
+  background-image: url('../images/lightsoil-background.jpg'); 
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  */
+}
+
+/* ==========================================================================
+   LIGHTSOIL CREATURE - SPECIFIC STYLES & ANIMATIONS (NEW SECTION)
+   ========================================================================== */
+
+.lightsoil-creature.active {
+  /* You can create a unique animation or reuse/modify an existing one */
+  animation: lightSoilCreaturePulse 5s ease-in-out infinite alternate; /* Example: Slower, alternating pulse */
+}
+
+@keyframes lightSoilCreaturePulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.98) rotate(-2deg) translateZ(0);
+    filter: brightness(0.95) saturate(0.9);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.02) rotate(2deg) translateZ(0);
+    filter: brightness(1.05) saturate(1.1);
+  }
+}
+
 /* ==========================================================================
    AUDIO ENABLE BUTTON
    ========================================================================== */
@@ -365,21 +386,21 @@ body {
    ========================================================================== */
 
 @media (max-width: 768px) { /* Portrait phone views */
-  .idle-creature, .soil-creature, .light-creature {
+  .idle-creature, .soil-creature, .light-creature, .lightsoil-creature { /* ADDED .lightsoil-creature */
     width: min(35vw, 30vh);
     height: min(35vw, 30vh);
   }
 }
 
 @media (max-height: 500px) { /* Very short viewport heights */
-  .idle-creature, .soil-creature, .light-creature {
+  .idle-creature, .soil-creature, .light-creature, .lightsoil-creature { /* ADDED .lightsoil-creature */
     width: min(30vw, 25vh);
     height: min(30vw, 25vh);
   }
 }
 
 @media (min-width: 1200px) { /* Larger screens / desktops */
-  .idle-creature, .soil-creature, .light-creature {
+  .idle-creature, .soil-creature, .light-creature, .lightsoil-creature { /* ADDED .lightsoil-creature */
     width: min(35vw, 40vh); 
     height: min(35vw, 40vh);
   }
@@ -393,7 +414,7 @@ body {
     overflow: hidden; /* Prevent scrolling on landscape touch devices */
   }
   
-  .idle-creature, .soil-creature, .light-creature {
+  .idle-creature, .soil-creature, .light-creature, .lightsoil-creature { /* ADDED .lightsoil-creature */
     width: min(50vw, 40vh); 
     height: min(50vw, 40vh); 
   }

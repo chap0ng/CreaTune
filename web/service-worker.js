@@ -1,4 +1,4 @@
-const CACHE_NAME = 'CreaTune-cache-v9'; // Incremented cache version
+const CACHE_NAME = 'CreaTune-cache-v10'; // <<< INCREMENTED cache version
 const urlsToCache = [
   './',
   './index.html',
@@ -8,7 +8,8 @@ const urlsToCache = [
   // Core scripts
   './js/client/websocket-client.js',
   './js/creatones/soil.js',
-  './js/creatones/light.js', // ADDED LIGHT.JS
+  './js/creatones/light.js',
+  './js/creatones/lightsoil.js', // <<< ADDED LIGHTSOIL.JS
   './js/other/frame-slider.js',
   './js/other/Tone.js',
   './js/other/audio-enabler.js',
@@ -16,10 +17,12 @@ const urlsToCache = [
 
   // Images & Sprites
   './images/creature.png', // Assuming this is the idle creature
-  './images/soil-background.jpg', // Default background
+  './images/soil-background.jpg',
   './sprites/creatures/soil-creature.png',
-  './sprites/creatures/light-creature.png', // ADDED
-  './sprites/backgrounds/soil-background.png', // Specific soil background if used
+  './sprites/creatures/light-creature.png',
+  './sprites/creatures/lightsoil-creature.png', // <<< ADDED LIGHTSOIL-CREATURE.PNG
+  // './images/lightsoil-background.jpg', // <<< ADD IF YOU USE A SPECIFIC BACKGROUND IMAGE FOR LIGHTSOIL
+  './sprites/backgrounds/soil-background.png',
 
   // Icons
   './icons/icon-192x192.png',

@@ -1,47 +1,59 @@
 class LightHandler {
     constructor() {
+        // Synths and Loops
         this.ambientSynth = null;
         this.sparkleSynth = null;
         this.mainLoop = null;
         this.sparkleLoop = null;
 
-        this.fadeDuration = 0.8;
-        this.baseAmbientTargetVolume = 9; // Corrected: Negative dB value
-        this.baseSparkleTargetVolume = 6; // Corrected: Negative dB value
+        // Audio Params
+        this.fadeDuration = 1.0; // Example
+        this.baseAmbientVolume = 9; // Example (dB)
+        this.baseSparkleVolume = 6; // Example (dB)
 
-        this.masterVolumeAdjustment = 0;
-        this.masterFMBrightnessFactor = 1.0;
-        this.masterDelayFeedbackFactor = 1.0;
-
+        // State
         this.isActive = false;
         this.isPlaying = false;
         this.isFadingOut = false;
-        // this.isConnected is general server connection, use deviceStates.light.connected for specific device
         this.audioEnabled = false;
         this.toneInitialized = false;
         this.debugMode = true;
         this.stopTimeoutId = null;
+        this.isExternallyMuted = false; // <<< NEW PROPERTY
 
-        this.currentLightCondition = "dark";
-        this.currentLightAppValue = 0.0;
-        this.deviceStates = { // Local copy for convenience, actual state from websocket-client
+        this.currentLightCondition = "dark"; // Default
+        this.currentLightAppValue = 0.0;    // Default
+        this.deviceStates = { // Local copy for convenience
             light: { connected: false }
         };
 
+        // DOM Elements
         this.lightCreatureVisual = document.querySelector('.light-creature');
         this.frameBackground = document.querySelector('.framebackground');
-        this.audioEnableButton = document.getElementById('audio-enable-button');
 
         if (!this.lightCreatureVisual && this.debugMode) console.warn('💡 .light-creature element not found.');
         if (!this.frameBackground && this.debugMode) console.warn('💡 .framebackground element not found for LightHandler.');
-        if (!this.audioEnableButton && this.debugMode) console.warn('💡 #audio-enable-button not found for LightHandler.');
 
         this.initializeWhenReady();
     }
 
+    setExternallyMuted(isMuted) { // <<< NEW METHOD
+        if (this.debugMode) console.log(`💡 LightHandler: setExternallyMuted called with: ${isMuted}. Current state: ${this.isExternallyMuted}`);
+        if (this.isExternallyMuted === isMuted) return; // No change
+
+        this.isExternallyMuted = isMuted;
+        if (this.debugMode) console.log(`💡 LightHandler: isExternallyMuted set to ${this.isExternallyMuted}`);
+
+        if (this.isExternallyMuted && (this.isPlaying || this.isFadingOut)) {
+            if (this.debugMode) console.log('💡 LightHandler: Externally muted, forcing audio stop.');
+            this.stopAudio(true); // Force stop audio if muted
+        }
+        this.manageAudioAndVisuals();
+    }
+
     initializeWhenReady() {
         const checkDependencies = () => {
-            if (window.Tone && window.creatune && this.audioEnableButton) {
+            if (window.Tone && window.creatune) {
                 if (this.debugMode) console.log('💡 LightHandler: Core Dependencies ready.');
                 this.setupListeners();
                 this.updateUI();
@@ -55,7 +67,7 @@ class LightHandler {
         };
         checkDependencies();
     }
-    
+
     handleAudioContextRunning() {
         if (this.debugMode) console.log('💡 LightHandler: AudioContext is running.');
         this.audioEnabled = true;
@@ -76,31 +88,29 @@ class LightHandler {
             return;
         }
 
-        if (this.debugMode) console.log('💡 LightHandler: Initializing Tone.js components (Gamelan/Piano style)...');
+        if (this.debugMode) console.log('💡 LightHandler: Initializing Tone.js components...');
         try {
-            const sharedReverb = new Tone.Reverb({ decay: 4, wet: 0.25 }).toDestination();
-            const sharedDelay = new Tone.FeedbackDelay("4n.", Math.min(0.9, 0.45 * this.masterDelayFeedbackFactor)).connect(sharedReverb);
+            const reverb = new Tone.Reverb(1.5).toDestination();
+            const delay = new Tone.FeedbackDelay("4n", 0.25).connect(reverb);
 
-            this.ambientSynth = new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: Math.max(0.5, 2.0 * this.masterFMBrightnessFactor),
-                modulationIndex: Math.max(1, 5 * this.masterFMBrightnessFactor),
-                oscillator: { type: 'sine' },
-                modulation: { type: 'triangle' },
-                envelope: { attack: 0.02, decay: 0.5, sustain: 0.3, release: 2.5 },
-                modulationEnvelope: { attack: 0.05, decay: 0.2, sustain: 0.1, release: 1.5 },
+            this.ambientSynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "fatsawtooth", count: 3, spread: 30 },
+                envelope: { attack: 0.8, decay: 0.5, sustain: 0.8, release: 1.5 },
                 volume: -Infinity
-            }).connect(sharedDelay);
+            }).connect(reverb);
 
-            this.sparkleSynth = new Tone.PluckSynth({
-                attackNoise: 0.8,
-                dampening: 3500,
-                resonance: 0.85,
-                release: 0.8,
+            this.sparkleSynth = new Tone.MetalSynth({
+                frequency: 200,
+                envelope: { attack: 0.001, decay: 0.1, release: 0.05 },
+                harmonicity: 3.1,
+                modulationIndex: 16,
+                resonance: 4000,
+                octaves: 1.5,
                 volume: -Infinity
-            }).connect(sharedReverb);
+            }).connect(delay);
 
-            this.createAmbientPattern();
-            this.createSparklePattern();
+            this.createMainLoop();
+            this.createSparkleLoop();
 
             this.toneInitialized = true;
             if (this.debugMode) console.log('💡 LightHandler: Tone.js components initialized successfully.');
@@ -116,27 +126,23 @@ class LightHandler {
         }
     }
 
-    createAmbientPattern() {
+    createMainLoop() {
         if (!this.ambientSynth) return;
-        const gamelanNotes = ["C3", "E3", "G3", "A3", "C4", "D4", "E4", "G4", "A4"];
-        this.mainLoop = new Tone.Pattern( (time, note) => {
-            const velocity = Math.max(0.15, this.currentLightAppValue * 0.5 + 0.1);
-            this.ambientSynth.triggerAttackRelease(note, "1m", time, velocity);
-        }, gamelanNotes, "randomWalk");
-        this.mainLoop.interval = "1m";
-        this.mainLoop.humanize = "8n";
+        const notes = ["C3", "E3", "G3", "B3", "C4"];
+        this.mainLoop = new Tone.Sequence((time, note) => {
+            const velocity = this.currentLightAppValue * 0.5 + 0.1; // Modulate velocity
+            this.ambientSynth.triggerAttackRelease(note, "2n", time, velocity);
+        }, notes, "4n");
+        this.mainLoop.humanize = true;
     }
 
-    createSparklePattern() {
+    createSparkleLoop() {
         if (!this.sparkleSynth) return;
-        const sparklePitches = ["C5", "E5", "G5", "A5", "C6", "D6", "E6", "G6"];
         this.sparkleLoop = new Tone.Loop(time => {
-            const pitch = sparklePitches[Math.floor(Math.random() * sparklePitches.length)];
-            const velocity = Math.random() * 0.25 + (this.currentLightAppValue * 0.15);
-            this.sparkleSynth.triggerAttackRelease(pitch, "32n", time, Math.max(0.08, velocity));
-        }, "8n");
-        this.sparkleLoop.probability = 0.0;
-        this.sparkleLoop.humanize = "64n";
+            const freq = Math.random() * 1000 + 500; // Random high frequencies
+            this.sparkleSynth.triggerAttackRelease(freq, "32n", time, Math.random() * 0.3 + 0.05);
+        }, "8t"); // Triplet feel for sparkles
+        this.sparkleLoop.probability = 0; // Start with no probability
     }
 
     setupListeners() {
@@ -152,16 +158,16 @@ class LightHandler {
                 this.isActive = state.active;
                 this.currentLightCondition = state.rawData.light_condition || "dark";
                 this.currentLightAppValue = state.rawData.light_app_value || 0.0;
-                this.deviceStates.light.connected = true; // If we get a state change, it must be connected
+                this.deviceStates.light.connected = true;
                 this.manageAudioAndVisuals();
             }
         });
         window.creatune.on('data', (deviceType, data) => {
             if (deviceType === 'light') {
-                if (this.debugMode) console.log(`💡 LightHandler data: condition=${data.light_condition}, appValue=${data.light_app_value}`);
+                // if (this.debugMode) console.log(`💡 LightHandler data: condition=${data.light_condition}, appValue=${data.light_app_value}`);
                 this.currentLightCondition = data.light_condition || this.currentLightCondition;
                 this.currentLightAppValue = data.light_app_value !== undefined ? data.light_app_value : this.currentLightAppValue;
-                this.deviceStates.light.connected = true; // If we get data, it must be connected
+                this.deviceStates.light.connected = true;
                 this.updateSoundParameters();
             }
         });
@@ -170,7 +176,7 @@ class LightHandler {
                 if (this.debugMode) console.log(`💡 LightHandler: Light device connected.`);
                 this.deviceStates.light.connected = true;
                 if (Tone.context.state === 'running') this.handleAudioContextRunning();
-                else this.manageAudioAndVisuals(); // Update UI even if context not running
+                else this.manageAudioAndVisuals();
             }
         });
         window.creatune.on('disconnected', (deviceType) => {
@@ -181,7 +187,7 @@ class LightHandler {
                 this.manageAudioAndVisuals();
             }
         });
-        
+
         document.addEventListener('creaTuneAudioEnabled', () => {
             if (this.debugMode) console.log("💡 LightHandler detected creaTuneAudioEnabled event.");
             this.handleAudioContextRunning();
@@ -206,40 +212,48 @@ class LightHandler {
     }
 
     updateSoundParameters() {
-        if (!this.toneInitialized || !this.audioEnabled) return;
+        if (!this.toneInitialized || !this.audioEnabled || this.isExternallyMuted) return; // <<< MODIFIED
 
         if (this.ambientSynth) {
-            const dynamicVolumePart = this.currentLightAppValue * 10;
-            const targetVolume = this.isActive ? this.baseAmbientTargetVolume + dynamicVolumePart + this.masterVolumeAdjustment : -Infinity;
+            const dynamicVolumePart = this.currentLightAppValue * 10; // Example scaling
+            const targetVolume = this.isActive ? this.baseAmbientVolume + dynamicVolumePart : -Infinity;
             this.ambientSynth.volume.linearRampTo(targetVolume, 0.5);
         }
 
         if (this.sparkleLoop && this.sparkleSynth) {
             let probability = 0;
             let sparkleVolMod = 0;
-            switch (this.currentLightCondition) {
-                case 'dim': probability = 0.1; sparkleVolMod = -6; break;
-                case 'bright': probability = 0.25; sparkleVolMod = -2; break;
-                case 'very_bright': probability = 0.45; sparkleVolMod = 0; break;
-                case 'extremely_bright': probability = 0.65; sparkleVolMod = +3; break;
-                default: probability = 0.05; sparkleVolMod = -10;
+            // Example: More sparkles in brighter conditions
+            if (this.currentLightCondition === 'bright' || this.currentLightCondition === 'very_bright' || this.currentLightCondition === 'extremely_bright') {
+                probability = this.currentLightAppValue * 0.5 + 0.2; // Max 0.7
+                sparkleVolMod = 0;
+            } else if (this.currentLightCondition === 'dim') {
+                probability = this.currentLightAppValue * 0.3 + 0.1; // Max 0.4
+                sparkleVolMod = -6;
+            } else { // dark
+                probability = this.currentLightAppValue * 0.1; // Max 0.1
+                sparkleVolMod = -12;
             }
-            this.sparkleLoop.probability = this.isActive ? probability : 0;
-            const targetSparkleVol = this.isActive ? this.baseSparkleTargetVolume + sparkleVolMod + this.masterVolumeAdjustment : -Infinity;
-            this.sparkleSynth.volume.linearRampTo(targetSparkleVol, 0.5);
-        }
-
-        if (this.mainLoop) {
-            if (this.currentLightAppValue < 0.15) this.mainLoop.interval = "1m";
-            else if (this.currentLightAppValue < 0.4) this.mainLoop.interval = "2n";
-            else if (this.currentLightAppValue < 0.7) this.mainLoop.interval = "4n";
-            else this.mainLoop.interval = "8n";
+            this.sparkleLoop.probability = this.isActive ? Math.min(0.8, probability) : 0; // Cap probability
+            const targetSparkleVol = this.isActive ? this.baseSparkleVolume + sparkleVolMod : -Infinity;
+            this.sparkleSynth.volume.linearRampTo(targetSparkleVol, 0.7);
         }
     }
 
     manageAudioAndVisuals() {
+        if (this.debugMode) console.log(`💡 LightHandler: manageAudioAndVisuals called. ExternallyMuted: ${this.isExternallyMuted}, IsActive: ${this.isActive}, Connected: ${this.deviceStates.light.connected}`);
+
         if (Tone.context.state !== 'running') this.audioEnabled = false;
         else this.audioEnabled = true;
+
+        if (this.isExternallyMuted) { // <<< MODIFIED
+            if (this.isPlaying || this.isFadingOut) {
+                if (this.debugMode) console.log('💡 LightHandler: Externally muted, ensuring audio is stopped.');
+                this.stopAudio(true);
+            }
+            this.updateUI();
+            return;
+        }
 
         if (!this.audioEnabled) {
             if (this.isPlaying || this.isFadingOut) this.stopAudio(true);
@@ -258,7 +272,7 @@ class LightHandler {
             }
         }
 
-        const shouldPlayAudio = this.deviceStates.light.connected && this.isActive;
+        const shouldPlayAudio = this.deviceStates.light.connected && this.isActive && !this.isExternallyMuted; // <<< MODIFIED
 
         if (shouldPlayAudio) {
             if (!this.isPlaying || this.isFadingOut) {
@@ -275,25 +289,36 @@ class LightHandler {
     }
 
     updateUI() {
+        const showCreature = this.deviceStates.light.connected && this.isActive && !this.isExternallyMuted; // <<< MODIFIED
+
         if (this.lightCreatureVisual) {
-            const showCreature = this.deviceStates.light.connected && this.isActive;
             this.lightCreatureVisual.classList.toggle('active', showCreature);
+            // Remove all light condition classes first
             this.lightCreatureVisual.classList.remove('light-dark', 'light-dim', 'light-bright', 'light-very-bright', 'light-extremely-bright');
-            if (this.deviceStates.light.connected) {
+            if (showCreature) { // Only add condition class if creature is shown
                 this.lightCreatureVisual.classList.add(`light-${this.currentLightCondition.replace('_', '-')}`);
             }
         }
         if (this.frameBackground) {
-            const frameActive = this.deviceStates.light.connected && this.isActive;
-            this.frameBackground.classList.toggle('light-active-bg', frameActive);
-            this.frameBackground.classList.remove('light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg');
-            if (this.deviceStates.light.connected) {
-                 this.frameBackground.classList.add(`light-${this.currentLightCondition.replace('_', '-')}-bg`);
+            const frameActive = this.deviceStates.light.connected && this.isActive && !this.isExternallyMuted; // <<< MODIFIED
+            
+            if (frameActive) {
+                this.frameBackground.classList.add('light-active-bg'); // Generic active class
+                // Remove all specific light background classes first
+                this.frameBackground.classList.remove('light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg');
+                this.frameBackground.classList.add(`light-${this.currentLightCondition.replace('_', '-')}-bg`); // Add current
+            } else {
+                this.frameBackground.classList.remove('light-active-bg');
+                this.frameBackground.classList.remove('light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg');
             }
         }
     }
 
     startAudio() {
+        if (this.isExternallyMuted) { // <<< MODIFIED
+            if (this.debugMode) console.log("💡 LightHandler: Attempted to startAudio, but is externally muted.");
+            return;
+        }
         if (!this.audioEnabled || !this.toneInitialized) {
             if (this.debugMode) console.warn("💡 LightHandler: Attempted to startAudio, but audio system not ready.");
             this.updateUI(); return;
@@ -305,8 +330,7 @@ class LightHandler {
         }
         if (this.isPlaying) {
             if (this.debugMode) console.log("💡 LightHandler: startAudio called, but already playing. Ensuring volumes.");
-            this.updateSoundParameters();
-            this.updateUI(); return;
+            this.updateSoundParameters(); this.updateUI(); return;
         }
         
         if (!this.deviceStates.light.connected || !this.isActive) {
@@ -323,8 +347,7 @@ class LightHandler {
         }
 
         if (this.debugMode) console.log('💡 LightHandler: Starting audio...');
-        this.isPlaying = true;
-        this.isFadingOut = false;
+        this.isPlaying = true; this.isFadingOut = false;
         this.updateSoundParameters();
         if (Tone.Transport.state !== "started") Tone.Transport.start();
         if (this.mainLoop.state !== "started") this.mainLoop.start(0);
@@ -349,8 +372,7 @@ class LightHandler {
         }
 
         if (this.debugMode) console.log(`💡 LightHandler: Stopping audio ${force ? '(forced)' : '(with fade-out)'}...`);
-        this.isPlaying = false;
-        this.isFadingOut = true;
+        this.isPlaying = false; this.isFadingOut = true;
         const fadeTime = force ? 0.01 : this.fadeDuration;
 
         if (this.ambientSynth) {
@@ -372,19 +394,24 @@ class LightHandler {
             if (this.debugMode) console.log('💡 LightHandler: Audio fully stopped and loops cleared.');
             this.updateUI();
         }, force ? 10 : (this.fadeDuration * 1000 + 100));
-        this.updateUI();
+        
+        if (force) {
+            this.updateUI();
+        }
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     const initLightHandler = () => {
-        if (window.creatune && window.Tone && document.getElementById('audio-enable-button')) {
+        if (window.creatune && window.Tone) {
             if (!window.lightHandlerInstance) {
                 window.lightHandlerInstance = new LightHandler();
                 if (window.lightHandlerInstance.debugMode) console.log('💡 Light Handler instance created.');
             }
         } else {
-            const tempDebugMode = (window.lightHandlerInstance && window.lightHandlerInstance.debugMode !== undefined) ? window.lightHandlerInstance.debugMode : true; // Default to true if instance not yet created
+            const tempDebugMode = (window.lightHandlerInstance && window.lightHandlerInstance.debugMode !== undefined) 
+                                  ? window.lightHandlerInstance.debugMode 
+                                  : true;
             if (tempDebugMode) console.log('💡 Waiting for LightHandler dependencies (DOMContentLoaded)...');
             setTimeout(initLightHandler, 100);
         }
