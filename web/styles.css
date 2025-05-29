@@ -181,8 +181,8 @@ body {
   left: 50%;
   transform: translate(-50%, -50%) translateZ(0); /* translateZ(0) for hardware acceleration */
   
-  width: min(40vw, 35vh); /* Default size, adjust as needed, responsive to viewport */
-  height: min(40vw, 35vh); 
+  width: min(50vw, 35vh); /* Default size, adjust as needed, responsive to viewport */
+  height: min(50vw, 35vh); 
   
   background-size: contain;
   background-repeat: no-repeat;
