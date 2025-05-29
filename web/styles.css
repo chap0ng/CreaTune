@@ -54,7 +54,7 @@ body {
   padding-top: 0px;
   padding-bottom: 0px;
   padding-left: 50px;
-  padding-right: 50px;
+  padding-right: 70px;
   box-sizing: border-box; 
 }
 
@@ -242,11 +242,11 @@ body {
 .light-creature,
 .lightsoil-creature { /* ADDED .lightsoil-creature */
   position: absolute; 
-  top: 50%;
-  left: 50%;
+  top: 150px;
+  left: 250px;
   transform: translate(-50%, -50%) translateZ(0);
-  width: min(50vw, 35vh);
-  height: min(50vw, 35vh); 
+  width: min(60vw, 35vh);
+  height: min(60vw, 35vh); 
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;

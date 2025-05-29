@@ -31,7 +31,6 @@ const urlsToCache = [
   './sprites/frame/knottopright.png',
 
 
-
   // Icons
   './icons/icon-192x192.png',
   './icons/icon-512x512.png'

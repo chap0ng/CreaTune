@@ -9,7 +9,7 @@
   "lang": "en-US",
   "dir": "ltr",
   "background_color": "#f5eee0",
-  "theme_color": "#e6695a",
+  "theme_color": "#f5eee0",
   "categories": ["music", "entertainment", "utilities"],
   "prefer_related_applications": false,
   "edge_side_panel": {
