@@ -1,47 +1,89 @@
 class CreaTuneClient {
     constructor() {
         this.ws = null;
-        this.isConnected = false; // General connection to the WebSocket server
+        this.isConnected = false;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 10;
         this.reconnectDelay = 1000;
         this.clientId = null;
-
-        this.serverHostOverride = '192.168.0.100:8080'; // Your server's IP
+        this.serverHostOverride = '192.168.0.100:8080';
 
         this.deviceStates = {
-            soil: {
-                connected: false, // Specific connection status for this device type
-                active: false,
-                lastRawData: null,
-                lastStateChange: 0,
-                stateHistory: []
-            },
-            light: { // <<< FULLY ENABLED LIGHT SENSOR STATE
-                connected: false,
-                active: false,
-                lastRawData: null,
-                lastStateChange: 0,
-                stateHistory: []
-            }
-            // temp: { connected: false, active: false, lastRawData: null, lastStateChange: 0, stateHistory: [] },
+            soil: { connected: false, active: false, lastRawData: null, lastStateChange: 0, stateHistory: [] },
+            light: { connected: false, active: false, lastRawData: null, lastStateChange: 0, stateHistory: [] }
         };
 
         this.stabilityRequiredReadings = 3;
         this.maxHistoryLength = 5;
-        this.minStateChangeInterval = 1000; // ms
+        this.minStateChangeInterval = 1000;
 
         this.callbacks = {};
         this.debug = true;
+        this.audioContextStarted = false; // Track if user has initiated audio
+        this.audioEnableButton = null;
     }
 
     init() {
         if (this.debug) console.log('🔌 Initializing CreaTune WebSocket Client...');
         this.connect();
         this.setupBrowserEventListeners();
+        // Audio enable button setup will be called from DOMContentLoaded
     }
 
+    setupAudioEnableButton() {
+        this.audioEnableButton = document.getElementById('audio-enable-button');
+        if (this.audioEnableButton) {
+            if (Tone.context.state === 'running') {
+                if (this.debug) console.log('🎤 AudioContext already running on init. Button hidden.');
+                this.audioContextStarted = true;
+                this.audioEnableButton.style.display = 'none'; // Hide if already running
+                document.dispatchEvent(new CustomEvent('creaTuneAudioEnabled'));
+            } else {
+                if (this.debug) console.log('🎤 AudioContext not running. Enable button shown.');
+                this.audioEnableButton.style.display = 'block';
+                this.audioEnableButton.addEventListener('click', async () => {
+                    if (this.debug) console.log('🎤 Audio enable button clicked.');
+                    if (Tone.context.state !== 'running') {
+                        try {
+                            await Tone.start();
+                            this.audioContextStarted = true;
+                            if (this.debug) console.log('✅ Tone.js audio context started successfully by user gesture.');
+                            document.dispatchEvent(new CustomEvent('creaTuneAudioEnabled'));
+                            this.audioEnableButton.style.display = 'none'; // Hide after successful start
+                        } catch (e) {
+                            console.error('❌ Error starting Tone.js audio context:', e);
+                            document.dispatchEvent(new CustomEvent('creaTuneAudioDisabled'));
+                            // Optionally, provide user feedback that it failed
+                        }
+                    } else {
+                        if (this.debug) console.log('🎤 AudioContext was already running when button was clicked (unexpected). Hiding button.');
+                        this.audioContextStarted = true;
+                        document.dispatchEvent(new CustomEvent('creaTuneAudioEnabled'));
+                        this.audioEnableButton.style.display = 'none';
+                    }
+                }, { once: true }); // Add listener only once
+            }
+        } else {
+            if (this.debug) console.warn('🎤 Audio enable button #audio-enable-button not found.');
+        }
+
+        // Listen for Tone.js context state changes (e.g., if it gets suspended by the browser)
+        Tone.context.on("statechange", (state) => {
+            if (this.debug) console.log(`🎤 Tone.js AudioContext state changed to: ${state}`);
+            if (state === 'running' && this.audioContextStarted) {
+                document.dispatchEvent(new CustomEvent('creaTuneAudioEnabled'));
+                if (this.audioEnableButton) this.audioEnableButton.style.display = 'none';
+            } else if (state !== 'running' && this.audioContextStarted) { // If it was started and then suspended/closed
+                document.dispatchEvent(new CustomEvent('creaTuneAudioDisabled'));
+                if (this.audioEnableButton) this.audioEnableButton.style.display = 'block'; // Show button again
+                // Potentially reset this.audioContextStarted if user needs to click again
+            }
+        });
+    }
+
+
     setupBrowserEventListeners() {
+        // ... (existing browser event listeners: online, offline, visibilitychange) ...
         if (this.debug) console.log('🔗 Setting up browser event listeners for network and visibility.');
         window.addEventListener('online', () => {
             if (this.debug) console.log('🟢 Network status: Online');
@@ -70,6 +112,7 @@ class CreaTuneClient {
     }
 
     connect() {
+        // ... (existing connect method) ...
         try {
             if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
                 if (this.debug) console.log('🔗 WebSocket connection attempt already in progress. Skipping.');
@@ -116,7 +159,8 @@ class CreaTuneClient {
     }
 
     handleMessage(data) {
-        if (this.debug && data.type !== 'ping' && data.type !== 'sensor_data') { // Avoid flooding console for frequent messages
+        // ... (existing handleMessage method, ensure no changes that would break it) ...
+        if (this.debug && data.type !== 'ping' && data.type !== 'sensor_data') { 
              console.log('[CreaTuneClient] Received message:', data);
         }
 
@@ -181,17 +225,17 @@ class CreaTuneClient {
     }
 
     processSensorData(data) {
+        // ... (existing processSensorData method) ...
         const deviceType = this.identifyDeviceType(data);
 
         if (!deviceType || !this.deviceStates[deviceType]) {
             if (this.debug) console.warn(`❓ Unknown or unconfigured device type for sensor data:`, data, `Identified as: ${deviceType}`);
             return;
         }
-        // if (this.debug) console.log(`[Client] Processing sensor data for ${deviceType}:`, data);
 
         const device = this.deviceStates[deviceType];
 
-        if (!device.connected) { // If data arrives, mark as connected
+        if (!device.connected) { 
             device.connected = true;
             if (this.debug) console.log(`📡 ${deviceType.toUpperCase()} now considered connected (received data).`);
             this.notifyCallbacks('connected', deviceType);
@@ -221,30 +265,29 @@ class CreaTuneClient {
                 });
             }
         }
-        this.notifyCallbacks('data', deviceType, data); // Always notify for raw data
+        this.notifyCallbacks('data', deviceType, data);
     }
 
     shouldBeActive(deviceType, data) {
+        // ... (existing shouldBeActive method) ...
         switch (deviceType) {
             case 'soil':
                 if (data.soil_condition) {
                     return data.soil_condition === 'humid' || data.soil_condition === 'wet';
                 }
-                // Fallbacks for soil
                 if (data.moisture_app_value !== undefined) return data.moisture_app_value > 0.3;
                 if (data.voltage !== undefined) return data.voltage > 0.4;
                 if (data.raw_value !== undefined) return data.raw_value < 700 && data.raw_value > 0;
                 if (this.debug) console.warn(`💧 Soil: No recognizable activity fields in data:`, data);
                 return false;
-            case 'light': // <<< ADDED LIGHT CASE
+            case 'light':
                 if (data.light_condition) {
                     return data.light_condition === 'dim' ||
                            data.light_condition === 'bright' ||
                            data.light_condition === 'very_bright' ||
                            data.light_condition === 'extremely_bright';
                 }
-                // Fallback for light
-                if (data.light_app_value !== undefined) return data.light_app_value > 0.2; // Active if not very dark
+                if (data.light_app_value !== undefined) return data.light_app_value > 0.2;
                 if (this.debug) console.warn(`💡 Light: No recognizable activity fields in data:`, data);
                 return false;
             default:
@@ -253,6 +296,7 @@ class CreaTuneClient {
     }
 
     getStableState(device) {
+        // ... (existing getStableState method) ...
         if (device.stateHistory.length < this.stabilityRequiredReadings) {
             return null;
         }
@@ -262,35 +306,35 @@ class CreaTuneClient {
     }
 
     identifyDeviceType(data) {
-        // Prefer explicit device_type from server if available
+        // ... (existing identifyDeviceType method) ...
         if (data.device_type && this.deviceStates[data.device_type.toLowerCase()]) {
             return data.device_type.toLowerCase();
         }
-        // Then check sensor name
         if (data.sensor) {
             const sensorLower = data.sensor.toLowerCase();
             if (sensorLower.includes('soil') || sensorLower.includes('moisture')) return 'soil';
-            if (sensorLower.includes('light')) return 'light'; // <<< UNCOMMENTED
+            if (sensorLower.includes('light')) return 'light';
         }
-        // Fallback to specific data fields
         if (data.soil_condition !== undefined || data.moisture_app_value !== undefined) {
             return 'soil';
         }
-        if (data.light_condition !== undefined || data.light_app_value !== undefined) { // <<< UNCOMMENTED
+        if (data.light_condition !== undefined || data.light_app_value !== undefined) {
             return 'light';
         }
-        return null; // Could not identify
+        return null;
     }
 
     identifyDeviceTypeByName(name) {
+        // ... (existing identifyDeviceTypeByName method) ...
         if (!name) return null;
         const nameLower = name.toLowerCase();
         if (nameLower.includes('soil') || nameLower.includes('moisture')) return 'soil';
-        if (nameLower.includes('light')) return 'light'; // <<< UNCOMMENTED
+        if (nameLower.includes('light')) return 'light';
         return null;
     }
 
     handleESPDisconnection(data) {
+        // ... (existing handleESPDisconnection method) ...
         const deviceType = this.identifyDeviceTypeByName(data.name);
         if (deviceType && this.deviceStates[deviceType]) {
             const device = this.deviceStates[deviceType];
@@ -307,16 +351,16 @@ class CreaTuneClient {
     }
 
     markAllDisconnected() {
+        // ... (existing markAllDisconnected method) ...
         if (this.debug) console.log('🔌❌ Client-side: Marking all devices as disconnected due to WebSocket closure or explicit call.');
         Object.keys(this.deviceStates).forEach(deviceType => {
             const device = this.deviceStates[deviceType];
             if (device.connected || device.active) {
                 const wasConnected = device.connected;
-                // const wasActive = device.active; // Not needed for this logic
                 device.connected = false;
                 device.active = false;
                 device.stateHistory = [];
-                if (wasConnected) { // Only notify if it was previously connected
+                if (wasConnected) { 
                     this.notifyCallbacks('disconnected', deviceType);
                 }
             }
@@ -324,6 +368,7 @@ class CreaTuneClient {
     }
 
     attemptReconnect() {
+        // ... (existing attemptReconnect method) ...
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
             const targetForLog = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && this.serverHostOverride ? this.serverHostOverride : window.location.host;
             console.error(`❌ Max reconnection attempts (${this.maxReconnectAttempts}) reached for ${targetForLog}. Stopping.`);
@@ -345,6 +390,7 @@ class CreaTuneClient {
     }
 
     sendMessage(message) {
+        // ... (existing sendMessage method) ...
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             try {
                 this.ws.send(JSON.stringify(message));
@@ -357,17 +403,20 @@ class CreaTuneClient {
     }
 
     on(eventType, callback) {
+        // ... (existing on method) ...
         if (!this.callbacks[eventType]) this.callbacks[eventType] = [];
         this.callbacks[eventType].push(callback);
     }
 
     off(eventType, callback) {
+        // ... (existing off method) ...
         if (this.callbacks[eventType]) {
             this.callbacks[eventType] = this.callbacks[eventType].filter(cb => cb !== callback);
         }
     }
 
     notifyCallbacks(eventType, ...args) {
+        // ... (existing notifyCallbacks method) ...
         if (this.callbacks[eventType]) {
             this.callbacks[eventType].forEach(callback => {
                 try {
@@ -380,9 +429,10 @@ class CreaTuneClient {
     }
 
     getDeviceState(deviceType) {
+        // ... (existing getDeviceState method) ...
         const type = deviceType.toLowerCase();
         const device = this.deviceStates[type];
-        return device ? { ...device } : null; // Return a copy
+        return device ? { ...device } : null;
     }
 }
 
@@ -391,8 +441,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!window.creatune) {
         window.creatune = new CreaTuneClient();
         window.creatune.init();
+        window.creatune.setupAudioEnableButton(); // <<< ADD THIS LINE
     } else {
         console.log('ℹ️ CreaTuneClient already initialized.');
+        // If already initialized, still ensure audio button is set up or state is checked
+        if (!window.creatune.audioEnableButton) { // Check if button setup was missed
+             window.creatune.setupAudioEnableButton();
+        }
     }
 });
 
