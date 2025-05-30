@@ -74,7 +74,6 @@ class SoilHandler {
                 this.stopAudio(true); 
             }
         }
-        // Manage audio and visuals will re-evaluate based on the new muted state
         this.manageAudioAndVisuals();
     }
 
@@ -120,7 +119,6 @@ class SoilHandler {
 
         if (this.debugMode) console.log('💧 SoilHandler: Initializing Tone.js components...');
         try {
-            // Ensure Transport is started before creating loops that might depend on it.
             if (Tone.Transport.state !== "started") {
                 Tone.Transport.start();
                 if (this.debugMode) console.log('💧 SoilHandler: Tone.Transport started in initTone.');
@@ -179,7 +177,6 @@ class SoilHandler {
         if (!this.toyPianoSynth) return;
         const toyPianoNotes = ["C4", "E4", "G4", "A4", "C5", "D5", "E5", "G5"];
         this.toyPianoLoop = new Tone.Pattern((time, note) => {
-            // Check this.isPlaying (for generative) and also ensure synth volume is not -Infinity
             if (!this.isPlaying || !this.toyPianoSynth || this.toyPianoSynth.volume.value === -Infinity) return; 
             const velocity = Math.max(0.3, this.currentSoilAppValue * 0.7 + 0.2);
             this.toyPianoSynth.triggerAttackRelease(note, "8n", time, velocity);
@@ -234,7 +231,6 @@ class SoilHandler {
             if (deviceType === 'soil') {
                 if (this.debugMode) console.log(`💧 SoilHandler: Soil device connected event.`);
                 this.deviceStates.soil.connected = true;
-                // Don't assume active yet, wait for stateChange
                 if (Tone.context.state === 'running') this.handleAudioContextRunning(); 
                 else this.manageAudioAndVisuals(); 
             }
@@ -315,7 +311,7 @@ class SoilHandler {
                 probability = 0.5; bellVolMod = 0; 
             } else if (this.currentSoilCondition === 'humid') {
                 probability = 0.25; bellVolMod = -6; 
-            } else { // dry
+            } else { 
                 probability = 0.1; bellVolMod = -12; 
             }
             this.bellLoop.probability = (this.isActive && this.deviceStates.soil.connected && this.isPlaying) ? probability : 0;
@@ -425,7 +421,7 @@ class SoilHandler {
         this.isRecordMode = true; 
         
         if (this.debugMode) console.log('💧 enterRecordMode: Stopping generative audio forcefully.');
-        this.stopAudio(true); // Force stop generative audio, sets this.isPlaying = false
+        this.stopAudio(true); 
 
         this.updateUI(); 
 
@@ -490,7 +486,7 @@ class SoilHandler {
 
     _setupRhythmicPlayback(audioBlob) {
         if (!this.isRecordMode || !this.toneInitialized || !this.toyPianoSynth) {
-            if(this.debugMode) console.warn(`💧 _setupRhythmicPlayback: Blocked. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, toyPianoSynth=${!!this.toyPianoSynth}. Forcing exit.`);
+            if(this.debugMode) console.warn(`💧 _setupRhythmicPlayback: Blocked (initial checks). isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, toyPianoSynth=${!!this.toyPianoSynth}. Forcing exit.`);
             this.exitRecordMode(true); 
             return;
         }
@@ -503,49 +499,71 @@ class SoilHandler {
             console.warn(`💧 _setupRhythmicPlayback: toyPianoSynth or its volume property not available for setting rhythmic volume.`);
         }
 
-
         if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl); 
         this.recordedAudioBlobUrl = URL.createObjectURL(audioBlob);
         
-        this.recordedBufferPlayer = new Tone.Player(this.recordedAudioBlobUrl).toDestination(); 
+        // Create player and connect meter. Load URL.
+        this.recordedBufferPlayer = new Tone.Player(this.recordedAudioBlobUrl);
         this.rhythmFollower = new Tone.Meter({ smoothing: 0.2 }); 
         this.recordedBufferPlayer.connect(this.rhythmFollower); 
+        // If you want to hear the recording directly:
+        this.recordedBufferPlayer.toDestination(); 
         this.recordedBufferPlayer.loop = true;
         this.lastRhythmNoteTime = 0; 
 
-        this.rhythmicLoop = new Tone.Loop(time => {
-            if (!this.isRecordMode || !this.rhythmFollower || !this.toyPianoSynth) return; 
-
-            const level = this.rhythmFollower.getValue(); 
-            const currentTime = Tone.now() * 1000;
-
-            if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
-                const notes = ["C4", "E4", "G4", "A4", "C5"]; 
-                const noteToPlay = notes[Math.floor(Math.random() * notes.length)];
-                const calculatedVelocity = 0.4 + (Math.min(20, Math.max(0, level - this.rhythmThreshold)) * 0.025);
-                const velocity = Math.min(0.9, Math.max(0.1, calculatedVelocity)); 
-                
-                if (this.debugMode && Math.random() < 0.25) console.log(`💧 Rhythmic trigger! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}`);
-                
-                this.toyPianoSynth.triggerAttackRelease(noteToPlay, "16n", time, velocity);
-                this.triggerCreatureAnimation(); 
-                if (typeof window.updateNotesDisplay === 'function') window.updateNotesDisplay(noteToPlay);
-                this.lastRhythmNoteTime = currentTime;
+        // Wait for the player to load its buffer
+        this.recordedBufferPlayer.loaded.then(() => {
+            if (!this.isRecordMode) { // Check if mode changed while loading
+                if (this.debugMode) console.log('💧 _setupRhythmicPlayback: Record mode exited while buffer was loading. Aborting start.');
+                // Player and follower will be cleaned up by exitRecordMode if it was called,
+                // or ensure they are disposed if this is the first point of realizing exit.
+                if (this.recordedBufferPlayer) { this.recordedBufferPlayer.dispose(); this.recordedBufferPlayer = null; }
+                if (this.rhythmFollower) { this.rhythmFollower.dispose(); this.rhythmFollower = null; }
+                if (this.rhythmicLoop) { this.rhythmicLoop.dispose(); this.rhythmicLoop = null; } // Also dispose loop if it was somehow created
+                return;
             }
-        }, "16n").start(0); 
 
-        this.recordedBufferPlayer.start().then(() => {
+            if (this.debugMode) console.log('💧 _setupRhythmicPlayback: Recorded buffer player loaded.');
+            this.recordedBufferPlayer.start(); // Start playback now
             if (this.debugMode) console.log('💧 _setupRhythmicPlayback: Recorded buffer player started.');
+
+            // Setup and start the rhythmic loop only AFTER the player is loaded and started
+            this.rhythmicLoop = new Tone.Loop(time => {
+                // Ensure player is still valid and started before getting level
+                if (!this.isRecordMode || !this.rhythmFollower || !this.toyPianoSynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
+                    return;
+                }
+
+                const level = this.rhythmFollower.getValue(); 
+                const currentTime = Tone.now() * 1000;
+
+                if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
+                    const notes = ["C4", "E4", "G4", "A4", "C5"]; 
+                    const noteToPlay = notes[Math.floor(Math.random() * notes.length)];
+                    const calculatedVelocity = 0.4 + (Math.min(20, Math.max(0, level - this.rhythmThreshold)) * 0.025);
+                    const velocity = Math.min(0.9, Math.max(0.1, calculatedVelocity)); 
+                    
+                    if (this.debugMode && Math.random() < 0.25) console.log(`💧 Rhythmic trigger! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}`);
+                    
+                    this.toyPianoSynth.triggerAttackRelease(noteToPlay, "16n", time, velocity);
+                    this.triggerCreatureAnimation(); 
+                    if (typeof window.updateNotesDisplay === 'function') window.updateNotesDisplay(noteToPlay);
+                    this.lastRhythmNoteTime = currentTime;
+                }
+            }, "16n").start(0); 
+            if (this.debugMode) console.log('💧 _setupRhythmicPlayback: Rhythmic loop initiated.');
+
         }).catch(err => {
-            console.error('❌ _setupRhythmicPlayback: Error starting recorded buffer player:', err);
-            this.exitRecordMode(true); 
+            console.error('❌ _setupRhythmicPlayback: Error loading recorded buffer player:', err);
+            this.exitRecordMode(true); // Force exit if loading fails
         });
 
         if (Tone.Transport.state !== "started") {
             Tone.Transport.start();
-            if (this.debugMode) console.log('💧 _setupRhythmicPlayback: Tone.Transport started.');
+            if (this.debugMode) console.log('💧 _setupRhythmicPlayback: Tone.Transport started (outside .then).');
         }
-        if (this.debugMode) console.log('💧 _setupRhythmicPlayback: Rhythmic loop and player initiated.');
+        // Note: Rhythmic loop and player start are now primarily inside the .then() callback
+        if (this.debugMode) console.log('💧 _setupRhythmicPlayback: Setup initiated, player loading asynchronously.');
     }
 
     exitRecordMode(force = false) {
