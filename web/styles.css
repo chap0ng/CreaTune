@@ -80,7 +80,7 @@ body {
   padding: 30px; 
   position: relative;
   background-color: var(--warm-beige);
-  z-index: 5; /*ensure it sits above other content*/
+  z-index: 1; /*ensure it sits above other content*/
 }
 
 /* ==========================================================================
@@ -201,6 +201,7 @@ body {
   transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  z-index: 10;
 }
 
 .framebackground.soil-connected-bg {
@@ -379,6 +380,7 @@ body {
 /* ==========================================================================
    AUDIO ENABLE BUTTON
    ========================================================================== */
+
 #audio-enable-button {
   position: fixed;
   top: 20px; 
@@ -417,6 +419,56 @@ body {
   pointer-events: none; 
   transform: translateY(-20px); 
 }
+
+/* ==========================================================================
+   UI
+   ========================================================================== */
+
+#notes-display {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  font-size: 45px;
+  color: var(--coral-red);
+  text-align: center;
+  /* display: center; */ /* Invalid, text-align handles text centering */
+}
+
+#stoprecordmode {
+  position: absolute;
+  top: 30px;
+  left: 30px;
+  padding: 0px 10px;
+  font-family: 'VT323', monospace;
+  font-size: 20px;
+  color: var(--coral-red);
+  background-color: var(--light-gray);
+  background-image:url(sprites/creatures/light-creature.png); /* As per your existing style */
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  z-index: 1000; 
+  display: none; /* Initially hidden */
+}
+
+/* NEW: Record Mode Pulsing Feedback */
+.framebackground.record-mode-pulsing {
+  animation: recordPulseEffect 5s ease-in-out infinite alternate;
+}
+
+@keyframes recordPulseEffect {
+  0% {
+    box-shadow: 0 0 5px 2px rgba(230, 105, 90, 0.25); /* Subtle coral-red glow */
+    transform: scale(1.00); /* Optional: very slight scale pulse */
+  }
+  100% {
+    box-shadow: 0 0 15px 5px rgba(230, 105, 90, 0.55); /* Stronger glow */
+    transform: scale(1.005); /* Optional: very slight scale pulse */
+  }
+}
+
 
 /* ==========================================================================
    RESPONSIVE ADJUSTMENTS - CREATURE SIZE

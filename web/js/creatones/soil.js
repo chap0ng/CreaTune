@@ -28,15 +28,31 @@ class SoilHandler {
         };
 
         // Sprite Animation State
-        this.soilCreatureCurrentFrame = 0; // Current frame, 0-indexed (0 to 5 for 6 frames)
-        this.soilCreatureTotalFrames = 6;  // Total frames in your sprite sheet
+        this.soilCreatureCurrentFrame = 0;
+        this.soilCreatureTotalFrames = 6;
 
         // DOM Elements
         this.soilCreatureVisual = document.querySelector('.soil-creature');
         this.frameBackground = document.querySelector('.framebackground');
+        this.stopRecordModeButton = document.getElementById('stoprecordmode'); // Using your existing ID
+
+        // Record Mode Properties
+        this.isRecordMode = false;
+        this.isCurrentlyRecording = false;
+        this.mic = null;
+        this.recorder = null;
+        this.recordedBufferPlayer = null; // Will play the recorded audio (muted) for rhythm detection
+        this.rhythmFollower = null;     // Meter to detect rhythm
+        this.rhythmicLoop = null;       // Tone.Loop to trigger notes based on rhythm
+        this.recordingDuration = 5000;  // 5 seconds for recording
+        this.rhythmThreshold = -30;     // dB threshold for triggering notes (NEEDS TUNING)
+        this.rhythmNoteCooldown = 150;  // ms cooldown between rhythmically triggered notes
+        this.lastRhythmNoteTime = 0;
+        this.recordedAudioBlobUrl = null; // To store and revoke blob URL
 
         if (!this.soilCreatureVisual && this.debugMode) console.warn('💧 .soil-creature element not found.');
         if (!this.frameBackground && this.debugMode) console.warn('💧 .framebackground element not found for SoilHandler.');
+        if (!this.stopRecordModeButton && this.debugMode) console.warn('💧 #stoprecordmode button not found.');
 
         this.initializeWhenReady();
     }
@@ -48,9 +64,9 @@ class SoilHandler {
         this.isExternallyMuted = isMuted;
         if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): isExternallyMuted set to ${this.isExternallyMuted}`);
 
-        if (this.isExternallyMuted && (this.isPlaying || this.isFadingOut)) {
-            if (this.debugMode) console.log('💧 SoilHandler (Toypiano): Externally muted, forcing audio stop.');
-            this.stopAudio(true); 
+        if (this.isExternallyMuted) {
+            if (this.isRecordMode) this.exitRecordMode(true); // Force exit record mode
+            else if (this.isPlaying || this.isFadingOut) this.stopAudio(true); 
         }
         this.manageAudioAndVisuals();
     }
@@ -60,7 +76,7 @@ class SoilHandler {
             if (window.Tone && window.creatune) {
                 if (this.debugMode) console.log('💧 SoilHandler (Toypiano): Core Dependencies ready.');
                 this.setupListeners();
-                this.updateUI(); // Initial UI setup
+                this.updateUI(); 
                 if (Tone.context.state === 'running') {
                     this.handleAudioContextRunning();
                 }
@@ -75,7 +91,7 @@ class SoilHandler {
     handleAudioContextRunning() {
         if (this.debugMode) console.log('💧 SoilHandler (Toypiano): AudioContext is running.');
         this.audioEnabled = true;
-        if (!this.toneInitialized) {
+        if (!this.toneInitialized && !this.isRecordMode) { // Don't auto-init if about to enter record mode
             this.initTone();
         }
         this.manageAudioAndVisuals();
@@ -134,25 +150,22 @@ class SoilHandler {
     }
 
     triggerCreatureAnimation() {
+        // Optionally, disable creature animation during mic recording phase
+        // if (this.isCurrentlyRecording) return; 
+
         if (this.soilCreatureVisual && this.soilCreatureVisual.classList.contains('active')) {
             this.soilCreatureCurrentFrame++; 
-
-            // Loop back to the first frame if we've gone past the last one
             if (this.soilCreatureCurrentFrame >= this.soilCreatureTotalFrames) {
                 this.soilCreatureCurrentFrame = 0; 
             }
-            
-            // Calculate newPositionX based on currentFrame (0-5) * 20%
-            // This will result in 0%, 20%, 40%, 60%, 80%, 100%
             const newPositionX = (this.soilCreatureCurrentFrame * 20) + '%';
             this.soilCreatureVisual.style.backgroundPositionX = newPositionX;
 
-            if (this.debugMode && Math.random() < 0.2) { // Reduced logging frequency
+            if (this.debugMode && Math.random() < 0.2) {
                  console.log(`💧 Soil Creature frame index: ${this.soilCreatureCurrentFrame}, backgroundPositionX set to: ${newPositionX}`);
             }
         }
     }
-
 
     createToyPianoPattern() {
         if (!this.toyPianoSynth) return;
@@ -161,6 +174,9 @@ class SoilHandler {
             const velocity = Math.max(0.3, this.currentSoilAppValue * 0.7 + 0.2);
             this.toyPianoSynth.triggerAttackRelease(note, "8n", time, velocity);
             this.triggerCreatureAnimation(); 
+            if (typeof window.updateNotesDisplay === 'function') { // Update notes display
+                window.updateNotesDisplay(note);
+            }
         }, toyPianoNotes, "randomWalk");
         this.toyPianoLoop.interval = "4n";
         this.toyPianoLoop.humanize = "16n";
@@ -173,8 +189,6 @@ class SoilHandler {
             const pitch = bellPitches[Math.floor(Math.random() * bellPitches.length)];
             const velocity = Math.random() * 0.3 + 0.3;
             this.bellSynth.triggerAttackRelease(pitch, "16n", time, velocity);
-            // Optionally trigger animation for bell notes too:
-            // this.triggerCreatureAnimation(); 
         }, "2n");
         this.bellLoop.probability = 0.0;
         this.bellLoop.humanize = "32n";
@@ -185,8 +199,9 @@ class SoilHandler {
             console.error('💧 SoilHandler (Toypiano): window.creatune (WebSocket client) not available.');
             return;
         }
-        if (this.debugMode) console.log('💧 SoilHandler (Toypiano): Setting up WebSocket listeners...');
+        if (this.debugMode) console.log('💧 SoilHandler (Toypiano): Setting up WebSocket and DOM listeners...');
 
+        // WebSocket Listeners (existing)
         window.creatune.on('stateChange', (deviceType, state) => {
             if (deviceType === 'soil') {
                 if (this.debugMode) console.log(`💧 SoilHandler (Toypiano) stateChange: active=${state.active}, condition=${state.rawData.soil_condition}, appValue=${state.rawData.moisture_app_value}`);
@@ -202,7 +217,7 @@ class SoilHandler {
                 this.currentSoilCondition = data.soil_condition || this.currentSoilCondition;
                 this.currentSoilAppValue = data.moisture_app_value !== undefined ? data.moisture_app_value : this.currentSoilAppValue;
                 this.deviceStates.soil.connected = true; 
-                this.updateSoundParameters(); 
+                if (!this.isRecordMode) this.updateSoundParameters(); 
             }
         });
         window.creatune.on('connected', (deviceType) => {
@@ -218,10 +233,12 @@ class SoilHandler {
                 if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): Soil device disconnected.`);
                 this.deviceStates.soil.connected = false;
                 this.isActive = false; 
-                this.manageAudioAndVisuals();
+                if (this.isRecordMode) this.exitRecordMode(true); // Force exit if device disconnects
+                else this.manageAudioAndVisuals();
             }
         });
 
+        // Audio Enabler Events (existing)
         document.addEventListener('creaTuneAudioEnabled', () => {
             if (this.debugMode) console.log("💧 SoilHandler (Toypiano) detected creaTuneAudioEnabled event.");
             this.handleAudioContextRunning();
@@ -229,9 +246,35 @@ class SoilHandler {
         document.addEventListener('creaTuneAudioDisabled', () => {
             if (this.debugMode) console.log("💧 SoilHandler (Toypiano) detected creaTuneAudioDisabled event.");
             this.audioEnabled = false;
-            this.manageAudioAndVisuals(); 
+            if (this.isRecordMode) this.exitRecordMode(true); // Force exit if audio disabled
+            else this.manageAudioAndVisuals(); 
         });
+        
+        // Record Mode Listeners (NEW)
+        if (this.frameBackground) {
+            this.frameBackground.addEventListener('click', () => {
+                if (this.frameBackground.classList.contains('soil-connected-bg') && 
+                    !this.isRecordMode && 
+                    this.isActive && // Only allow if soil sensor is active
+                    this.audioEnabled && // Only if audio context is running
+                    this.toneInitialized) { // And Tone components are ready
+                    this.enterRecordMode();
+                } else if (this.debugMode && !this.isRecordMode) {
+                    console.log(`💧 Record mode not entered. Conditions: soil-connected-bg=${this.frameBackground.classList.contains('soil-connected-bg')}, isRecordMode=${this.isRecordMode}, isActive=${this.isActive}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}`);
+                }
+            });
+        }
 
+        if (this.stopRecordModeButton) {
+            this.stopRecordModeButton.addEventListener('click', (event) => {
+                event.stopPropagation(); // Prevent click from bubbling to frameBackground
+                if (this.isRecordMode) {
+                    this.exitRecordMode();
+                }
+            });
+        }
+
+        // Initial state from WebSocket client (existing)
         const wsClientInitialState = window.creatune.getDeviceState('soil');
         if (wsClientInitialState) {
             this.deviceStates.soil.connected = wsClientInitialState.connected;
@@ -246,7 +289,7 @@ class SoilHandler {
     }
 
     updateSoundParameters() {
-        if (!this.toneInitialized || !this.audioEnabled || this.isExternallyMuted) return; 
+        if (!this.toneInitialized || !this.audioEnabled || this.isExternallyMuted || this.isRecordMode) return; 
 
         if (this.toyPianoSynth) {
             const dynamicVolumePart = this.currentSoilAppValue * 10; 
@@ -277,40 +320,46 @@ class SoilHandler {
     }
 
     manageAudioAndVisuals() {
-        if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): manageAudioAndVisuals called. ExternallyMuted: ${this.isExternallyMuted}, IsActive: ${this.isActive}, Connected: ${this.deviceStates.soil.connected}`);
+        if (this.debugMode) console.log(`💧 SoilHandler: manageAudioAndVisuals. RecordMode: ${this.isRecordMode}, ExternallyMuted: ${this.isExternallyMuted}, IsActive: ${this.isActive}, Connected: ${this.deviceStates.soil.connected}`);
 
         if (Tone.context.state !== 'running') this.audioEnabled = false;
         else this.audioEnabled = true;
 
         if (this.isExternallyMuted) { 
-            if (this.isPlaying || this.isFadingOut) {
-                if (this.debugMode) console.log('💧 SoilHandler (Toypiano): Externally muted, ensuring audio is stopped.');
-                this.stopAudio(true); 
-            }
+            if (this.isRecordMode) this.exitRecordMode(true);
+            else if (this.isPlaying || this.isFadingOut) this.stopAudio(true); 
             this.updateUI(); 
             return;
         }
 
         if (!this.audioEnabled) {
-            if (this.isPlaying || this.isFadingOut) this.stopAudio(true); 
-            if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): AudioContext not running or audio disabled. Audio remains off.`);
+            if (this.isRecordMode) this.exitRecordMode(true);
+            else if (this.isPlaying || this.isFadingOut) this.stopAudio(true); 
+            if (this.debugMode) console.log(`💧 SoilHandler: AudioContext not running or audio disabled. Audio remains off.`);
             this.updateUI();
             return;
         }
         
+        // If in record mode, its own logic handles audio start/stop and UI.
+        if (this.isRecordMode) {
+            this.updateUI(); // Ensure UI reflects record mode state
+            return;
+        }
+
+        // Generative audio logic
         if (!this.toneInitialized) {
-            if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): Tone not initialized. Attempting initTone.`);
+            if (this.debugMode) console.log(`💧 SoilHandler: Tone not initialized. Attempting initTone.`);
             this.initTone(); 
             if (!this.toneInitialized) { 
-                 if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): initTone failed or deferred. Cannot manage audio yet.`);
+                 if (this.debugMode) console.log(`💧 SoilHandler: initTone failed or deferred. Cannot manage audio yet.`);
                  this.updateUI();
                  return;
             }
         }
 
-        const shouldPlayAudio = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted; 
+        const shouldPlayGenerativeAudio = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted; 
 
-        if (shouldPlayAudio) {
+        if (shouldPlayGenerativeAudio) {
             if (!this.isPlaying || this.isFadingOut) {
                 this.startAudio();
             } else { 
@@ -325,39 +374,207 @@ class SoilHandler {
     }
 
     updateUI() {
-        const showCreature = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted; 
+        const showCreature = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted && !this.isRecordMode; 
 
         if (this.soilCreatureVisual) {
             const wasActive = this.soilCreatureVisual.classList.contains('active');
             this.soilCreatureVisual.classList.toggle('active', showCreature);
             
-            if (wasActive && !showCreature) { // If creature is becoming inactive
-                // Reset to the first frame when it becomes inactive
+            if (wasActive && !showCreature) {
                 this.soilCreatureCurrentFrame = 0;
                 this.soilCreatureVisual.style.backgroundPositionX = '0%';
             }
-            // No longer need to remove 'animate-once' as it's not used
-
             this.soilCreatureVisual.classList.remove('soil-dry', 'soil-humid', 'soil-wet');
             if (showCreature) { 
                 this.soilCreatureVisual.classList.add(`soil-${this.currentSoilCondition.replace('_', '-')}`);
             }
         }
+
         if (this.frameBackground) {
-            const frameActive = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted; 
+            const frameActiveForGenerative = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted && !this.isRecordMode;
             
-            if (frameActive) {
+            if (frameActiveForGenerative) {
                 this.frameBackground.classList.add('soil-active-bg'); 
                 this.frameBackground.classList.remove('soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg'); 
                 this.frameBackground.classList.add(`soil-${this.currentSoilCondition.replace('_', '-')}-bg`); 
-            } else {
+            } else if (!this.isRecordMode) { 
                 this.frameBackground.classList.remove('soil-active-bg');
                 this.frameBackground.classList.remove('soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg');
             }
+            this.frameBackground.classList.toggle('record-mode-pulsing', this.isRecordMode);
+        }
+
+        if (this.stopRecordModeButton) {
+            this.stopRecordModeButton.style.display = this.isRecordMode ? 'block' : 'none';
         }
     }
 
+    async enterRecordMode() {
+        if (this.isRecordMode || !this.audioEnabled || !this.toneInitialized) {
+            if(this.debugMode) console.warn(`💧 Record mode entry blocked. isRecordMode=${this.isRecordMode}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}`);
+            return;
+        }
+        if (this.debugMode) console.log('💧 SoilHandler: Entering Record Mode...');
+        this.isRecordMode = true;
+
+        this.stopAudio(true); // Force stop generative audio
+
+        this.updateUI(); 
+
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 sec
+
+        if (!this.isRecordMode) { // Check if exited during wait
+            if(this.debugMode) console.log('💧 Record mode exited during pre-recording wait.');
+            return; 
+        }
+
+        try {
+            this.mic = new Tone.UserMedia();
+            await this.mic.open();
+            
+            if (!this.isRecordMode) { // Check again after mic.open()
+                if(this.debugMode) console.log('💧 Record mode exited after mic permission prompt.');
+                this.mic.close(); 
+                this.mic = null;
+                return; 
+            }
+
+            if (this.debugMode) console.log('💧 SoilHandler: Mic opened.');
+            this.isCurrentlyRecording = true;
+            this.recorder = new Tone.Recorder();
+            this.mic.connect(this.recorder);
+            this.recorder.start();
+            if (this.debugMode) console.log('💧 SoilHandler: Recording started...');
+
+            // Record for a duration
+            setTimeout(async () => {
+                if (!this.isCurrentlyRecording || !this.recorder || !this.isRecordMode) {
+                    if(this.debugMode) console.log('💧 Recording timeout fired, but no longer recording or in record mode.');
+                    if (this.mic && this.mic.state === "started") this.mic.close();
+                    this.isCurrentlyRecording = false;
+                    return;
+                }
+                
+                const audioBlob = await this.recorder.stop();
+                this.isCurrentlyRecording = false;
+                if (this.mic && this.mic.state === "started") this.mic.close();
+                this.mic = null; // Dispose of mic instance
+                if (this.debugMode) console.log('💧 SoilHandler: Recording stopped. Blob size:', audioBlob.size);
+
+                if (!this.isRecordMode) { // Check if exited during recording
+                     if(this.debugMode) console.log('💧 Record mode exited during recording phase.');
+                     return;
+                }
+                this._setupRhythmicPlayback(audioBlob);
+
+            }, this.recordingDuration);
+
+        } catch (err) {
+            console.error('❌ SoilHandler: Error during mic recording setup:', err);
+            this.exitRecordMode(true); 
+        }
+    }
+
+    _setupRhythmicPlayback(audioBlob) {
+        if (!this.isRecordMode || !this.toneInitialized) {
+            if(this.debugMode) console.warn('💧 Cannot setup rhythmic playback, not in record mode or Tone not ready.');
+            return;
+        }
+        if (this.debugMode) console.log('💧 SoilHandler: Setting up rhythmic playback.');
+
+        if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl); // Revoke previous if any
+        this.recordedAudioBlobUrl = URL.createObjectURL(audioBlob);
+        
+        this.recordedBufferPlayer = new Tone.Player(this.recordedAudioBlobUrl);
+        // Do NOT connect player to destination if we only want to hear the triggered notes.
+        // If you want to hear the recording too, then: .toDestination();
+
+        this.rhythmFollower = new Tone.Meter({ smoothing: 0.2 }); // Add some smoothing
+        this.recordedBufferPlayer.connect(this.rhythmFollower); 
+
+        this.recordedBufferPlayer.loop = true;
+        this.lastRhythmNoteTime = 0; // Reset cooldown timer
+
+        this.rhythmicLoop = new Tone.Loop(time => {
+            if (!this.isRecordMode || !this.rhythmFollower || !this.toyPianoSynth) return;
+
+            const level = this.rhythmFollower.getValue(); 
+            const currentTime = Tone.now() * 1000;
+
+            if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
+                if (this.debugMode && Math.random() < 0.15) console.log(`💧 Rhythm trigger! Level: ${typeof level === 'number' ? level.toFixed(2) : level}`);
+                
+                const notes = ["C4", "E4", "G4", "A4", "C5"]; // Shorter list for rhythmic variation
+                const noteToPlay = notes[Math.floor(Math.random() * notes.length)];
+                const velocity = 0.6 + (Math.abs(level) - Math.abs(this.rhythmThreshold)) * 0.02; // Velocity based on how much over threshold
+                
+                this.toyPianoSynth.triggerAttackRelease(noteToPlay, "16n", time, Math.min(0.9, Math.max(0.2, velocity)));
+                this.triggerCreatureAnimation(); 
+                if (typeof window.updateNotesDisplay === 'function') {
+                    window.updateNotesDisplay(noteToPlay);
+                }
+                this.lastRhythmNoteTime = currentTime;
+            }
+        }, "16n").start(0);
+
+        this.recordedBufferPlayer.start().then(() => {
+            if (this.debugMode) console.log('💧 Recorded buffer player started for rhythm detection.');
+        }).catch(err => {
+            console.error('❌ Error starting recorded buffer player:', err);
+            this.exitRecordMode(true);
+        });
+
+        if (Tone.Transport.state !== "started") Tone.Transport.start();
+        if (this.debugMode) console.log('💧 SoilHandler: Rhythmic playback loop and player started.');
+    }
+
+    exitRecordMode(force = false) {
+        if (!this.isRecordMode && !force) return;
+        if (this.debugMode) console.log('💧 SoilHandler: Exiting Record Mode...');
+        
+        this.isRecordMode = false;
+        this.isCurrentlyRecording = false; // Ensure this is reset
+
+        if (this.mic && this.mic.state === "started") {
+            this.mic.close();
+        }
+        this.mic = null;
+
+        if (this.recorder) {
+            if (this.recorder.state === "started") {
+                this.recorder.stop(); // Should have been stopped by timeout, but as a safeguard
+            }
+            this.recorder.dispose(); // Dispose of recorder
+            this.recorder = null;
+        }
+        if (this.rhythmicLoop) {
+            this.rhythmicLoop.stop(0).dispose();
+            this.rhythmicLoop = null;
+        }
+        if (this.recordedBufferPlayer) {
+            this.recordedBufferPlayer.stop(0).dispose();
+            this.recordedBufferPlayer = null;
+            if (this.recordedAudioBlobUrl) {
+                URL.revokeObjectURL(this.recordedAudioBlobUrl);
+                this.recordedAudioBlobUrl = null;
+            }
+        }
+        if (this.rhythmFollower) {
+            this.rhythmFollower.dispose();
+            this.rhythmFollower = null;
+        }
+
+        this.updateUI(); 
+
+        if (this.debugMode) console.log('💧 SoilHandler: Record mode exited. Attempting to restore generative audio.');
+        this.manageAudioAndVisuals(); 
+    }
+
     startAudio() {
+        if (this.isRecordMode) { 
+            if (this.debugMode) console.log("💧 SoilHandler: In record mode, generative audio start prevented.");
+            return;
+        }
         if (this.isExternallyMuted) { 
             if (this.debugMode) console.log("💧 SoilHandler (Toypiano): Attempted to startAudio, but is externally muted.");
             return;
@@ -393,8 +610,8 @@ class SoilHandler {
         this.isPlaying = true; this.isFadingOut = false;
         this.updateSoundParameters(); 
         if (Tone.Transport.state !== "started") Tone.Transport.start();
-        if (this.toyPianoLoop.state !== "started") this.toyPianoLoop.start(0);
-        if (this.bellLoop.state !== "started") this.bellLoop.start(0);
+        if (this.toyPianoLoop && this.toyPianoLoop.state !== "started") this.toyPianoLoop.start(0);
+        if (this.bellLoop && this.bellLoop.state !== "started") this.bellLoop.start(0);
         if (this.debugMode) console.log('💧 SoilHandler: Audio (Toypiano) started.');
         this.updateUI();
     }
@@ -415,30 +632,44 @@ class SoilHandler {
         }
 
         if (this.debugMode) console.log(`💧 SoilHandler: Stopping audio (Toypiano) ${force ? '(forced)' : '(with fade-out)'}...`);
-        this.isPlaying = false; this.isFadingOut = true;
+        this.isPlaying = false; 
+        
+        if (!force) this.isFadingOut = true;
+        else this.isFadingOut = false;
+
         const fadeTime = force ? 0.01 : this.fadeDuration;
 
-        if (this.toyPianoSynth) {
+        if (this.toyPianoSynth && this.toyPianoSynth.volume) {
             this.toyPianoSynth.volume.cancelScheduledValues(Tone.now());
             this.toyPianoSynth.volume.rampTo(-Infinity, fadeTime, Tone.now());
         }
-        if (this.bellSynth) {
+        if (this.bellSynth && this.bellSynth.volume) {
             this.bellSynth.volume.cancelScheduledValues(Tone.now());
             this.bellSynth.volume.rampTo(-Infinity, fadeTime, Tone.now());
         }
 
         if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
-        this.stopTimeoutId = setTimeout(() => {
+        
+        const completeStop = () => {
             if (this.toyPianoLoop && this.toyPianoLoop.state === "started") this.toyPianoLoop.stop(0);
             if (this.bellLoop && this.bellLoop.state === "started") this.bellLoop.stop(0);
-            if (this.toyPianoSynth) this.toyPianoSynth.volume.value = -Infinity;
-            if (this.bellSynth) this.bellSynth.volume.value = -Infinity;
-            this.isFadingOut = false;
+            
+            if (this.toyPianoSynth && this.toyPianoSynth.volume) this.toyPianoSynth.volume.value = -Infinity;
+            if (this.bellSynth && this.bellSynth.volume) this.bellSynth.volume.value = -Infinity;
+            
+            this.isFadingOut = false; 
+            this.isPlaying = false; 
             if (this.debugMode) console.log('💧 SoilHandler: Audio (Toypiano) fully stopped and loops cleared.');
             this.updateUI(); 
-        }, force ? 10 : (this.fadeDuration * 1000 + 100)); 
+        };
+
+        if (force) {
+            completeStop();
+        } else {
+            this.stopTimeoutId = setTimeout(completeStop, (this.fadeDuration * 1000 + 150)); // Increased timeout slightly
+        }
         
-        if (force) { 
+        if (!force) { // If not forced, UI update happens now to reflect fading
             this.updateUI();
         }
     }
