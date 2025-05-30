@@ -256,10 +256,12 @@ body {
 }
 
 /* Specific creature images */
+
 .soil-creature {
   background-image: url('../sprites/creatures/soil-creature.png'); /* Path to your 6-frame sprite sheet */
   background-size: 600% 100%; /* 6 columns, 1 row */
   background-position: 0% 0%;   /* Start at the first frame (controlled by JS) */
+  z-index: 10; /* Ensure soil creature is above the background */
 }
 
 .light-creature {
