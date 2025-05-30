@@ -106,7 +106,7 @@ body {
   grid-area: frameleft; 
   background-color: var(--warm-beige);
   background-image: url(sprites/frame/frameropel.png); 
-  background-size: 60%;
+  background-size: 100% 100%; 
   background-position: center; 
   background-repeat: no-repeat; 
 }
@@ -114,7 +114,7 @@ body {
   grid-area: frameright; 
   background-color: var(--warm-beige);
   background-image: url(sprites/frame/frameropel.png); 
-  background-size: 60%;
+  background-size: 100% 100%; 
   background-position: center;
   background-repeat: no-repeat;
 }
@@ -225,6 +225,34 @@ body {
     radial-gradient(circle at 75% 75%, rgba(142,164,125,0.2) 1px, transparent 1px);
   background-size: 30px 30px, 15px 15px;
   background-position: 0 0, 15px 15px;
+}
+
+/* ==========================================================================
+   FRAME IDLE - WOBBLE ANIMATION
+   ========================================================================== */
+
+@keyframes wobbleEffect {
+  0%, 100% {
+    transform: translateX(0px) scaleY(1) translateZ(0);
+  }
+  25% {
+    transform: translateX(-4px) scaleY(1.03) translateZ(0); /* Move left, stretch slightly vertically */
+  }
+  50% {
+    transform: translateX(0px) scaleY(0.97) translateZ(0); /* Back to center X, squash slightly vertically */
+  }
+  75% {
+    transform: translateX(4px) scaleY(1.03) translateZ(0);  /* Move right, stretch slightly vertically */
+  }
+}
+
+
+.frame-is-wobbling {
+  animation-name: wobbleEffect;
+  animation-duration: 0.25s; /* Duration of one wobble cycle */
+  animation-iteration-count: 20; /* 0.25s * 20 = 5 seconds total */
+  animation-timing-function: ease-in-out;
+  will-change: transform; /* Optimize for transform animation */
 }
 
 /* ==========================================================================
@@ -417,85 +445,6 @@ body {
   pointer-events: none; 
   transform: translateY(-20px); 
 }
-
-/* ==========================================================================
-   INTERACTIVE UI ELEMENTS (Notes Display, Song Mode Button)
-   ========================================================================== */
-
-/* New container for the UI elements */
-#interactive-ui-container {
-  position: absolute;
-  /* Position it to align with the top content area of the frame.
-     frameidle's grid-template-rows starts with 20px for frametop/corners.
-     This will place the container just below that initial top border area. */
-  top: 25px; 
-  left: 25px;  /* Align with frameidle's content padding/border */
-  right: 25px; /* Align with frameidle's content padding/border */
-  height: 60px; /* Adjust as needed, should be enough for 50-55px items + some breathing room */
-  display: flex;
-  justify-content: center; /* Centers the items horizontally */
-  align-items: center;
-  gap: 15px; /* Space between the notes display and the button */
-  z-index: 25; /* Ensure it's above framebackground (z-index: 5) and creatures (z-index: 5 or 10) */
-  
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  /* Transition for the container's appearance */
-  transition: opacity 0.3s ease-in-out, visibility 0s linear 0.3s; 
-}
-
-#interactive-ui-container.visible {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transition: opacity 0.3s ease-in-out; /* Only transition opacity on appear */
-}
-
-/* Common styling for the square UI elements */
-.interactive-ui-element {
-  /* Removed position:absolute, top/left/bottom/right as they are now flex items */
-  /* Opacity, visibility, pointer-events, and transitions are now handled by the container */
-  width: 55px;  /* Target square size */
-  height: 55px; /* Target square size */
-  display: flex; /* Used to center content within each element (e.g., text in notes-display) */
-  justify-content: center;
-  align-items: center;
-  border-radius: 8px; /* Slightly rounded corners for the squares */
-  background-color: rgba(245, 238, 224, 0.9); /* A bit more opaque beige */
-  box-shadow: 0 2px 5px rgba(45, 49, 66, 0.25); /* A subtle shadow for depth */
-  padding: 5px; /* Inner padding for content */
-}
-
-#notes-display {
-  /* Inherits square size, flex centering, background, etc. from .interactive-ui-element */
-  font-family: 'VT323', monospace;
-  font-size: 16px; /* Adjust for best fit within the square */
-  color: var(--dark-slate);
-  text-align: center;
-  line-height: 1.2; /* May help with vertical centering of text */
-  overflow-wrap: break-word; /* Wrap long words/notes */
-  word-break: break-all; /* If a single note string is too long, break it */
-  overflow: hidden; /* Hide any text that still overflows */
-}
-
-#song-mode-toggle {
-  /* Inherits square size from .interactive-ui-element */
-  background-color: transparent; /* Make button background transparent, image will be the visual */
-  border: none;
-  padding: 0; /* Remove default button padding */
-  cursor: pointer;
-  box-shadow: none; /* Remove shadow if it's just an image */
-}
-
-#song-mode-toggle img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  border-radius: 6px; /* Match parent's border-radius if button bg is transparent and image has distinct edges */
-}
-
-
 
 /* ==========================================================================
    RESPONSIVE ADJUSTMENTS - CREATURE SIZE

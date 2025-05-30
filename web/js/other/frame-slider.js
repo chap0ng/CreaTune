@@ -4,32 +4,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const framebackground = document.querySelector('.framebackground');
     const frameleft = document.querySelector('.frameleft');
     const frameright = document.querySelector('.frameright');
-
-    // Get references to UI elements
-    const interactiveUIContainer = document.getElementById('interactive-ui-container'); // Updated
-    const notesDisplay = document.getElementById('notes-display');
-    const songModeToggle = document.getElementById('song-mode-toggle');
-    const songModeToggleImg = songModeToggle ? songModeToggle.querySelector('img') : null;
     
     let isDragging = false;
-    let initialMouseY = 0;
-    let initialFrameOffset = 0;
-    let currentOffset = 0;
+    let initialMouseY = 0;      // Stores mouse Y when drag starts
+    let initialFrameOffset = 0; // Stores frame's visual offset when drag starts
+    let currentOffset = 0;      // Tracks the current actual visual offset of the frame
     let isOpen = false;
+    let wobbleTimeoutId = null; // Added to manage wobble timeout
     
-    let isSongModeActive = false;
-    const songModeActiveImgSrc = 'sprites/ui/song_mode_active.png';
-    const songModeInactiveImgSrc = 'sprites/ui/song_mode_inactive.png';
-
-    window.frameSliderState = { 
-        isOpen: false,
-        isSongModeActive: false
-    };
+    window.frameSliderState = { isOpen: false }; // Global state
     
+    // Ensure body overflow is hidden if the script intends to control scrolling.
+    // The CSS also sets body overflow, JS inline style will take precedence.
     document.body.style.overflow = 'hidden'; 
 
+    // Applies the visual offset to frame elements
     function applyFrameOffset(offsetValue) {
+        // Ensure offsetValue is not negative
         const finalOffset = Math.max(0, offsetValue);
+
         const topElements = [frametop, document.querySelector('.corner1'), document.querySelector('.corner2')];
         const transform = `translateY(${finalOffset}px)`;
         
@@ -43,36 +36,34 @@ document.addEventListener('DOMContentLoaded', () => {
         if (frameright) frameright.style.marginTop = marginTop;
     }
 
+    // Handles interactive dragging, clamping the drag range
     function handleInteractiveDrag(newCalculatedTargetOffset) {
-        if (!frameidle) return;
         const frameHeight = frameidle.offsetHeight;
+        // Max offset user can achieve through direct dragging
         const maxInteractiveDragOffset = frameHeight * 0.5; 
+        
         const clampedOffsetForDrag = Math.max(0, Math.min(maxInteractiveDragOffset, newCalculatedTargetOffset));
         
         requestAnimationFrame(() => {
             applyFrameOffset(clampedOffsetForDrag);
         });
-        currentOffset = clampedOffsetForDrag;
+        
+        currentOffset = clampedOffsetForDrag; // Update currentOffset to the interactively dragged position
     }
     
-    function updateInteractiveUIState(isFrameOpen) {
-        // Toggle visibility of the container
-        if (interactiveUIContainer) { 
-            interactiveUIContainer.classList.toggle('visible', isFrameOpen);
-        }
-    }
-
+    // Snaps the frame to open or closed position
     function snap() {
-        if (!frameidle) return;
         const frameHeight = frameidle.offsetHeight;
-        const snapOpenTargetOffset = frameHeight * 0.7;
+        const snapOpenTargetOffset = frameHeight * 0.7; // Target when snapping open
         const snapClosedTargetOffset = 0;
-        const decisionThreshold = snapOpenTargetOffset * 0.4;
+        
+        // Threshold to decide: if currentOffset (max 0.5*H from drag) is > 40% of snapOpenTargetOffset, then open.
+        const decisionThreshold = snapOpenTargetOffset * 0.4; // e.g., 0.7H * 0.4 = 0.28H
+
         const finalSnapPosition = currentOffset > decisionThreshold ? snapOpenTargetOffset : snapClosedTargetOffset;
 
         isOpen = finalSnapPosition > 0;
         window.frameSliderState.isOpen = isOpen;
-        updateInteractiveUIState(isOpen); 
 
         const elementsToTransform = [frametop, document.querySelector('.corner1'), document.querySelector('.corner2')];
         const elementsToMargin = [framebackground, frameleft, frameright];
@@ -87,7 +78,8 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(() => {
             applyFrameOffset(finalSnapPosition);
         });
-        currentOffset = finalSnapPosition;
+        
+        currentOffset = finalSnapPosition; // Update currentOffset to the final snapped position
 
         setTimeout(() => {
             elementsToTransform.forEach(el => {
@@ -96,31 +88,57 @@ document.addEventListener('DOMContentLoaded', () => {
             elementsToMargin.forEach(el => {
                 if (el) el.style.transition = '';
             });
-        }, 300);
+        }, 300); // Duration of the snap animation
     }
     
+    // Adjusts frame position on window resize
     window.addEventListener('resize', () => {
-        if (!frameidle) return;
-        const frameHeight = frameidle.offsetHeight;
+        if (!frameidle) return; // Ensure frameidle exists
+        const frameHeight = frameidle.offsetHeight; // Get current height
         let newTargetOffsetOnResize = 0;
 
         if (isOpen) {
-            newTargetOffsetOnResize = frameHeight * 0.7;
+            newTargetOffsetOnResize = frameHeight * 0.7; // Maintain open state at 70% of new height
         }
+        // No transition needed for resize, apply directly
         requestAnimationFrame(() => {
             applyFrameOffset(newTargetOffsetOnResize);
         });
         currentOffset = newTargetOffsetOnResize;
-        updateInteractiveUIState(isOpen); 
     });
     
     if (frameidle) {
+        // Wobble effect on click
+        frameidle.addEventListener('click', (event) => {
+            // Prevent wobble if the click was on the frametop (to avoid double-triggering or interfering with drag)
+            if (frametop && (event.target === frametop || frametop.contains(event.target))) {
+                // Click was on frametop, let drag/snap logic handle it.
+                // Or, you can remove this condition if you want wobble even when frametop is clicked.
+            } else {
+                // If already wobbling, clear previous timeout and remove class to restart animation smoothly
+                if (wobbleTimeoutId) {
+                    clearTimeout(wobbleTimeoutId);
+                    frameidle.classList.remove('frame-is-wobbling');
+                    // Force a reflow to ensure the animation restarts if re-clicked quickly
+                    void frameidle.offsetWidth; 
+                }
+
+                frameidle.classList.add('frame-is-wobbling');
+
+                wobbleTimeoutId = setTimeout(() => {
+                    frameidle.classList.remove('frame-is-wobbling');
+                    wobbleTimeoutId = null; // Reset the timeout ID
+                }, 5000); // Remove class after 5 seconds (5000 milliseconds)
+            }
+        });
+
+        // Mouse Events for dragging
         if (frametop) {
             frametop.addEventListener('mousedown', (e) => {
                 isDragging = true;
                 initialMouseY = e.clientY;
-                initialFrameOffset = currentOffset;
-                e.preventDefault();
+                initialFrameOffset = currentOffset; // Capture the frame's current offset at drag start
+                e.preventDefault(); // Prevent text selection, etc.
             });
         }
     }
@@ -130,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const deltaY = e.clientY - initialMouseY;
         const newTargetOffset = initialFrameOffset + deltaY;
         handleInteractiveDrag(newTargetOffset);
+        // e.preventDefault(); // Usually not needed here unless specific issues arise
     });
     
     document.addEventListener('mouseup', () => {
@@ -139,13 +158,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
+    // Touch Events for dragging
     if (frametop) {
         frametop.addEventListener('touchstart', (e) => {
             isDragging = true;
             initialMouseY = e.touches[0].clientY;
             initialFrameOffset = currentOffset;
+            // preventDefault is important here if touch-action:none is not fully handling scroll prevention
+            // or if you want to be absolutely sure.
+            // CSS has touch-action: none on .frametop, which should help.
             e.preventDefault(); 
-        }, { passive: false }); 
+        }, { passive: false }); // Explicitly not passive due to preventDefault
     }
     
     document.addEventListener('touchmove', (e) => {
@@ -153,8 +176,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const deltaY = e.touches[0].clientY - initialMouseY;
         const newTargetOffset = initialFrameOffset + deltaY;
         handleInteractiveDrag(newTargetOffset);
-        e.preventDefault(); 
-    }, { passive: false }); 
+        e.preventDefault(); // Prevent page scroll while dragging the frame element
+    }, { passive: false }); // Explicitly not passive due to preventDefault
     
     document.addEventListener('touchend', () => {
         if (isDragging) {
@@ -162,22 +185,4 @@ document.addEventListener('DOMContentLoaded', () => {
             snap();
         }
     });
-
-    if (songModeToggle && songModeToggleImg) {
-        songModeToggle.addEventListener('click', () => {
-            isSongModeActive = !isSongModeActive;
-            songModeToggleImg.src = isSongModeActive ? songModeActiveImgSrc : songModeInactiveImgSrc;
-            window.frameSliderState.isSongModeActive = isSongModeActive;
-            console.log('Song mode toggled:', isSongModeActive);
-        });
-    }
-
-    window.updateNotesDisplay = function(notesText) {
-        if (notesDisplay) {
-            notesDisplay.textContent = notesText;
-        }
-    }
-    
-    // Initialize UI state
-    updateInteractiveUIState(isOpen);
 });
