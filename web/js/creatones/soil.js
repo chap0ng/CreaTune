@@ -7,7 +7,7 @@ class SoilHandler {
         this.bellLoop = null;
 
         // Audio Params - Toypiano Style
-        this.fadeDuration = 1.5; // Was 0.8, user changed to 1.5 in provided code
+        this.fadeDuration = 1.5; 
         this.baseToyPianoVolume = 9; 
         this.baseBellVolume = 6;     
 
@@ -19,11 +19,11 @@ class SoilHandler {
         this.toneInitialized = false;
         this.debugMode = true;
         this.stopTimeoutId = null;
-        this.isExternallyMuted = false; // <<< NEW PROPERTY
+        this.isExternallyMuted = false; 
 
-        this.currentSoilCondition = "dry"; // Default
-        this.currentSoilAppValue = 0.0;    // Default
-        this.deviceStates = { // Local copy for convenience
+        this.currentSoilCondition = "dry"; 
+        this.currentSoilAppValue = 0.0;    
+        this.deviceStates = { 
             soil: { connected: false }
         };
 
@@ -37,18 +37,17 @@ class SoilHandler {
         this.initializeWhenReady();
     }
 
-    setExternallyMuted(isMuted) { // <<< NEW METHOD
+    setExternallyMuted(isMuted) { 
         if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): setExternallyMuted called with: ${isMuted}. Current state: ${this.isExternallyMuted}`);
-        if (this.isExternallyMuted === isMuted) return; // No change
+        if (this.isExternallyMuted === isMuted) return; 
 
         this.isExternallyMuted = isMuted;
         if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): isExternallyMuted set to ${this.isExternallyMuted}`);
 
         if (this.isExternallyMuted && (this.isPlaying || this.isFadingOut)) {
             if (this.debugMode) console.log('💧 SoilHandler (Toypiano): Externally muted, forcing audio stop.');
-            this.stopAudio(true); // Force stop audio if muted
+            this.stopAudio(true); 
         }
-        // Always re-evaluate audio and visuals based on the new muted state
         this.manageAudioAndVisuals();
     }
 
@@ -99,7 +98,7 @@ class SoilHandler {
                 dampening: 4000,
                 resonance: 0.9,
                 release: 0.5,
-                volume: -Infinity // Start silent
+                volume: -Infinity 
             }).connect(sharedDelay);
 
             this.bellSynth = new Tone.Synth({
@@ -110,7 +109,7 @@ class SoilHandler {
                     sustain: 0.1,
                     release: 0.5
                 },
-                volume: -Infinity // Start silent
+                volume: -Infinity 
             }).connect(sharedReverb);
 
             this.createToyPianoPattern();
@@ -130,12 +129,24 @@ class SoilHandler {
         }
     }
 
+    triggerCreatureAnimation() {
+        if (this.soilCreatureVisual && this.soilCreatureVisual.classList.contains('active')) {
+            this.soilCreatureVisual.classList.remove('animate-once');
+            void this.soilCreatureVisual.offsetWidth; 
+            this.soilCreatureVisual.classList.add('animate-once');
+            if (this.debugMode && Math.random() < 0.1) { 
+                 console.log('💧 Soil Creature animation triggered');
+            }
+        }
+    }
+
     createToyPianoPattern() {
         if (!this.toyPianoSynth) return;
         const toyPianoNotes = ["C4", "E4", "G4", "A4", "C5", "D5", "E5", "G5"];
         this.toyPianoLoop = new Tone.Pattern((time, note) => {
             const velocity = Math.max(0.3, this.currentSoilAppValue * 0.7 + 0.2);
             this.toyPianoSynth.triggerAttackRelease(note, "8n", time, velocity);
+            this.triggerCreatureAnimation(); // Trigger sprite animation
         }, toyPianoNotes, "randomWalk");
         this.toyPianoLoop.interval = "4n";
         this.toyPianoLoop.humanize = "16n";
@@ -148,6 +159,8 @@ class SoilHandler {
             const pitch = bellPitches[Math.floor(Math.random() * bellPitches.length)];
             const velocity = Math.random() * 0.3 + 0.3;
             this.bellSynth.triggerAttackRelease(pitch, "16n", time, velocity);
+            // Optionally trigger animation for bell notes too:
+            // this.triggerCreatureAnimation(); 
         }, "2n");
         this.bellLoop.probability = 0.0;
         this.bellLoop.humanize = "32n";
@@ -166,32 +179,31 @@ class SoilHandler {
                 this.isActive = state.active;
                 this.currentSoilCondition = state.rawData.soil_condition || "dry";
                 this.currentSoilAppValue = state.rawData.moisture_app_value || 0.0;
-                this.deviceStates.soil.connected = true; // Assuming stateChange implies connected
+                this.deviceStates.soil.connected = true; 
                 this.manageAudioAndVisuals();
             }
         });
         window.creatune.on('data', (deviceType, data) => {
             if (deviceType === 'soil') {
-                // if (this.debugMode) console.log(`💧 SoilHandler (Toypiano) data: condition=${data.soil_condition}, appValue=${data.moisture_app_value}`);
                 this.currentSoilCondition = data.soil_condition || this.currentSoilCondition;
                 this.currentSoilAppValue = data.moisture_app_value !== undefined ? data.moisture_app_value : this.currentSoilAppValue;
-                this.deviceStates.soil.connected = true; // Assuming data implies connected
-                this.updateSoundParameters(); // Only update sound params, manageAudioAndVisuals handles start/stop
+                this.deviceStates.soil.connected = true; 
+                this.updateSoundParameters(); 
             }
         });
         window.creatune.on('connected', (deviceType) => {
             if (deviceType === 'soil') {
                 if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): Soil device connected.`);
                 this.deviceStates.soil.connected = true;
-                if (Tone.context.state === 'running') this.handleAudioContextRunning(); // Try to init Tone if context is ready
-                else this.manageAudioAndVisuals(); // Otherwise, just update based on new connection state
+                if (Tone.context.state === 'running') this.handleAudioContextRunning(); 
+                else this.manageAudioAndVisuals(); 
             }
         });
         window.creatune.on('disconnected', (deviceType) => {
             if (deviceType === 'soil') {
                 if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): Soil device disconnected.`);
                 this.deviceStates.soil.connected = false;
-                this.isActive = false; // Device disconnected means it cannot be active
+                this.isActive = false; 
                 this.manageAudioAndVisuals();
             }
         });
@@ -203,7 +215,7 @@ class SoilHandler {
         document.addEventListener('creaTuneAudioDisabled', () => {
             if (this.debugMode) console.log("💧 SoilHandler (Toypiano) detected creaTuneAudioDisabled event.");
             this.audioEnabled = false;
-            this.manageAudioAndVisuals(); // This will likely stop audio
+            this.manageAudioAndVisuals(); 
         });
 
         const wsClientInitialState = window.creatune.getDeviceState('soil');
@@ -216,15 +228,14 @@ class SoilHandler {
             }
             if (this.debugMode) console.log(`💧 SoilHandler (Toypiano) initial state from wsClient: Connected=${this.deviceStates.soil.connected}, Active=${this.isActive}, Condition=${this.currentSoilCondition}`);
         }
-        this.updateUI(); // Initial UI update
+        this.updateUI(); 
     }
 
     updateSoundParameters() {
-        if (!this.toneInitialized || !this.audioEnabled || this.isExternallyMuted) return; // <<< MODIFIED
+        if (!this.toneInitialized || !this.audioEnabled || this.isExternallyMuted) return; 
 
         if (this.toyPianoSynth) {
-            const dynamicVolumePart = this.currentSoilAppValue * 10; // Example scaling
-            // Ensure baseToyPianoVolume is negative for dB
+            const dynamicVolumePart = this.currentSoilAppValue * 10; 
             const targetVolume = this.isActive ? (this.baseToyPianoVolume < 0 ? this.baseToyPianoVolume : -18) + dynamicVolumePart : -Infinity;
             this.toyPianoSynth.volume.linearRampTo(targetVolume, 0.5);
         }
@@ -236,11 +247,10 @@ class SoilHandler {
                 probability = 0.5; bellVolMod = 0;
             } else if (this.currentSoilCondition === 'humid') {
                 probability = 0.25; bellVolMod = -4;
-            } else { // dry
+            } else { 
                 probability = 0.1; bellVolMod = -8;
             }
             this.bellLoop.probability = this.isActive ? probability : 0;
-            // Ensure baseBellVolume is negative for dB
             const targetBellVol = this.isActive ? (this.baseBellVolume < 0 ? this.baseBellVolume : -24) + bellVolMod : -Infinity;
             this.bellSynth.volume.linearRampTo(targetBellVol, 0.7);
         }
@@ -258,17 +268,17 @@ class SoilHandler {
         if (Tone.context.state !== 'running') this.audioEnabled = false;
         else this.audioEnabled = true;
 
-        if (this.isExternallyMuted) { // <<< MODIFIED: If externally muted, ensure audio is off and UI reflects it.
+        if (this.isExternallyMuted) { 
             if (this.isPlaying || this.isFadingOut) {
                 if (this.debugMode) console.log('💧 SoilHandler (Toypiano): Externally muted, ensuring audio is stopped.');
-                this.stopAudio(true); // Force stop
+                this.stopAudio(true); 
             }
-            this.updateUI(); // Update UI to reflect muted state (e.g., hide creature)
+            this.updateUI(); 
             return;
         }
 
         if (!this.audioEnabled) {
-            if (this.isPlaying || this.isFadingOut) this.stopAudio(true); // Force stop if audio context dies
+            if (this.isPlaying || this.isFadingOut) this.stopAudio(true); 
             if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): AudioContext not running or audio disabled. Audio remains off.`);
             this.updateUI();
             return;
@@ -276,23 +286,23 @@ class SoilHandler {
         
         if (!this.toneInitialized) {
             if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): Tone not initialized. Attempting initTone.`);
-            this.initTone(); // This will call manageAudioAndVisuals again if successful
-            if (!this.toneInitialized) { // If still not initialized (e.g. audio context issue)
+            this.initTone(); 
+            if (!this.toneInitialized) { 
                  if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): initTone failed or deferred. Cannot manage audio yet.`);
                  this.updateUI();
                  return;
             }
         }
 
-        const shouldPlayAudio = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted; // <<< MODIFIED
+        const shouldPlayAudio = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted; 
 
         if (shouldPlayAudio) {
             if (!this.isPlaying || this.isFadingOut) {
                 this.startAudio();
-            } else { // Already playing, just update parameters
+            } else { 
                 this.updateSoundParameters();
             }
-        } else { // Should not be playing
+        } else { 
             if (this.isPlaying && !this.isFadingOut) {
                 this.stopAudio();
             }
@@ -301,26 +311,29 @@ class SoilHandler {
     }
 
     updateUI() {
-        const showCreature = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted; // <<< MODIFIED
+        const showCreature = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted; 
 
         if (this.soilCreatureVisual) {
+            const wasActive = this.soilCreatureVisual.classList.contains('active');
             this.soilCreatureVisual.classList.toggle('active', showCreature);
+            
+            if (wasActive && !showCreature) { // If creature is becoming inactive
+                this.soilCreatureVisual.classList.remove('animate-once'); // Stop animation
+            }
+
             this.soilCreatureVisual.classList.remove('soil-dry', 'soil-humid', 'soil-wet');
-            if (showCreature) { // Only add condition class if creature is shown
+            if (showCreature) { 
                 this.soilCreatureVisual.classList.add(`soil-${this.currentSoilCondition.replace('_', '-')}`);
             }
         }
         if (this.frameBackground) {
-            const frameActive = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted; // <<< MODIFIED
+            const frameActive = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted; 
             
-            // Only manage soil-specific background if this handler is supposed to be active
             if (frameActive) {
-                this.frameBackground.classList.add('soil-active-bg'); // Generic active class
-                this.frameBackground.classList.remove('soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg'); // Clear old
-                this.frameBackground.classList.add(`soil-${this.currentSoilCondition.replace('_', '-')}-bg`); // Add current
+                this.frameBackground.classList.add('soil-active-bg'); 
+                this.frameBackground.classList.remove('soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg'); 
+                this.frameBackground.classList.add(`soil-${this.currentSoilCondition.replace('_', '-')}-bg`); 
             } else {
-                // If not active (or externally muted), remove its specific background classes
-                // This allows LightSoilHandler or default background to take over.
                 this.frameBackground.classList.remove('soil-active-bg');
                 this.frameBackground.classList.remove('soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg');
             }
@@ -328,7 +341,7 @@ class SoilHandler {
     }
 
     startAudio() {
-        if (this.isExternallyMuted) { // <<< MODIFIED
+        if (this.isExternallyMuted) { 
             if (this.debugMode) console.log("💧 SoilHandler (Toypiano): Attempted to startAudio, but is externally muted.");
             return;
         }
@@ -346,13 +359,13 @@ class SoilHandler {
             this.updateSoundParameters(); this.updateUI(); return;
         }
         
-        if (!this.deviceStates.soil.connected || !this.isActive) { // Already checked isExternallyMuted
+        if (!this.deviceStates.soil.connected || !this.isActive) { 
             if (this.debugMode) console.log(`💧 SoilHandler (Toypiano): Start audio conditions not met (DeviceConnected:${this.deviceStates.soil.connected}, SensorActive:${this.isActive}).`);
             this.updateUI(); return;
         }
         if (!this.toyPianoSynth || !this.bellSynth || !this.toyPianoLoop || !this.bellLoop) {
             console.error("💧 SoilHandler (Toypiano): Critical: Synths/Loops not available in startAudio. Attempting re-init.");
-            this.initTone(); // This will call manageAudioAndVisuals
+            this.initTone(); 
              if (!this.toyPianoSynth || !this.bellSynth || !this.toyPianoLoop || !this.bellLoop) {
                 console.error("💧 SoilHandler (Toypiano): Critical: Re-init failed. Cannot start audio.");
                 return;
@@ -361,7 +374,7 @@ class SoilHandler {
 
         if (this.debugMode) console.log('💧 SoilHandler: Starting audio (Toypiano)...');
         this.isPlaying = true; this.isFadingOut = false;
-        this.updateSoundParameters(); // Set initial volumes based on current state
+        this.updateSoundParameters(); 
         if (Tone.Transport.state !== "started") Tone.Transport.start();
         if (this.toyPianoLoop.state !== "started") this.toyPianoLoop.start(0);
         if (this.bellLoop.state !== "started") this.bellLoop.start(0);
@@ -370,18 +383,16 @@ class SoilHandler {
     }
 
     stopAudio(force = false) {
-        // No direct check for isExternallyMuted here, as this method might be called BY setExternallyMuted.
-        // The isPlaying/isFadingOut checks handle most cases.
         if (!this.audioEnabled || !this.toneInitialized) {
             this.isPlaying = false; this.isFadingOut = false;
             if (this.debugMode && !force) console.warn("💧 SoilHandler (Toypiano): Attempted to stopAudio, but audio system not ready.");
             this.updateUI(); return;
         }
-        if (!this.isPlaying && !this.isFadingOut && !force) { // If already stopped and not forced
+        if (!this.isPlaying && !this.isFadingOut && !force) { 
             if (this.debugMode) console.log("💧 SoilHandler (Toypiano): stopAudio called, but already stopped.");
             this.updateUI(); return;
         }
-        if (this.isFadingOut && !force) { // If already fading and not forced
+        if (this.isFadingOut && !force) { 
             if (this.debugMode) console.log("💧 SoilHandler (Toypiano): stopAudio called, but already fading out.");
             return;
         }
@@ -407,10 +418,10 @@ class SoilHandler {
             if (this.bellSynth) this.bellSynth.volume.value = -Infinity;
             this.isFadingOut = false;
             if (this.debugMode) console.log('💧 SoilHandler: Audio (Toypiano) fully stopped and loops cleared.');
-            this.updateUI(); // Update UI after audio is fully stopped
-        }, force ? 10 : (this.fadeDuration * 1000 + 100)); // Add a small buffer for ramp
+            this.updateUI(); 
+        }, force ? 10 : (this.fadeDuration * 1000 + 100)); 
         
-        if (force) { // If forced, update UI immediately as well
+        if (force) { 
             this.updateUI();
         }
     }

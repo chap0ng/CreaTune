@@ -99,7 +99,7 @@ body {
   background-size: 100%;
   background-position: center;
   background-repeat: no-repeat;
-  display: center;
+  /* display: center; /* This is invalid, remove or use flex if needed */
 }
 
 /* Frame Sides & Bottom */
@@ -107,7 +107,7 @@ body {
   grid-area: frameleft; 
   background-color: var(--warm-beige);
   background-image: url(sprites/frame/frameropel.png); 
-  background-size: 60%; /* Stretch to fill width (20px) and height (1fr) */
+  background-size: 100% 100%; /* Adjusted for full stretch */
   background-position: center; 
   background-repeat: no-repeat; 
 }
@@ -115,7 +115,7 @@ body {
   grid-area: frameright; 
   background-color: var(--warm-beige);
   background-image: url(sprites/frame/frameropel.png); 
-  background-size: 60%; /* Stretch to fill width (20px) and height (1fr) */
+  background-size: 100% 100%; /* Adjusted for full stretch */
   background-position: center;
   background-repeat: no-repeat;
 }
@@ -135,10 +135,10 @@ body {
   background-image: url(sprites/frame/knottopleft.png);
   height: 90%; 
   width: 90%;
-  background-size: 100% 100%; /* Explicitly 100% width and 100% height */
+  background-size: 100% 100%; 
   background-position: center;
-  background-repeat: repeat; /* Assuming corners are meant to tile if image is smaller */
-  display: flex; 
+  background-repeat: no-repeat; /* Changed from repeat */
+  /* display: flex; */ /* Optional */
 }
 .corner2 { 
   grid-area: corner2; 
@@ -149,11 +149,10 @@ body {
   margin-left: 2px;
   background-size: 100% 100%;
   background-position: center;
-  background-repeat: repeat;
-  display: flex; 
+  background-repeat: no-repeat; /* Changed from repeat */
+  /* display: flex; */ /* Optional */
 }
 .corner3 { 
-  /*bottom left corner*/
   grid-area: corner3; 
   background-color: var(--warm-beige);
   background-image: url(sprites/frame/knotbotleft.png);
@@ -162,8 +161,8 @@ body {
   background-size: 100% 100%;
   margin-top: 2px;
   background-position: center;
-  background-repeat: repeat;
-  display: flex; 
+  background-repeat: no-repeat; /* Changed from repeat */
+  /* display: flex; */ /* Optional */
 }
 .corner4 { 
   grid-area: corner4; 
@@ -175,8 +174,8 @@ body {
   margin-top: 2px;
   margin-left: 2px;
   background-position: center;
-  background-repeat: repeat;
-  display: flex; 
+  background-repeat: no-repeat; /* Changed from repeat */
+  /* display: flex; */ /* Optional */
 }
 
 /* Performance optimizations */
@@ -240,50 +239,66 @@ body {
 .idle-creature, 
 .soil-creature,
 .light-creature,
-.lightsoil-creature { /* ADDED .lightsoil-creature */
+.lightsoil-creature {
   position: absolute; 
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%) translateZ(0);
   width: min(70vw, 40vh);
   height: min(70vw, 40vh); 
-  background-size: contain;
+  background-size: contain; /* Default, overridden by .soil-creature */
   background-repeat: no-repeat;
-  background-position: center;
+  background-position: center; /* Default, overridden by .soil-creature */
   display: none;
   opacity: 0;
   z-index: 5;
   transition: 
     opacity 0.6s ease-in-out,
     transform 1s ease-in-out;
-  will-change: opacity, transform;
+  will-change: opacity, transform, background-position; /* Added background-position */
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
 
 /* Specific creature images */
 .soil-creature {
-  background-image: url('../sprites/creatures/soil-creature.png');
+  background-image: url('../sprites/creatures/soil-creature.png'); /* <<< YOUR SPRITE SHEET */
+  background-size: 600% 100%; /* 6 columns, 1 row */
+  background-position: 0% 0%;   /* Start at the first frame */
 }
 
 .light-creature {
   background-image: url('../sprites/creatures/light-creature.png');
 }
 
-.lightsoil-creature { /* NEW CREATURE STYLE */
-  background-image: url('../sprites/creatures/lightsoil-creature.png'); /* <<<--- UPDATE THIS PATH */
+.lightsoil-creature { 
+  background-image: url('../sprites/creatures/lightsoil-creature.png'); 
 }
 
 /* Active state for creatures (controlled by JS) */
 .idle-creature.active,
-.soil-creature.active,
+.soil-creature.active, /* This still makes it visible */
 .light-creature.active,
-.lightsoil-creature.active { /* ADDED .lightsoil-creature.active */
+.lightsoil-creature.active { 
   display: block;
   opacity: 1;
 }
 
-/* Soil Creature Animations */
+/* Soil Creature Sprite Animation - NEW */
+.soil-creature.animate-once {
+  animation: soilSpriteAnimation 0.6s steps(6) forwards; /* Play 6 frames over 0.6s */
+}
+
+@keyframes soilSpriteAnimation {
+  0% {
+    background-position-x: 0%;
+  }
+  100% {
+    background-position-x: -600%; /* Moves through 6 frames */
+  }
+}
+
+/* OLD Soil Creature Animations - REMOVED/COMMENTED
 .soil-creature.active {
   animation: soilCreatureIdle 4s ease-in-out infinite;
 }
@@ -317,6 +332,7 @@ body {
     filter: brightness(1);
   }
 }
+*/
 
 /* ==========================================================================
    LIGHT CREATURE - SPECIFIC STYLES & ANIMATIONS
@@ -384,26 +400,17 @@ body {
   background-color: #fadf9b; /* Even lighter warm yellow */
 }
 
-/* LightSoil condition specific background styles */ /* NEW SECTION */
+/* LightSoil condition specific background styles */ 
 .framebackground.lightsoil-active-bg {
-  /* Define a unique background for when both light and soil are active */
-  /* Example: could be a blend, a new image, or a complex gradient */
-  background-color: var(--all-three); /* Using the blended color as an example */
-  /* Or an image:
-  background-image: url('../images/lightsoil-background.jpg'); 
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  */
+  background-color: var(--all-three); 
 }
 
 /* ==========================================================================
-   LIGHTSOIL CREATURE - SPECIFIC STYLES & ANIMATIONS (NEW SECTION)
+   LIGHTSOIL CREATURE - SPECIFIC STYLES & ANIMATIONS
    ========================================================================== */
 
 .lightsoil-creature.active {
-  /* You can create a unique animation or reuse/modify an existing one */
-  animation: lightSoilCreaturePulse 5s ease-in-out infinite alternate; /* Example: Slower, alternating pulse */
+  animation: lightSoilCreaturePulse 5s ease-in-out infinite alternate; 
 }
 
 @keyframes lightSoilCreaturePulse {
@@ -463,22 +470,22 @@ body {
    RESPONSIVE ADJUSTMENTS - CREATURE SIZE
    ========================================================================== */
 
-@media (max-width: 768px) { /* Portrait phone views */
-  .idle-creature, .soil-creature, .light-creature, .lightsoil-creature { /* ADDED .lightsoil-creature */
+@media (max-width: 768px) { 
+  .idle-creature, .soil-creature, .light-creature, .lightsoil-creature { 
     width: min(35vw, 30vh);
     height: min(35vw, 30vh);
   }
 }
 
-@media (max-height: 500px) { /* Very short viewport heights */
-  .idle-creature, .soil-creature, .light-creature, .lightsoil-creature { /* ADDED .lightsoil-creature */
+@media (max-height: 500px) { 
+  .idle-creature, .soil-creature, .light-creature, .lightsoil-creature { 
     width: min(30vw, 25vh);
     height: min(30vw, 25vh);
   }
 }
 
-@media (min-width: 1200px) { /* Larger screens / desktops */
-  .idle-creature, .soil-creature, .light-creature, .lightsoil-creature { /* ADDED .lightsoil-creature */
+@media (min-width: 1200px) { 
+  .idle-creature, .soil-creature, .light-creature, .lightsoil-creature { 
     width: min(35vw, 40vh); 
     height: min(35vw, 40vh);
   }
@@ -489,10 +496,10 @@ body {
    ========================================================================== */
 @media (orientation: landscape) and (hover: none) and (pointer: coarse) {
   body {
-    overflow: hidden; /* Prevent scrolling on landscape touch devices */
+    overflow: hidden; 
   }
   
-  .idle-creature, .soil-creature, .light-creature, .lightsoil-creature { /* ADDED .lightsoil-creature */
+  .idle-creature, .soil-creature, .light-creature, .lightsoil-creature { 
     width: min(50vw, 40vh); 
     height: min(50vw, 40vh); 
   }
