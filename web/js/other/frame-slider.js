@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let initialFrameOffset = 0; // Stores frame's visual offset when drag starts
     let currentOffset = 0;      // Tracks the current actual visual offset of the frame
     let isOpen = false;
+    let wobbleTimeoutId = null; // Added to manage wobble timeout
     
     window.frameSliderState = { isOpen: false }; // Global state
     
@@ -92,6 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Adjusts frame position on window resize
     window.addEventListener('resize', () => {
+        if (!frameidle) return; // Ensure frameidle exists
         const frameHeight = frameidle.offsetHeight; // Get current height
         let newTargetOffsetOnResize = 0;
 
@@ -105,14 +107,40 @@ document.addEventListener('DOMContentLoaded', () => {
         currentOffset = newTargetOffsetOnResize;
     });
     
-    // Mouse Events
-    if (frametop) {
-        frametop.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            initialMouseY = e.clientY;
-            initialFrameOffset = currentOffset; // Capture the frame's current offset at drag start
-            e.preventDefault(); // Prevent text selection, etc.
+    if (frameidle) {
+        // Wobble effect on click
+        frameidle.addEventListener('click', (event) => {
+            // Prevent wobble if the click was on the frametop (to avoid double-triggering or interfering with drag)
+            if (frametop && (event.target === frametop || frametop.contains(event.target))) {
+                // Click was on frametop, let drag/snap logic handle it.
+                // Or, you can remove this condition if you want wobble even when frametop is clicked.
+            } else {
+                // If already wobbling, clear previous timeout and remove class to restart animation smoothly
+                if (wobbleTimeoutId) {
+                    clearTimeout(wobbleTimeoutId);
+                    frameidle.classList.remove('frame-is-wobbling');
+                    // Force a reflow to ensure the animation restarts if re-clicked quickly
+                    void frameidle.offsetWidth; 
+                }
+
+                frameidle.classList.add('frame-is-wobbling');
+
+                wobbleTimeoutId = setTimeout(() => {
+                    frameidle.classList.remove('frame-is-wobbling');
+                    wobbleTimeoutId = null; // Reset the timeout ID
+                }, 5000); // Remove class after 5 seconds (5000 milliseconds)
+            }
         });
+
+        // Mouse Events for dragging
+        if (frametop) {
+            frametop.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                initialMouseY = e.clientY;
+                initialFrameOffset = currentOffset; // Capture the frame's current offset at drag start
+                e.preventDefault(); // Prevent text selection, etc.
+            });
+        }
     }
     
     document.addEventListener('mousemove', (e) => {
@@ -130,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // Touch Events
+    // Touch Events for dragging
     if (frametop) {
         frametop.addEventListener('touchstart', (e) => {
             isDragging = true;

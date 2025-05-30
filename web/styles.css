@@ -228,6 +228,33 @@ body {
 }
 
 /* ==========================================================================
+   FRAME IDLE - WOBBLE ANIMATION
+   ========================================================================== */
+
+@keyframes wobbleEffect {
+  0%, 100% {
+    transform: rotate(0deg) translateZ(0);
+  }
+  25% {
+    transform: rotate(1.2deg) translateX(2px) translateZ(0);
+  }
+  50% {
+    transform: rotate(0deg) translateX(0px) translateZ(0);
+  }
+  75% {
+    transform: rotate(-1.2deg) translateX(-2px) translateZ(0);
+  }
+}
+
+.frame-is-wobbling {
+  animation-name: wobbleEffect;
+  animation-duration: 0.25s; /* Duration of one wobble cycle */
+  animation-iteration-count: 20; /* 0.25s * 20 = 5 seconds total */
+  animation-timing-function: ease-in-out;
+  will-change: transform; /* Optimize for transform animation */
+}
+
+/* ==========================================================================
    CREATURES
    ========================================================================== */
 
@@ -236,11 +263,11 @@ body {
 .light-creature,
 .lightsoil-creature {
   position: absolute; 
-  top: 50%;
+  top: 50%; 
   left: 50%;
-  transform: translate(-50%, -50%) translateZ(0);
-  width: min(70vw, 40vh);
-  height: min(70vw, 40vh); 
+  transform: translate(-50%, -50%) translateZ(0); /* Center the creature */
+  width: min(80vw, 60vh); /* Responsive width */
+  height: min(80vw, 60vh); /* Responsive height */
   background-size: contain; /* Default, overridden by .soil-creature */
   background-repeat: no-repeat;
   background-position: center; /* Default, overridden by .soil-creature */
@@ -255,23 +282,7 @@ body {
   -webkit-backface-visibility: hidden;
 }
 
-.test {
-  background-image: url(sprites/creatures/soil-creature.png); /* Path to your 6-frame sprite sheet */
-  background-size: 600% 100%; /* 6 columns, 1 row */
-  background-position: 80% 0%;   /* Start at the first frame (controlled by JS) */
-  z-index: 1000000; /* Ensure soil creature is above the background */
-  display: block;
-  background-color: #699bc8; /* Temporary background color for testing */
-  width: 100px; /* Temporary width for testing */
-  height: 100px; /* Temporary height for testing */
-  position: center;
-  top: 50%;
-  left: 50%;
-}
-
-
 /* Specific creature images */
-
 .soil-creature {
   background-image: url('../sprites/creatures/soil-creature.png'); /* Path to your 6-frame sprite sheet */
   background-size: 600% 100%; /* 6 columns, 1 row */
