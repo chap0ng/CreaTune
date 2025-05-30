@@ -137,18 +137,22 @@ class SoilHandler {
         if (this.soilCreatureVisual && this.soilCreatureVisual.classList.contains('active')) {
             this.soilCreatureCurrentFrame++; 
 
+            // Loop back to the first frame if we've gone past the last one
             if (this.soilCreatureCurrentFrame >= this.soilCreatureTotalFrames) {
                 this.soilCreatureCurrentFrame = 0; 
             }
             
-            const newPositionX = -(this.soilCreatureCurrentFrame * 100) + '%';
+            // Calculate newPositionX based on currentFrame (0-5) * 20%
+            // This will result in 0%, 20%, 40%, 60%, 80%, 100%
+            const newPositionX = (this.soilCreatureCurrentFrame * 20) + '%';
             this.soilCreatureVisual.style.backgroundPositionX = newPositionX;
 
-            if (this.debugMode && Math.random() < 0.2) { 
-                 console.log(`💧 Soil Creature frame: ${this.soilCreatureCurrentFrame}, posX: ${newPositionX}`);
+            if (this.debugMode && Math.random() < 0.2) { // Reduced logging frequency
+                 console.log(`💧 Soil Creature frame index: ${this.soilCreatureCurrentFrame}, backgroundPositionX set to: ${newPositionX}`);
             }
         }
     }
+
 
     createToyPianoPattern() {
         if (!this.toyPianoSynth) return;

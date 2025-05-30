@@ -255,6 +255,21 @@ body {
   -webkit-backface-visibility: hidden;
 }
 
+.test {
+  background-image: url(sprites/creatures/soil-creature.png); /* Path to your 6-frame sprite sheet */
+  background-size: 600% 100%; /* 6 columns, 1 row */
+  background-position: 80% 0%;   /* Start at the first frame (controlled by JS) */
+  z-index: 1000000; /* Ensure soil creature is above the background */
+  display: block;
+  background-color: #699bc8; /* Temporary background color for testing */
+  width: 100px; /* Temporary width for testing */
+  height: 100px; /* Temporary height for testing */
+  position: center;
+  top: 50%;
+  left: 50%;
+}
+
+
 /* Specific creature images */
 
 .soil-creature {
