@@ -205,10 +205,10 @@ body {
 }
 
 .framebackground.soil-connected-bg {
-  background-image: url('../images/soil-background.jpg');
+  background-image: url(images/soil-background.jpg);
   background-size: cover;
   background-position: center;
-  background-repeat: no-repeat;
+  background-repeat: repeat;
 }
 
 .framebackground.temp-active-bg { 
