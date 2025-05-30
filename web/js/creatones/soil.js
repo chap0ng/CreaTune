@@ -27,6 +27,10 @@ class SoilHandler {
             soil: { connected: false }
         };
 
+        // Sprite Animation State
+        this.soilCreatureCurrentFrame = 0; // Current frame, 0-indexed (0 to 5 for 6 frames)
+        this.soilCreatureTotalFrames = 6;  // Total frames in your sprite sheet
+
         // DOM Elements
         this.soilCreatureVisual = document.querySelector('.soil-creature');
         this.frameBackground = document.querySelector('.framebackground');
@@ -56,7 +60,7 @@ class SoilHandler {
             if (window.Tone && window.creatune) {
                 if (this.debugMode) console.log('💧 SoilHandler (Toypiano): Core Dependencies ready.');
                 this.setupListeners();
-                this.updateUI();
+                this.updateUI(); // Initial UI setup
                 if (Tone.context.state === 'running') {
                     this.handleAudioContextRunning();
                 }
@@ -131,11 +135,17 @@ class SoilHandler {
 
     triggerCreatureAnimation() {
         if (this.soilCreatureVisual && this.soilCreatureVisual.classList.contains('active')) {
-            this.soilCreatureVisual.classList.remove('animate-once');
-            void this.soilCreatureVisual.offsetWidth; 
-            this.soilCreatureVisual.classList.add('animate-once');
-            if (this.debugMode && Math.random() < 0.1) { 
-                 console.log('💧 Soil Creature animation triggered');
+            this.soilCreatureCurrentFrame++; 
+
+            if (this.soilCreatureCurrentFrame >= this.soilCreatureTotalFrames) {
+                this.soilCreatureCurrentFrame = 0; 
+            }
+            
+            const newPositionX = -(this.soilCreatureCurrentFrame * 100) + '%';
+            this.soilCreatureVisual.style.backgroundPositionX = newPositionX;
+
+            if (this.debugMode && Math.random() < 0.2) { 
+                 console.log(`💧 Soil Creature frame: ${this.soilCreatureCurrentFrame}, posX: ${newPositionX}`);
             }
         }
     }
@@ -146,7 +156,7 @@ class SoilHandler {
         this.toyPianoLoop = new Tone.Pattern((time, note) => {
             const velocity = Math.max(0.3, this.currentSoilAppValue * 0.7 + 0.2);
             this.toyPianoSynth.triggerAttackRelease(note, "8n", time, velocity);
-            this.triggerCreatureAnimation(); // Trigger sprite animation
+            this.triggerCreatureAnimation(); 
         }, toyPianoNotes, "randomWalk");
         this.toyPianoLoop.interval = "4n";
         this.toyPianoLoop.humanize = "16n";
@@ -318,8 +328,11 @@ class SoilHandler {
             this.soilCreatureVisual.classList.toggle('active', showCreature);
             
             if (wasActive && !showCreature) { // If creature is becoming inactive
-                this.soilCreatureVisual.classList.remove('animate-once'); // Stop animation
+                // Reset to the first frame when it becomes inactive
+                this.soilCreatureCurrentFrame = 0;
+                this.soilCreatureVisual.style.backgroundPositionX = '0%';
             }
+            // No longer need to remove 'animate-once' as it's not used
 
             this.soilCreatureVisual.classList.remove('soil-dry', 'soil-humid', 'soil-wet');
             if (showCreature) { 
