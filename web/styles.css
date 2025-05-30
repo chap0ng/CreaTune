@@ -106,7 +106,7 @@ body {
   grid-area: frameleft; 
   background-color: var(--warm-beige);
   background-image: url(sprites/frame/frameropel.png); 
-  background-size: 100% 100%; 
+  background-size: 60%;
   background-position: center; 
   background-repeat: no-repeat; 
 }
@@ -114,7 +114,7 @@ body {
   grid-area: frameright; 
   background-color: var(--warm-beige);
   background-image: url(sprites/frame/frameropel.png); 
-  background-size: 100% 100%; 
+  background-size: 60%; 
   background-position: center;
   background-repeat: no-repeat;
 }
@@ -225,34 +225,6 @@ body {
     radial-gradient(circle at 75% 75%, rgba(142,164,125,0.2) 1px, transparent 1px);
   background-size: 30px 30px, 15px 15px;
   background-position: 0 0, 15px 15px;
-}
-
-/* ==========================================================================
-   FRAME IDLE - WOBBLE ANIMATION
-   ========================================================================== */
-
-@keyframes wobbleEffect {
-  0%, 100% {
-    transform: translateX(0px) scaleY(1) translateZ(0);
-  }
-  25% {
-    transform: translateX(-4px) scaleY(1.03) translateZ(0); /* Move left, stretch slightly vertically */
-  }
-  50% {
-    transform: translateX(0px) scaleY(0.97) translateZ(0); /* Back to center X, squash slightly vertically */
-  }
-  75% {
-    transform: translateX(4px) scaleY(1.03) translateZ(0);  /* Move right, stretch slightly vertically */
-  }
-}
-
-
-.frame-is-wobbling {
-  animation-name: wobbleEffect;
-  animation-duration: 0.25s; /* Duration of one wobble cycle */
-  animation-iteration-count: 20; /* 0.25s * 20 = 5 seconds total */
-  animation-timing-function: ease-in-out;
-  will-change: transform; /* Optimize for transform animation */
 }
 
 /* ==========================================================================
