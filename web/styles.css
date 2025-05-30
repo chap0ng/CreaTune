@@ -233,18 +233,19 @@ body {
 
 @keyframes wobbleEffect {
   0%, 100% {
-    transform: rotate(0deg) translateZ(0);
+    transform: translateX(0px) scaleY(1) translateZ(0);
   }
   25% {
-    transform: rotate(1.2deg) translateX(2px) translateZ(0);
+    transform: translateX(-4px) scaleY(1.03) translateZ(0); /* Move left, stretch slightly vertically */
   }
   50% {
-    transform: rotate(0deg) translateX(0px) translateZ(0);
+    transform: translateX(0px) scaleY(0.97) translateZ(0); /* Back to center X, squash slightly vertically */
   }
   75% {
-    transform: rotate(-1.2deg) translateX(-2px) translateZ(0);
+    transform: translateX(4px) scaleY(1.03) translateZ(0);  /* Move right, stretch slightly vertically */
   }
 }
+
 
 .frame-is-wobbling {
   animation-name: wobbleEffect;
