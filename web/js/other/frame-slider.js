@@ -5,7 +5,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const frameleft = document.querySelector('.frameleft');
     const frameright = document.querySelector('.frameright');
 
-    // Get references to new UI elements
+    // Get references to UI elements
+    const interactiveUIContainer = document.getElementById('interactive-ui-container'); // Updated
     const notesDisplay = document.getElementById('notes-display');
     const songModeToggle = document.getElementById('song-mode-toggle');
     const songModeToggleImg = songModeToggle ? songModeToggle.querySelector('img') : null;
@@ -16,15 +17,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentOffset = 0;
     let isOpen = false;
     
-    // State for song mode
     let isSongModeActive = false;
-    // Image paths (adjust if your paths/names are different)
     const songModeActiveImgSrc = 'sprites/ui/song_mode_active.png';
     const songModeInactiveImgSrc = 'sprites/ui/song_mode_inactive.png';
 
     window.frameSliderState = { 
         isOpen: false,
-        isSongModeActive: false // Expose song mode state if needed by other scripts
+        isSongModeActive: false
     };
     
     document.body.style.overflow = 'hidden'; 
@@ -56,13 +55,10 @@ document.addEventListener('DOMContentLoaded', () => {
         currentOffset = clampedOffsetForDrag;
     }
     
-    // Function to update visibility of interactive UI elements
     function updateInteractiveUIState(isFrameOpen) {
-        if (notesDisplay) {
-            notesDisplay.classList.toggle('visible', isFrameOpen);
-        }
-        if (songModeToggle) {
-            songModeToggle.classList.toggle('visible', isFrameOpen);
+        // Toggle visibility of the container
+        if (interactiveUIContainer) { 
+            interactiveUIContainer.classList.toggle('visible', isFrameOpen);
         }
     }
 
@@ -76,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         isOpen = finalSnapPosition > 0;
         window.frameSliderState.isOpen = isOpen;
-        updateInteractiveUIState(isOpen); // Update UI visibility
+        updateInteractiveUIState(isOpen); 
 
         const elementsToTransform = [frametop, document.querySelector('.corner1'), document.querySelector('.corner2')];
         const elementsToMargin = [framebackground, frameleft, frameright];
@@ -115,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
             applyFrameOffset(newTargetOffsetOnResize);
         });
         currentOffset = newTargetOffsetOnResize;
-        updateInteractiveUIState(isOpen); // Ensure UI visibility is correct on resize
+        updateInteractiveUIState(isOpen); 
     });
     
     if (frameidle) {
@@ -167,25 +163,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Event listener for song mode toggle button
     if (songModeToggle && songModeToggleImg) {
         songModeToggle.addEventListener('click', () => {
             isSongModeActive = !isSongModeActive;
             songModeToggleImg.src = isSongModeActive ? songModeActiveImgSrc : songModeInactiveImgSrc;
             window.frameSliderState.isSongModeActive = isSongModeActive;
-            
-            // Optional: Dispatch a custom event if other parts of your app need to know about song mode changes
-            // document.dispatchEvent(new CustomEvent('songModeChanged', { detail: { isActive: isSongModeActive } }));
-            console.log('Song mode toggled:', isSongModeActive); // For debugging
+            console.log('Song mode toggled:', isSongModeActive);
         });
     }
 
-    // Expose a function to update notes display (called from other scripts)
     window.updateNotesDisplay = function(notesText) {
         if (notesDisplay) {
             notesDisplay.textContent = notesText;
         }
     }
-    // Initialize UI state based on initial isOpen (which is false)
+    
+    // Initialize UI state
     updateInteractiveUIState(isOpen);
 });
