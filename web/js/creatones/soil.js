@@ -142,12 +142,10 @@ class SoilHandler {
                 this.soilCreatureCurrentFrame = 0; 
             }
             
-            // Calculate newPositionX based on currentFrame (0-5) * 20%
-            // This will result in 0%, 20%, 40%, 60%, 80%, 100%
             const newPositionX = (this.soilCreatureCurrentFrame * 20) + '%';
             this.soilCreatureVisual.style.backgroundPositionX = newPositionX;
 
-            if (this.debugMode && Math.random() < 0.2) { // Reduced logging frequency
+            if (this.debugMode && Math.random() < 0.2) { 
                  console.log(`💧 Soil Creature frame index: ${this.soilCreatureCurrentFrame}, backgroundPositionX set to: ${newPositionX}`);
             }
         }
@@ -161,8 +159,14 @@ class SoilHandler {
             const velocity = Math.max(0.3, this.currentSoilAppValue * 0.7 + 0.2);
             this.toyPianoSynth.triggerAttackRelease(note, "8n", time, velocity);
             this.triggerCreatureAnimation(); 
+
+            // NEW: Update the notes display with the played toy piano note
+            if (typeof window.updateNotesDisplay === 'function') {
+                window.updateNotesDisplay(note);
+            }
+
         }, toyPianoNotes, "randomWalk");
-        this.toyPianoLoop.interval = "4n";
+        this.toyPianoLoop.interval = "4n"; // Default interval, can be changed by updateSoundParameters
         this.toyPianoLoop.humanize = "16n";
     }
 
