@@ -453,10 +453,11 @@ body {
   display: none; /* Initially hidden */
 }
 
-/* NEW: Record Mode Pulsing Feedback */
+/* RE-ADD Record Mode Pulsing Feedback */
 .framebackground.record-mode-pulsing {
-  animation: recordPulseEffect 5s ease-in-out infinite alternate;
+  animation: recordPulseEffect 1.2s ease-in-out infinite alternate; /* Adjusted duration for a common pulse feel */
 }
+
 
 @keyframes recordPulseEffect {
   0% {
