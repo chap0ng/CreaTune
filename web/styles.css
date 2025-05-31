@@ -67,10 +67,11 @@ body {
   grid-template-columns: 20px 1fr 20px;
   grid-template-rows: 20px 1fr 20px;
   grid-template-areas:
+
     "corner1   frametop   corner2"
     "frameleft framebackground frameright"
     "corner3   framebottom  corner4";
-  
+
   aspect-ratio: 2412 / 1080;
   width: 100%;
   height: 100%;
@@ -205,8 +206,9 @@ body {
 }
 
 .framebackground.soil-connected-bg {
-  background-image: url(images/soil-background.jpg);
+  /* background-image: url('../sprites/backgrounds/soilbackground.png'); /* Path to your soil connected background */
   background-size: cover;
+  background-color: #c0c0c0;
   background-position: center;
   background-repeat: repeat;
 }
@@ -355,7 +357,7 @@ body {
 
 /* LightSoil condition specific background styles */ 
 .framebackground.lightsoil-active-bg {
-  background-color: var(--all-three); 
+  background-color: var(--all-three);
 }
 
 /* ==========================================================================
@@ -433,7 +435,6 @@ body {
   font-size: 45px;
   color: var(--coral-red);
   text-align: center;
-  /* display: center; */ /* Invalid, text-align handles text centering */
 }
 
 #stoprecordmode {
@@ -458,7 +459,6 @@ body {
   animation: recordPulseEffect 1.2s ease-in-out infinite alternate; /* Adjusted duration for a common pulse feel */
 }
 
-
 @keyframes recordPulseEffect {
   0% {
     box-shadow: 0 0 5px 2px rgba(230, 105, 90, 0.25); /* Subtle coral-red glow */
@@ -469,7 +469,6 @@ body {
     transform: scale(1.005); /* Optional: very slight scale pulse */
   }
 }
-
 
 /* ==========================================================================
    RESPONSIVE ADJUSTMENTS - CREATURE SIZE
