@@ -267,8 +267,12 @@ body {
 }
 
 .light-creature {
-  background-image: url('../sprites/creatures/light-creature.png');
+  background-image: url('../sprites/creatures/light-creature-sprites.png'); /* <<< NEW: Path to your light creature 6-frame sprite sheet */
+  background-size: 600% 100%; /* <<< NEW: Assuming 6 frames, (6 * 100)% width */
+  background-position: 0% 0%;   /* <<< NEW: Start at the first frame (controlled by JS) */
+  z-index: 10; /* Optional: if it needs to be above other specific elements */
 }
+
 
 .lightsoil-creature { 
   background-image: url('../sprites/creatures/lightsoil-creature.png'); 
@@ -295,17 +299,6 @@ body {
 
 .light-creature.active {
   animation: lightCreaturePulse 4s ease-in-out infinite;
-}
-
-@keyframes lightCreaturePulse {
-  0%, 100% {
-    transform: translate(-50%, -50%) scale(1) translateZ(0);
-    filter: brightness(1);
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.05) translateY(-3px) translateZ(0);
-    filter: brightness(1.1);
-  }
 }
 
 /* Light condition specific visual styles for the creature itself */
@@ -439,19 +432,25 @@ body {
 
 #stoprecordmode {
   position: absolute;
-  top: 30px;
-  left: 30px;
-  padding: 0px 10px;
+  top: 30px; 
+  left: 30px; 
+  width: 40px; 
+  height: 40px; 
+  padding: 0; 
   font-family: 'VT323', monospace;
-  font-size: 20px;
+  font-size: 28px; 
+  line-height: 40px; 
+  text-align: center; 
   color: var(--coral-red);
-  background-color: var(--light-gray);
-  background-image:url(sprites/creatures/light-creature.png); /* As per your existing style */
-  border: none;
-  border-radius: 5px;
+  background-color: var(--warm-beige); 
+  border: 2px solid var(--dark-slate); 
+  border-radius: 50%; 
   cursor: pointer;
   z-index: 1000; 
-  display: none; /* Initially hidden */
+  display: none; /* Initially hidden, controlled by JS */
+  box-shadow: 2px 2px 0px var(--dark-slate); 
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* RE-ADD Record Mode Pulsing Feedback */

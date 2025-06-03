@@ -181,7 +181,9 @@ class SoilHandler {
             const velocity = Math.max(0.3, this.currentSoilAppValue * 0.7 + 0.2);
             this.toyPianoSynth.triggerAttackRelease(note, "8n", time, velocity);
             this.triggerCreatureAnimation(); 
-            if (typeof window.updateNotesDisplay === 'function') window.updateNotesDisplay(note);
+            // if (typeof window.updateNotesDisplay === 'function') window.updateNotesDisplay(note); // Remove this
+            const noteDisplayElement = document.querySelector('#notes-display p'); // Add this
+            if (noteDisplayElement) noteDisplayElement.textContent = note;          // Add this
         }, toyPianoNotes, "randomWalk");
         this.toyPianoLoop.interval = "4n";
         this.toyPianoLoop.humanize = "16n";
@@ -548,10 +550,13 @@ class SoilHandler {
                         
                         this.toyPianoSynth.triggerAttackRelease(noteToPlay, "16n", time, velocity);
                         this.triggerCreatureAnimation(); 
-                        if (typeof window.updateNotesDisplay === 'function') window.updateNotesDisplay(noteToPlay);
+                        // if (typeof window.updateNotesDisplay === 'function') window.updateNotesDisplay(noteToPlay); // Remove this
+                        const noteDisplayElement = document.querySelector('#notes-display p'); // Add this
+                        if (noteDisplayElement) noteDisplayElement.textContent = noteToPlay;      // Add this
                         this.lastRhythmNoteTime = currentTime;
                     }
                 }, "16n").start(0); 
+                
                 if (this.debugMode) console.log('💧 _setupRhythmicPlayback (onload): Rhythmic loop initiated.');
 
             },
