@@ -173,7 +173,8 @@ class SoilHandler {
         }
         if (this.soilCreatureVisual && this.soilCreatureVisual.classList.contains('active')) {
             this.soilCreatureCurrentFrame = (this.soilCreatureCurrentFrame + 1) % this.soilCreatureTotalFrames;
-            this.soilCreatureVisual.style.backgroundPositionX = (this.soilCreatureCurrentFrame * (100 / this.soilCreatureTotalFrames)) + '%';
+            // Ensure this matches your working version for soil creature
+            this.soilCreatureVisual.style.backgroundPositionX = (this.soilCreatureCurrentFrame * 20) + '%';
         }
     }
 

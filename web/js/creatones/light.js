@@ -166,7 +166,8 @@ class LightHandler {
         }
         if (this.lightCreatureVisual && this.lightCreatureVisual.classList.contains('active')) {
             this.lightCreatureCurrentFrame = (this.lightCreatureCurrentFrame + 1) % this.lightCreatureTotalFrames;
-            this.lightCreatureVisual.style.backgroundPositionX = (this.lightCreatureCurrentFrame * (100 / this.lightCreatureTotalFrames)) + '%';
+            // Reverting to the 20% step logic as per your working version
+            this.lightCreatureVisual.style.backgroundPositionX = (this.lightCreatureCurrentFrame * 20) + '%';
         }
     }
 
@@ -566,9 +567,17 @@ class LightHandler {
                         const noteToPlay = notes[Math.floor(Math.random() * notes.length)];
                         const velocity = 0.4 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.03); 
                         
-                        if (this.debugMode && Math.random() < 0.3) console.log(`💡 Rhythmic trigger (ambientSynth)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}`);
+                        if (this.debugMode) {
+                            const currentSynthVolume = this.ambientSynth && this.ambientSynth.volume ? this.ambientSynth.volume.value : 'N/A';
+                            console.log(`💡 Rhythmic trigger (Light): Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}, SynthVol: ${currentSynthVolume}`);
+                        }
                         
-                        this.ambientSynth.triggerAttackRelease(noteToPlay, "8n", time, Math.min(0.9, velocity)); 
+                        if (this.ambientSynth && this.ambientSynth.volume.value !== -Infinity) { // Extra check
+                           this.ambientSynth.triggerAttackRelease(noteToPlay, "8n", time, Math.min(0.9, velocity)); 
+                        } else if (this.debugMode && this.ambientSynth) {
+                           console.warn(`💡 AmbientSynth not triggered. Volume is -Infinity or synth issue. Current Volume: ${this.ambientSynth.volume.value}`);
+                        }
+
                         this.triggerCreatureAnimation(); 
                         this._displayNote(noteToPlay); 
                         this.lastRhythmNoteTime = currentTime;
