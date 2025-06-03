@@ -6,14 +6,11 @@ class LightHandler {
         this.mainLoop = null;
         this.sparkleLoop = null;
 
-        // Synth for Record Mode Rhythmic Playback
-        this.rhythmicLightSynth = null; 
-
         // Audio Params
         this.fadeDuration = 1.0;
         this.baseAmbientVolume = 9; 
         this.baseSparkleVolume = 6; 
-        this.rhythmicPlaybackVolume = 8; // Volume for synth in record mode
+        this.rhythmicPlaybackVolume = 8; // Volume for ambientSynth in record mode
 
         // State
         this.isActive = false;
@@ -33,7 +30,7 @@ class LightHandler {
 
         // Sprite Animation State
         this.lightCreatureCurrentFrame = 0;
-        this.lightCreatureTotalFrames = 6; // Assuming 6 frames for light-creature-sprites.png
+        this.lightCreatureTotalFrames = 6; 
 
         // DOM Elements
         this.lightCreatureVisual = document.querySelector('.light-creature');
@@ -53,6 +50,10 @@ class LightHandler {
         this.rhythmNoteCooldown = 150;
         this.lastRhythmNoteTime = 0;
         this.recordedAudioBlobUrl = null; 
+
+        // Note Display
+        this.noteDisplayTimeoutId = null; 
+        this.lastDisplayedNote = null;    
 
         if (!this.lightCreatureVisual && this.debugMode) console.warn('💡 .light-creature element not found.');
         if (!this.frameBackground && this.debugMode) console.warn('💡 .framebackground element not found for LightHandler.');
@@ -142,12 +143,6 @@ class LightHandler {
                 volume: -Infinity
             }).connect(delay);
             
-            this.rhythmicLightSynth = new Tone.Synth({ 
-                oscillator: { type: 'triangle8' }, // A slightly different timbre
-                envelope: { attack: 0.02, decay: 0.3, sustain: 0.2, release: 0.4 },
-                volume: -Infinity
-            }).toDestination(); 
-
             this.createMainLoop();
             this.createSparkleLoop();
 
@@ -160,7 +155,6 @@ class LightHandler {
             this.toneInitialized = false;
             if (this.ambientSynth) { this.ambientSynth.dispose(); this.ambientSynth = null; }
             if (this.sparkleSynth) { this.sparkleSynth.dispose(); this.sparkleSynth = null; }
-            if (this.rhythmicLightSynth) { this.rhythmicLightSynth.dispose(); this.rhythmicLightSynth = null; }
             if (this.mainLoop) { this.mainLoop.dispose(); this.mainLoop = null; }
             if (this.sparkleLoop) { this.sparkleLoop.dispose(); this.sparkleLoop = null; }
         }
@@ -172,8 +166,23 @@ class LightHandler {
         }
         if (this.lightCreatureVisual && this.lightCreatureVisual.classList.contains('active')) {
             this.lightCreatureCurrentFrame = (this.lightCreatureCurrentFrame + 1) % this.lightCreatureTotalFrames;
-            // Assumes background-size: 600% 100% for 6 frames (0-5)
             this.lightCreatureVisual.style.backgroundPositionX = (this.lightCreatureCurrentFrame * (100 / this.lightCreatureTotalFrames)) + '%';
+        }
+    }
+
+    _displayNote(note) {
+        const noteDisplayElement = document.querySelector('#notes-display p');
+        if (noteDisplayElement) {
+            if (this.noteDisplayTimeoutId) {
+                clearTimeout(this.noteDisplayTimeoutId);
+            }
+            noteDisplayElement.textContent = note;
+            this.lastDisplayedNote = note; 
+            this.noteDisplayTimeoutId = setTimeout(() => {
+                if (noteDisplayElement.textContent === this.lastDisplayedNote) {
+                    noteDisplayElement.textContent = '-';
+                }
+            }, 750); 
         }
     }
 
@@ -185,9 +194,8 @@ class LightHandler {
             const velocity = this.currentLightAppValue * 0.5 + 0.1; 
             this.ambientSynth.triggerAttackRelease(note, "2n", time, velocity);
             this.triggerCreatureAnimation();
-            const noteDisplayElement = document.querySelector('#notes-display p');
-            if (noteDisplayElement) noteDisplayElement.textContent = note;
-        }, notes, "4n");
+            this._displayNote(note);
+        }, notes, "4n"); // Adjust for speed, e.g., "2n" is slower
         this.mainLoop.humanize = true;
     }
 
@@ -197,8 +205,8 @@ class LightHandler {
             if (!this.isPlaying || !this.sparkleSynth || this.sparkleSynth.volume.value === -Infinity) return;
             const freq = Math.random() * 1000 + 500; 
             this.sparkleSynth.triggerAttackRelease(freq, "32n", time, Math.random() * 0.3 + 0.05);
-            // Sparkles usually don't have a "note" to display, so we skip note display here.
-        }, "8t"); 
+            // Optionally display sparkles: this._displayNote("✨");
+        }, "8t"); // Adjust for speed, e.g., "4n" is slower
         this.sparkleLoop.probability = 0; 
     }
 
@@ -260,15 +268,14 @@ class LightHandler {
 
         if (this.frameBackground) {
             this.frameBackground.addEventListener('click', () => {
-                // Check if this creature is the one that should enter record mode
-                // This simple check assumes only one creature can be "dominant" for record mode at a time.
-                // You might need a more sophisticated global state manager if multiple creatures can be active.
                 if (this.deviceStates.light.connected && 
                     !this.isRecordMode &&              
                     this.isActive &&                    
                     this.audioEnabled &&                
                     this.toneInitialized &&
-                    !window.soilHandlerInstance?.isRecordMode) { // Prevent if soil is already in record mode             
+                    (!window.soilHandlerInstance || !window.soilHandlerInstance.isRecordMode) // Check other handlers
+                     /* && (!window.lightSoilHandlerInstance || !window.lightSoilHandlerInstance.isRecordMode) */ // If you add more
+                    ) {             
                     this.enterRecordMode();
                 } else if (this.debugMode && !this.isRecordMode) {
                     console.log(`💡 Record mode NOT entered for Light. Conditions: light.connected=${this.deviceStates.light.connected}, isRecordMode=${this.isRecordMode}, isActive=${this.isActive}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}, soilRecordMode=${window.soilHandlerInstance?.isRecordMode}`);
@@ -279,7 +286,7 @@ class LightHandler {
         if (this.stopRecordModeButton) {
             this.stopRecordModeButton.addEventListener('click', (event) => {
                 event.stopPropagation(); 
-                if (this.isRecordMode) { // Only if THIS handler is in record mode
+                if (this.isRecordMode) { 
                     this.exitRecordMode();
                 }
             });
@@ -398,23 +405,26 @@ class LightHandler {
 
         if (this.frameBackground) {
             const frameActive = this.deviceStates.light.connected && this.isActive && !this.isExternallyMuted;
-            this.frameBackground.classList.toggle('light-active-bg', frameActive); // Generic active class
+            this.frameBackground.classList.toggle('light-active-bg', frameActive); 
             this.frameBackground.classList.remove('light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg');
             if(frameActive) {
                 this.frameBackground.classList.add(`light-${this.currentLightCondition.replace('_', '-')}-bg`);
             }
-            // Handle record mode pulsing, ensuring it doesn't conflict with soil's
-            // This assumes only one can be in record mode. If both, the last one to set it wins.
-            this.frameBackground.classList.toggle('record-mode-pulsing', this.isRecordMode);
+            
+            if (this.isRecordMode) {
+                this.frameBackground.classList.add('record-mode-pulsing');
+            } else if (!window.soilHandlerInstance || !window.soilHandlerInstance.isRecordMode) {
+                this.frameBackground.classList.remove('record-mode-pulsing');
+            }
         }
 
         if (this.stopRecordModeButton) {
-            // Show button if this handler is in record mode.
-            // If another handler (e.g. soil) is in record mode, its updateUI will handle the button.
-            // This could be problematic if both try to control it simultaneously.
-            // A better approach might be a global manager for the button if multiple handlers can be in record mode.
-            // For now, this will make the button visible if *this* instance is in record mode.
-            this.stopRecordModeButton.style.display = this.isRecordMode ? 'block' : 'none';
+            const soilInRecMode = window.soilHandlerInstance && window.soilHandlerInstance.isRecordMode;
+            if (this.isRecordMode) { 
+                this.stopRecordModeButton.style.display = 'block';
+            } else if (!soilInRecMode) { 
+                this.stopRecordModeButton.style.display = 'none';
+            }
         }
     }
 
@@ -475,7 +485,7 @@ class LightHandler {
                     if (this.recorder && this.recorder.state === "started") {
                         try { await this.recorder.stop(); } catch(e) {/*ignore*/}
                     }
-                    if (this.isRecordMode) this.exitRecordMode(true); // Force exit if state is inconsistent
+                    if (this.isRecordMode) this.exitRecordMode(true); 
                     return;
                 }
                 
@@ -501,16 +511,16 @@ class LightHandler {
     }
 
     _setupRhythmicPlayback(audioBlob) {
-        if (!this.isRecordMode || !this.toneInitialized || !this.rhythmicLightSynth) {
-            if(this.debugMode) console.warn(`💡 _setupRhythmicPlayback: Blocked. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, rhythmicLightSynth=${!!this.rhythmicLightSynth}. Forcing exit.`);
+        if (!this.isRecordMode || !this.toneInitialized || !this.ambientSynth) { 
+            if(this.debugMode) console.warn(`💡 _setupRhythmicPlayback: Blocked. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, ambientSynth=${!!this.ambientSynth}. Forcing exit.`);
             this.exitRecordMode(true); 
             return;
         }
-        if (this.debugMode) console.log('💡 _setupRhythmicPlayback: Starting...');
+        if (this.debugMode) console.log('💡 _setupRhythmicPlayback: Starting using ambientSynth...');
         
-        if (this.rhythmicLightSynth && this.rhythmicLightSynth.volume) {
-            this.rhythmicLightSynth.volume.value = this.rhythmicPlaybackVolume; 
-            if (this.debugMode) console.log(`💡 _setupRhythmicPlayback: rhythmicLightSynth volume set to ${this.rhythmicPlaybackVolume} dB.`);
+        if (this.ambientSynth && this.ambientSynth.volume) {
+            this.ambientSynth.volume.value = this.rhythmicPlaybackVolume; 
+            if (this.debugMode) console.log(`💡 _setupRhythmicPlayback: ambientSynth volume set to ${this.rhythmicPlaybackVolume} dB for rhythmic notes.`);
         }
 
         if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl); 
@@ -524,24 +534,27 @@ class LightHandler {
             loop: true,
             onload: () => {
                 if (!this.isRecordMode) { 
-                    if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Record mode exited while buffer was loading. Aborting start.');
+                    if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Record mode exited. Aborting.');
                     if (this.recordedBufferPlayer) { this.recordedBufferPlayer.dispose(); this.recordedBufferPlayer = null; }
                     if (this.rhythmFollower) { this.rhythmFollower.dispose(); this.rhythmFollower = null; }
                     if (this.rhythmicLoop) { this.rhythmicLoop.dispose(); this.rhythmicLoop = null; }
+                    if(this.ambientSynth && this.ambientSynth.volume.value === this.rhythmicPlaybackVolume) {
+                        this.ambientSynth.volume.value = -Infinity;
+                    }
                     return;
                 }
-                if (!this.recordedBufferPlayer) { // Safety check
-                     if (this.debugMode) console.warn('💡 _setupRhythmicPlayback (onload): recordedBufferPlayer became null before operations. Aborting.'); return;
+                if (!this.recordedBufferPlayer) { 
+                     if (this.debugMode) console.warn('💡 _setupRhythmicPlayback (onload): recordedBufferPlayer became null. Aborting.'); return;
                 }
 
                 if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Recorded buffer player loaded.');
                 this.recordedBufferPlayer.connect(this.rhythmFollower); 
-                // this.recordedBufferPlayer.toDestination(); // Uncomment if you want to hear the recording
+                this.recordedBufferPlayer.toDestination(); 
                 this.recordedBufferPlayer.start();
-                if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Recorded buffer player started.');
+                if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Recorded buffer player started and sent to destination.');
 
                 this.rhythmicLoop = new Tone.Loop(time => {
-                    if (!this.isRecordMode || !this.rhythmFollower || !this.rhythmicLightSynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
+                    if (!this.isRecordMode || !this.rhythmFollower || !this.ambientSynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
                         return;
                     }
 
@@ -549,20 +562,19 @@ class LightHandler {
                     const currentTime = Tone.now() * 1000;
 
                     if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
-                        const notes = ["C5", "D5", "E5", "G5", "A5"]; // Higher notes for light
+                        const notes = ["C4", "D4", "E4", "G4", "A4"]; 
                         const noteToPlay = notes[Math.floor(Math.random() * notes.length)];
-                        const velocity = 0.3 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.03); // Adjusted scaling
+                        const velocity = 0.4 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.03); 
                         
-                        if (this.debugMode && Math.random() < 0.3) console.log(`💡 Rhythmic trigger! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}`);
+                        if (this.debugMode && Math.random() < 0.3) console.log(`💡 Rhythmic trigger (ambientSynth)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}`);
                         
-                        this.rhythmicLightSynth.triggerAttackRelease(noteToPlay, "16n", time, Math.min(0.8, velocity));
+                        this.ambientSynth.triggerAttackRelease(noteToPlay, "8n", time, Math.min(0.9, velocity)); 
                         this.triggerCreatureAnimation(); 
-                        const noteDisplayElement = document.querySelector('#notes-display p');
-                        if (noteDisplayElement) noteDisplayElement.textContent = noteToPlay;
+                        this._displayNote(noteToPlay); 
                         this.lastRhythmNoteTime = currentTime;
                     }
                 }, "16n").start(0); 
-                if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Rhythmic loop initiated.');
+                if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Rhythmic loop with ambientSynth initiated.');
             },
             onerror: (err) => {
                 console.error('❌ _setupRhythmicPlayback: Error loading recorded buffer player for Light:', err);
@@ -608,11 +620,8 @@ class LightHandler {
         if (this.rhythmFollower) {
             this.rhythmFollower.dispose(); this.rhythmFollower = null;
         }
-
-        if (this.rhythmicLightSynth && this.rhythmicLightSynth.volume) {
-             this.rhythmicLightSynth.volume.value = -Infinity; // Silence the record mode synth
-        }
-        // Reset generative synth volumes too, as they might have been muted
+        
+        // Ensure generative synths are silenced after record mode
         if (this.ambientSynth && this.ambientSynth.volume) this.ambientSynth.volume.value = -Infinity;
         if (this.sparkleSynth && this.sparkleSynth.volume) this.sparkleSynth.volume.value = -Infinity;
         
@@ -620,17 +629,21 @@ class LightHandler {
         this.isFadingOut = false;
         if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
 
-        if (this.debugMode) console.log(`💡 exitRecordMode: Cleanup complete.`);
+        if (this.noteDisplayTimeoutId) { 
+            clearTimeout(this.noteDisplayTimeoutId);
+            const noteDisplayElement = document.querySelector('#notes-display p');
+            if (noteDisplayElement) noteDisplayElement.textContent = '-';
+        }
         
-        this.updateUI(); // Update UI first to hide record mode elements
+        this.updateUI(); 
         
-        if (wasRecordMode || force) { // If it was in record mode, or forced, reassess generative audio
+        if (wasRecordMode || force) { 
             this.manageAudioAndVisuals(); 
         }
         if (this.debugMode) console.log(`💡 exitRecordMode: Finished. isRecordMode is now ${this.isRecordMode}, isPlayingGen is ${this.isPlaying}`);
     }
 
-    startAudio() { // For GENERATIVE audio
+    startAudio() { 
         if (this.isRecordMode) { 
             if (this.debugMode) console.log("💡 startAudio (generative): Blocked, in record mode.");
             return;
@@ -659,7 +672,7 @@ class LightHandler {
                 console.error("❌ startAudio (generative) Light: Critical: Re-init failed. Cannot start.");
                 return;
              }
-             if (this.isPlaying) return; // Re-check after init
+             if (this.isPlaying) return; 
         }
 
         if (this.debugMode) console.log('💡 startAudio (generative): Starting...');
@@ -679,7 +692,7 @@ class LightHandler {
         this.updateUI();
     }
 
-    stopAudio(force = false) { // For GENERATIVE audio
+    stopAudio(force = false) { 
         if (!this.audioEnabled || !this.toneInitialized) {
             this.isPlaying = false; this.isFadingOut = false;
             if (this.debugMode && !force) console.warn("💡 stopAudio (generative): Audio system not ready. Forcing isPlaying=false.");
@@ -734,7 +747,7 @@ class LightHandler {
             this.stopTimeoutId = setTimeout(completeStop, (this.fadeDuration * 1000 + 150)); 
         }
         
-        if (!force || !wasPlaying) { // Update UI immediately if not fading or forced
+        if (!force || !wasPlaying) { 
              this.updateUI();
         }
     }
