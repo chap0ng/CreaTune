@@ -304,17 +304,17 @@ body {
 
 /* Light condition specific visual styles for the creature itself */
 .light-creature.light-dark {
-  filter: brightness(0.7) saturate(0.6);
+  filter: brightness(1.0);
   animation-duration: 5s; 
 }
 
 .light-creature.light-dim {
-  filter: brightness(0.3) saturate(0.8);
+  filter: brightness(1.0)drop-shadow(0 0 1px var(--warm-yellow)); 
   animation-duration: 5s; 
 }
 
 .light-creature.light-bright {
-  filter: brightness(0.5) drop-shadow(0 0 3px var(--warm-yellow)); 
+  filter: brightness(1.0) drop-shadow(0 0 3px var(--warm-yellow)); 
   animation-duration: 3.5s;
 }
 

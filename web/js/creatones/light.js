@@ -129,7 +129,7 @@ class LightHandler {
 
             this.ambientSynth = new Tone.PolySynth(Tone.Synth, {
                 oscillator: { type: "sawtooth", count: 3, spread: 30 },
-                envelope: { attack: 0.1, decay: 0.5, sustain: 0.8, release: 1.5 },
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.2 },
                 volume: -Infinity
             }).connect(reverb);
 
@@ -405,13 +405,24 @@ class LightHandler {
         }
 
         if (this.frameBackground) {
-            const frameActive = this.deviceStates.light.connected && this.isActive && !this.isExternallyMuted;
-            this.frameBackground.classList.toggle('light-active-bg', frameActive); 
-            this.frameBackground.classList.remove('light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg');
-            if(frameActive) {
+            const showLightBackground = this.deviceStates.light.connected && !this.isExternallyMuted;
+            const isLightSystemActive = this.deviceStates.light.connected && this.isActive && !this.isExternallyMuted;
+
+            this.frameBackground.classList.toggle('light-active-bg', isLightSystemActive); 
+            
+            this.frameBackground.classList.remove(
+                'light-dark-bg', 
+                'light-dim-bg', 
+                'light-bright-bg', 
+                'light-very-bright-bg', 
+                'light-extremely-bright-bg'
+            );
+
+            if (showLightBackground) {
                 this.frameBackground.classList.add(`light-${this.currentLightCondition.replace('_', '-')}-bg`);
             }
             
+            // Record mode pulsing is handled separately and should remain
             if (this.isRecordMode) {
                 this.frameBackground.classList.add('record-mode-pulsing');
             } else if (!window.soilHandlerInstance || !window.soilHandlerInstance.isRecordMode) {
@@ -580,7 +591,7 @@ class LightHandler {
                         }
                         
                         if (this.ambientSynth && this.ambientSynth.volume.value !== -Infinity) { // Extra check
-                           this.ambientSynth.triggerAttackRelease(noteToPlay, "8n", time, Math.min(0.9, velocity)); 
+                           this.ambientSynth.triggerAttackRelease(noteToPlay, "16n", time, Math.min(0.9, velocity)); 
                         } else if (this.debugMode && this.ambientSynth) {
                            console.warn(`💡 AmbientSynth not triggered. Volume is -Infinity or synth issue. Current Volume: ${this.ambientSynth.volume.value}`);
                         }
