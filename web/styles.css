@@ -305,53 +305,68 @@ body {
 /* Light condition specific visual styles for the creature itself */
 .light-creature.light-dark {
   filter: brightness(0.7) saturate(0.6);
-  opacity: 0.8; 
+  animation-duration: 5s; 
 }
 
 .light-creature.light-dim {
-  filter: brightness(0.9) saturate(0.8);
+  filter: brightness(0.3) saturate(0.8);
   animation-duration: 5s; 
 }
 
 .light-creature.light-bright {
-  filter: brightness(1.1) drop-shadow(0 0 3px var(--warm-yellow)); 
+  filter: brightness(0.5) drop-shadow(0 0 3px var(--warm-yellow)); 
   animation-duration: 3.5s;
 }
 
 .light-creature.light-very-bright {
-  filter: brightness(1.2) drop-shadow(0 0 6px var(--warm-yellow));
+  filter: brightness(1.0) drop-shadow(0 0 6px var(--warm-yellow));
   animation-duration: 2.5s; 
 }
 
 .light-creature.light-extremely-bright {
-  filter: brightness(1.3) drop-shadow(0 0 9px var(--coral-red)); 
+  filter: brightness(1.0) drop-shadow(0 0 9px var(--coral-red)); 
   animation-duration: 1.8s; 
 }
 
 /* Light condition specific background styles */
 .framebackground.light-dark-bg {
+  background-size: cover;
   background-color: var(--warm-beige);
+  background-position: center;
+  background-repeat: repeat;
   background-image:url(sprites/backgrounds/Background_light.gif);
 
 }
 
 .framebackground.light-dim-bg {
+  background-size: cover;
   background-color: var(--warm-beige);
+  background-position: center;
+  background-repeat: repeat;
   background-image:url(sprites/backgrounds/Background_light.gif);
 }
 
 .framebackground.light-bright-bg {
+  background-size: cover;
   background-color: var(--warm-beige);
+  background-position: center;
+  background-repeat: repeat;
   background-image:url(sprites/backgrounds/Background_light.gif);
 }
 
 .framebackground.light-very-bright-bg {
+  background-size: cover;
   background-color: var(--warm-beige);
+  background-position: center;
+  background-repeat: repeat;
   background-image:url(sprites/backgrounds/Background_light.gif);
 }
 
 .framebackground.light-extremely-bright-bg {
+  background-size: cover;
   background-color: var(--warm-beige);
+  background-position: center;
+  background-repeat: repeat;
   background-image:url(sprites/backgrounds/Background_light.gif);
 }
 
@@ -450,7 +465,6 @@ body {
   text-align: center; 
   color: var(--coral-red);
   background-color: var(--warm-beige); 
-  border: 2px solid var(--dark-slate); 
   border-radius: 50%; 
   cursor: pointer;
   z-index: 1000; 

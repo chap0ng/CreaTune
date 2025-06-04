@@ -129,7 +129,7 @@ class LightHandler {
 
             this.ambientSynth = new Tone.PolySynth(Tone.Synth, {
                 oscillator: { type: "sawtooth", count: 3, spread: 30 },
-                envelope: { attack: 0.8, decay: 0.5, sustain: 0.8, release: 1.5 },
+                envelope: { attack: 0.1, decay: 0.5, sustain: 0.8, release: 1.5 },
                 volume: -Infinity
             }).connect(reverb);
 
@@ -519,13 +519,16 @@ class LightHandler {
         }
         if (this.debugMode) console.log('💡 _setupRhythmicPlayback: Starting using ambientSynth...');
         
-        // THIS BLOCK IS KEY FOR THE SYNTH VOLUME IN RECORD MODE
-        if (this.ambientSynth && this.ambientSynth.volume) {
-            this.ambientSynth.volume.value = this.rhythmicPlaybackVolume; 
-            // ADD/MODIFY THIS LOG for more clarity:
-            if (this.debugMode) console.log(`💡 _setupRhythmicPlayback: ambientSynth volume explicitly set to ${this.ambientSynth.volume.value} (target rhythmicPlaybackVolume: ${this.rhythmicPlaybackVolume}).`);
-        } else if (this.debugMode) { // Added else-if for better logging if synth/volume is missing
-            console.warn(`💡 _setupRhythmicPlayback: ambientSynth or its volume property not available when trying to set rhythmic volume. ambientSynth exists: ${!!this.ambientSynth}`);
+        if (this.ambientSynth) {
+            this.ambientSynth.releaseAll(); // ADD THIS to ensure clean state
+            if (this.ambientSynth.volume) {
+                this.ambientSynth.volume.value = this.rhythmicPlaybackVolume; 
+                if (this.debugMode) console.log(`💡 _setupRhythmicPlayback: ambientSynth volume explicitly set to ${this.ambientSynth.volume.value} (target rhythmicPlaybackVolume: ${this.rhythmicPlaybackVolume}).`);
+            } else if (this.debugMode) {
+                 console.warn(`💡 _setupRhythmicPlayback: ambientSynth.volume property not available when trying to set rhythmic volume.`);
+            }
+        } else if (this.debugMode) { 
+            console.warn(`💡 _setupRhythmicPlayback: ambientSynth not available when trying to set rhythmic volume.`);
         }
 
         if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl); 
@@ -746,8 +749,11 @@ class LightHandler {
             if (this.mainLoop && this.mainLoop.state === "started") this.mainLoop.stop(0);
             if (this.sparkleLoop && this.sparkleLoop.state === "started") this.sparkleLoop.stop(0);
             
-            if (this.ambientSynth && this.ambientSynth.volume) this.ambientSynth.volume.value = -Infinity;
-            if (this.sparkleSynth && this.sparkleSynth.volume) this.sparkleSynth.volume.value = -Infinity;
+            if (this.ambientSynth) { // Check if synth exists
+                this.ambientSynth.releaseAll(); // ADD THIS to release all voices
+                if (this.ambientSynth.volume) this.ambientSynth.volume.value = -Infinity;
+            }
+            if (this.sparkleSynth && this.sparkleSynth.volume) this.sparkleSynth.volume.value = -Infinity; // line ~728
             
             this.isFadingOut = false; 
             if (this.debugMode) console.log('💡 stopAudio (generative): Fully stopped and loops cleared.');
@@ -755,6 +761,10 @@ class LightHandler {
         };
 
         if (force || !wasPlaying) { 
+            // If forced, also ensure voices are released immediately before ramp
+            if (force && this.ambientSynth) {
+                this.ambientSynth.releaseAll(); // ADD THIS
+            }
             completeStop();
         } else { 
             this.stopTimeoutId = setTimeout(completeStop, (this.fadeDuration * 1000 + 150)); 
