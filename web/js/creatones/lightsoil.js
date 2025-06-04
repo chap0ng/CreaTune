@@ -28,7 +28,7 @@ class LightSoilHandler {
         this.padReverb = null;
         this.padLoop = null;
         this.fadeDuration = 2.0; // Longer fade for pads
-        this.basePadVolume = 5; // dB, fairly loud for "bright"
+        this.basePadVolume = 6; // dB, fairly loud for "bright"
         // --- End Tone.js components ---
 
         // --- DOM Elements ---
@@ -258,8 +258,8 @@ class LightSoilHandler {
             this.padReverb = new Tone.Reverb({ decay: 4, wet: 0.6 }).toDestination();
             this.padChorus = new Tone.Chorus({ frequency: 0.5, delayTime: 3.5, depth: 0.7, wet: 0.5 }).connect(this.padReverb);
             this.ambientPadSynth = new Tone.PolySynth(Tone.Synth, {
-                oscillator: { type: "fatsawtooth", count: 5, spread: 40 },
-                envelope: { attack: 1.5, decay: 0.5, sustain: 0.8, release: 3.0 },
+                oscillator: { type: "sine", count: 3, spread: 40 },
+                envelope: { attack: 0.05, decay: 0.5, sustain: 0.8, release: 1.0 },
                 volume: -Infinity
             }).connect(this.padChorus);
 

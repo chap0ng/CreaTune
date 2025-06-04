@@ -10,7 +10,7 @@ class LightHandler {
         this.fadeDuration = 1.0;
         this.baseAmbientVolume = 9; 
         this.baseSparkleVolume = 6; 
-        this.rhythmicPlaybackVolume = 9; // Volume for ambientSynth in record mode
+        this.rhythmicPlaybackVolume = 9; // Volume for the synth used in record mode
 
         // State
         this.isActive = false;
@@ -166,7 +166,6 @@ class LightHandler {
         }
         if (this.lightCreatureVisual && this.lightCreatureVisual.classList.contains('active')) {
             this.lightCreatureCurrentFrame = (this.lightCreatureCurrentFrame + 1) % this.lightCreatureTotalFrames;
-            // Reverting to the 20% step logic as per your working version
             this.lightCreatureVisual.style.backgroundPositionX = (this.lightCreatureCurrentFrame * 20) + '%';
         }
     }
@@ -196,7 +195,7 @@ class LightHandler {
             this.ambientSynth.triggerAttackRelease(note, "2n", time, velocity);
             this.triggerCreatureAnimation();
             this._displayNote(note);
-        }, notes, "2n"); // Adjust for speed, e.g., "2n" is slower
+        }, notes, "2n"); 
         this.mainLoop.humanize = true;
     }
 
@@ -206,8 +205,7 @@ class LightHandler {
             if (!this.isPlaying || !this.sparkleSynth || this.sparkleSynth.volume.value === -Infinity) return;
             const freq = Math.random() * 1000 + 500; 
             this.sparkleSynth.triggerAttackRelease(freq, "32n", time, Math.random() * 0.3 + 0.05);
-            // Optionally display sparkles: this._displayNote("✨");
-        }, "8t"); // Adjust for speed, e.g., "4n" is slower
+        }, "8t"); 
         this.sparkleLoop.probability = 0; 
     }
 
@@ -274,8 +272,7 @@ class LightHandler {
                     this.isActive &&                    
                     this.audioEnabled &&                
                     this.toneInitialized &&
-                    (!window.soilHandlerInstance || !window.soilHandlerInstance.isRecordMode) // Check other handlers
-                     /* && (!window.lightSoilHandlerInstance || !window.lightSoilHandlerInstance.isRecordMode) */ // If you add more
+                    (!window.soilHandlerInstance || !window.soilHandlerInstance.isRecordMode)
                     ) {             
                     this.enterRecordMode();
                 } else if (this.debugMode && !this.isRecordMode) {
@@ -422,7 +419,6 @@ class LightHandler {
                 this.frameBackground.classList.add(`light-${this.currentLightCondition.replace('_', '-')}-bg`);
             }
             
-            // Record mode pulsing is handled separately and should remain
             if (this.isRecordMode) {
                 this.frameBackground.classList.add('record-mode-pulsing');
             } else if (!window.soilHandlerInstance || !window.soilHandlerInstance.isRecordMode) {
@@ -523,23 +519,23 @@ class LightHandler {
     }
 
     _setupRhythmicPlayback(audioBlob) {
-        if (!this.isRecordMode || !this.toneInitialized || !this.ambientSynth) { 
-            if(this.debugMode) console.warn(`💡 _setupRhythmicPlayback: Blocked. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, ambientSynth=${!!this.ambientSynth}. Forcing exit.`);
+        // Using sparkleSynth for rhythmic playback
+        if (!this.isRecordMode || !this.toneInitialized || !this.sparkleSynth) { 
+            if(this.debugMode) console.warn(`💡 _setupRhythmicPlayback: Blocked. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, sparkleSynth=${!!this.sparkleSynth}. Forcing exit.`);
             this.exitRecordMode(true); 
             return;
         }
-        if (this.debugMode) console.log('💡 _setupRhythmicPlayback: Starting using ambientSynth...');
+        if (this.debugMode) console.log('💡 _setupRhythmicPlayback: Starting using sparkleSynth...');
         
-        if (this.ambientSynth) {
-            this.ambientSynth.releaseAll(); // ADD THIS to ensure clean state
-            if (this.ambientSynth.volume) {
-                this.ambientSynth.volume.value = this.rhythmicPlaybackVolume; 
-                if (this.debugMode) console.log(`💡 _setupRhythmicPlayback: ambientSynth volume explicitly set to ${this.ambientSynth.volume.value} (target rhythmicPlaybackVolume: ${this.rhythmicPlaybackVolume}).`);
+        if (this.sparkleSynth) {
+            if (this.sparkleSynth.volume) {
+                this.sparkleSynth.volume.value = this.rhythmicPlaybackVolume; 
+                if (this.debugMode) console.log(`💡 _setupRhythmicPlayback: sparkleSynth volume explicitly set to ${this.sparkleSynth.volume.value} (target rhythmicPlaybackVolume: ${this.rhythmicPlaybackVolume}).`);
             } else if (this.debugMode) {
-                 console.warn(`💡 _setupRhythmicPlayback: ambientSynth.volume property not available when trying to set rhythmic volume.`);
+                 console.warn(`💡 _setupRhythmicPlayback: sparkleSynth.volume property not available when trying to set rhythmic volume.`);
             }
         } else if (this.debugMode) { 
-            console.warn(`💡 _setupRhythmicPlayback: ambientSynth not available when trying to set rhythmic volume.`);
+            console.warn(`💡 _setupRhythmicPlayback: sparkleSynth not available when trying to set rhythmic volume.`);
         }
 
         if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl); 
@@ -557,8 +553,8 @@ class LightHandler {
                     if (this.recordedBufferPlayer) { this.recordedBufferPlayer.dispose(); this.recordedBufferPlayer = null; }
                     if (this.rhythmFollower) { this.rhythmFollower.dispose(); this.rhythmFollower = null; }
                     if (this.rhythmicLoop) { this.rhythmicLoop.dispose(); this.rhythmicLoop = null; }
-                    if(this.ambientSynth && this.ambientSynth.volume.value === this.rhythmicPlaybackVolume) {
-                        this.ambientSynth.volume.value = -Infinity;
+                    if(this.sparkleSynth && this.sparkleSynth.volume && this.sparkleSynth.volume.value === this.rhythmicPlaybackVolume) {
+                        this.sparkleSynth.volume.value = -Infinity;
                     }
                     return;
                 }
@@ -573,7 +569,7 @@ class LightHandler {
                 if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Recorded buffer player started and sent to destination.');
 
                 this.rhythmicLoop = new Tone.Loop(time => {
-                    if (!this.isRecordMode || !this.rhythmFollower || !this.ambientSynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
+                    if (!this.isRecordMode || !this.rhythmFollower || !this.sparkleSynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
                         return;
                     }
 
@@ -581,27 +577,26 @@ class LightHandler {
                     const currentTime = Tone.now() * 1000;
 
                     if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
-                        const notes = ["C4", "D4", "E4", "G4", "A4"]; 
-                        const noteToPlay = notes[Math.floor(Math.random() * notes.length)];
-                        const velocity = 0.4 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.03); 
+                        const freqToPlay = Math.random() * 700 + 300; 
+                        const velocity = 0.2 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.045); 
                         
                         if (this.debugMode) {
-                            const currentSynthVolume = this.ambientSynth && this.ambientSynth.volume ? this.ambientSynth.volume.value : 'N/A';
-                            console.log(`💡 Rhythmic trigger (Light): Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}, SynthVol: ${currentSynthVolume}`);
+                            const currentSynthVolume = this.sparkleSynth && this.sparkleSynth.volume ? this.sparkleSynth.volume.value : 'N/A';
+                            console.log(`💡 Rhythmic trigger (Light Sparkle): Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Freq: ${freqToPlay.toFixed(0)}, Velocity: ${velocity.toFixed(2)}, SynthVol: ${currentSynthVolume}`);
                         }
                         
-                        if (this.ambientSynth && this.ambientSynth.volume.value !== -Infinity) { // Extra check
-                           this.ambientSynth.triggerAttackRelease(noteToPlay, "16n", time, Math.min(0.9, velocity)); 
-                        } else if (this.debugMode && this.ambientSynth) {
-                           console.warn(`💡 AmbientSynth not triggered. Volume is -Infinity or synth issue. Current Volume: ${this.ambientSynth.volume.value}`);
+                        if (this.sparkleSynth && this.sparkleSynth.volume.value !== -Infinity) { 
+                           this.sparkleSynth.triggerAttackRelease(freqToPlay, "32n", time, Math.min(0.7, velocity)); 
+                        } else if (this.debugMode && this.sparkleSynth) {
+                           console.warn(`💡 SparkleSynth not triggered. Volume is -Infinity or synth issue. Current Volume: ${this.sparkleSynth.volume.value}`);
                         }
 
                         this.triggerCreatureAnimation(); 
-                        this._displayNote(noteToPlay); 
+                        this._displayNote("✨"); 
                         this.lastRhythmNoteTime = currentTime;
                     }
                 }, "16n").start(0); 
-                if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Rhythmic loop with ambientSynth initiated.');
+                if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Rhythmic loop with sparkleSynth initiated.');
             },
             onerror: (err) => {
                 console.error('❌ _setupRhythmicPlayback: Error loading recorded buffer player for Light:', err);
@@ -648,7 +643,6 @@ class LightHandler {
             this.rhythmFollower.dispose(); this.rhythmFollower = null;
         }
         
-        // Ensure generative synths are silenced after record mode
         if (this.ambientSynth && this.ambientSynth.volume) this.ambientSynth.volume.value = -Infinity;
         if (this.sparkleSynth && this.sparkleSynth.volume) this.sparkleSynth.volume.value = -Infinity;
         
@@ -760,11 +754,11 @@ class LightHandler {
             if (this.mainLoop && this.mainLoop.state === "started") this.mainLoop.stop(0);
             if (this.sparkleLoop && this.sparkleLoop.state === "started") this.sparkleLoop.stop(0);
             
-            if (this.ambientSynth) { // Check if synth exists
-                this.ambientSynth.releaseAll(); // ADD THIS to release all voices
+            if (this.ambientSynth) { 
+                this.ambientSynth.releaseAll(); 
                 if (this.ambientSynth.volume) this.ambientSynth.volume.value = -Infinity;
             }
-            if (this.sparkleSynth && this.sparkleSynth.volume) this.sparkleSynth.volume.value = -Infinity; // line ~728
+            if (this.sparkleSynth && this.sparkleSynth.volume) this.sparkleSynth.volume.value = -Infinity; 
             
             this.isFadingOut = false; 
             if (this.debugMode) console.log('💡 stopAudio (generative): Fully stopped and loops cleared.');
@@ -772,9 +766,8 @@ class LightHandler {
         };
 
         if (force || !wasPlaying) { 
-            // If forced, also ensure voices are released immediately before ramp
             if (force && this.ambientSynth) {
-                this.ambientSynth.releaseAll(); // ADD THIS
+                this.ambientSynth.releaseAll(); 
             }
             completeStop();
         } else { 
