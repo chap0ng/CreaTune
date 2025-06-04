@@ -10,7 +10,7 @@ class LightHandler {
         this.fadeDuration = 1.0;
         this.baseAmbientVolume = 9; 
         this.baseSparkleVolume = 6; 
-        this.rhythmicPlaybackVolume = 8; // Volume for ambientSynth in record mode
+        this.rhythmicPlaybackVolume = 9; // Volume for ambientSynth in record mode
 
         // State
         this.isActive = false;
@@ -124,21 +124,21 @@ class LightHandler {
                 Tone.Transport.start();
             }
 
-            const reverb = new Tone.Reverb(1.5).toDestination();
-            const delay = new Tone.FeedbackDelay("4n", 0.25).connect(reverb);
+            const reverb = new Tone.Reverb(0.3).toDestination();
+            const delay = new Tone.FeedbackDelay("2n", 0.1).connect(reverb);
 
             this.ambientSynth = new Tone.PolySynth(Tone.Synth, {
-                oscillator: { type: "fatsawtooth", count: 3, spread: 30 },
+                oscillator: { type: "sawtooth", count: 3, spread: 30 },
                 envelope: { attack: 0.8, decay: 0.5, sustain: 0.8, release: 1.5 },
                 volume: -Infinity
             }).connect(reverb);
 
             this.sparkleSynth = new Tone.MetalSynth({
-                frequency: 200,
-                envelope: { attack: 0.001, decay: 0.1, release: 0.05 },
+                frequency: 240,
+                envelope: { attack: 0.001, decay: 0.5, release: 0.05 },
                 harmonicity: 3.1,
                 modulationIndex: 16,
-                resonance: 4000,
+                resonance: 2000, 
                 octaves: 1.5,
                 volume: -Infinity
             }).connect(delay);
@@ -196,7 +196,7 @@ class LightHandler {
             this.ambientSynth.triggerAttackRelease(note, "2n", time, velocity);
             this.triggerCreatureAnimation();
             this._displayNote(note);
-        }, notes, "4n"); // Adjust for speed, e.g., "2n" is slower
+        }, notes, "2n"); // Adjust for speed, e.g., "2n" is slower
         this.mainLoop.humanize = true;
     }
 
@@ -324,10 +324,10 @@ class LightHandler {
                 sparkleVolMod = 0;
             } else if (this.currentLightCondition === 'dim') {
                 probability = this.currentLightAppValue * 0.3 + 0.1; 
-                sparkleVolMod = -6;
+                sparkleVolMod = 9;
             } else { 
                 probability = this.currentLightAppValue * 0.1; 
-                sparkleVolMod = -12;
+                sparkleVolMod = 6;
             }
             this.sparkleLoop.probability = (this.isActive && this.deviceStates.light.connected && this.isPlaying) ? Math.min(0.8, probability) : 0;
             const targetSparkleVol = (this.isActive && this.deviceStates.light.connected) ? this.baseSparkleVolume + sparkleVolMod : -Infinity;
@@ -519,9 +519,13 @@ class LightHandler {
         }
         if (this.debugMode) console.log('💡 _setupRhythmicPlayback: Starting using ambientSynth...');
         
+        // THIS BLOCK IS KEY FOR THE SYNTH VOLUME IN RECORD MODE
         if (this.ambientSynth && this.ambientSynth.volume) {
             this.ambientSynth.volume.value = this.rhythmicPlaybackVolume; 
-            if (this.debugMode) console.log(`💡 _setupRhythmicPlayback: ambientSynth volume set to ${this.rhythmicPlaybackVolume} dB for rhythmic notes.`);
+            // ADD/MODIFY THIS LOG for more clarity:
+            if (this.debugMode) console.log(`💡 _setupRhythmicPlayback: ambientSynth volume explicitly set to ${this.ambientSynth.volume.value} (target rhythmicPlaybackVolume: ${this.rhythmicPlaybackVolume}).`);
+        } else if (this.debugMode) { // Added else-if for better logging if synth/volume is missing
+            console.warn(`💡 _setupRhythmicPlayback: ambientSynth or its volume property not available when trying to set rhythmic volume. ambientSynth exists: ${!!this.ambientSynth}`);
         }
 
         if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl); 

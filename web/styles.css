@@ -208,9 +208,10 @@ body {
 .framebackground.soil-connected-bg {
   /* background-image: url('../sprites/backgrounds/soilbackground.png'); /* Path to your soil connected background */
   background-size: cover;
-  background-color: #c0c0c0;
+  background-color: var(--warm-beige);
   background-position: center;
   background-repeat: repeat;
+  background-image: url(sprites/backgrounds/Background_soil.gif);
 }
 
 .framebackground.temp-active-bg { 
@@ -329,23 +330,29 @@ body {
 
 /* Light condition specific background styles */
 .framebackground.light-dark-bg {
-  background-color: var(--dark-slate); 
+  background-color: var(--warm-beige);
+  background-image:url(sprites/backgrounds/Background_light.gif);
+
 }
 
 .framebackground.light-dim-bg {
-  background-color: var(--steel-blue); 
+  background-color: var(--warm-beige);
+  background-image:url(sprites/backgrounds/Background_light.gif);
 }
 
 .framebackground.light-bright-bg {
-  background-color: var(--warm-yellow); 
+  background-color: var(--warm-beige);
+  background-image:url(sprites/backgrounds/Background_light.gif);
 }
 
 .framebackground.light-very-bright-bg {
-  background-color: #f8d07a; /* Lighter shade of warm-yellow */
+  background-color: var(--warm-beige);
+  background-image:url(sprites/backgrounds/Background_light.gif);
 }
 
 .framebackground.light-extremely-bright-bg {
-  background-color: #fadf9b; /* Even lighter warm yellow */
+  background-color: var(--warm-beige);
+  background-image:url(sprites/backgrounds/Background_light.gif);
 }
 
 /* LightSoil condition specific background styles */ 
