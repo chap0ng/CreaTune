@@ -519,23 +519,26 @@ class LightHandler {
     }
 
     _setupRhythmicPlayback(audioBlob) {
-        // Using sparkleSynth for rhythmic playback
-        if (!this.isRecordMode || !this.toneInitialized || !this.sparkleSynth) { 
-            if(this.debugMode) console.warn(`💡 _setupRhythmicPlayback: Blocked. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, sparkleSynth=${!!this.sparkleSynth}. Forcing exit.`);
+        // REVERTED: Using ambientSynth for rhythmic playback to display notes
+        if (!this.isRecordMode || !this.toneInitialized || !this.ambientSynth) { 
+            if(this.debugMode) console.warn(`💡 _setupRhythmicPlayback: Blocked. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, ambientSynth=${!!this.ambientSynth}. Forcing exit.`);
             this.exitRecordMode(true); 
             return;
         }
-        if (this.debugMode) console.log('💡 _setupRhythmicPlayback: Starting using sparkleSynth...');
+        // REVERTED: Log for ambientSynth
+        if (this.debugMode) console.log('💡 _setupRhythmicPlayback: Starting using ambientSynth...');
         
-        if (this.sparkleSynth) {
-            if (this.sparkleSynth.volume) {
-                this.sparkleSynth.volume.value = this.rhythmicPlaybackVolume; 
-                if (this.debugMode) console.log(`💡 _setupRhythmicPlayback: sparkleSynth volume explicitly set to ${this.sparkleSynth.volume.value} (target rhythmicPlaybackVolume: ${this.rhythmicPlaybackVolume}).`);
+        // REVERTED: Set volume for ambientSynth
+        if (this.ambientSynth) {
+            this.ambientSynth.releaseAll(); // Good practice for PolySynth
+            if (this.ambientSynth.volume) {
+                this.ambientSynth.volume.value = this.rhythmicPlaybackVolume; 
+                if (this.debugMode) console.log(`💡 _setupRhythmicPlayback: ambientSynth volume explicitly set to ${this.ambientSynth.volume.value} (target rhythmicPlaybackVolume: ${this.rhythmicPlaybackVolume}).`);
             } else if (this.debugMode) {
-                 console.warn(`💡 _setupRhythmicPlayback: sparkleSynth.volume property not available when trying to set rhythmic volume.`);
+                 console.warn(`💡 _setupRhythmicPlayback: ambientSynth.volume property not available when trying to set rhythmic volume.`);
             }
         } else if (this.debugMode) { 
-            console.warn(`💡 _setupRhythmicPlayback: sparkleSynth not available when trying to set rhythmic volume.`);
+            console.warn(`💡 _setupRhythmicPlayback: ambientSynth not available when trying to set rhythmic volume.`);
         }
 
         if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl); 
@@ -543,6 +546,9 @@ class LightHandler {
         
         this.rhythmFollower = new Tone.Meter({ smoothing: 0.2 }); 
         this.lastRhythmNoteTime = 0; 
+
+        // Define notes for rhythmic playback with ambientSynth
+        const rhythmicNotes = ["C4", "E4", "G4", "A4", "C5"]; 
 
         this.recordedBufferPlayer = new Tone.Player({
             url: this.recordedAudioBlobUrl,
@@ -553,8 +559,9 @@ class LightHandler {
                     if (this.recordedBufferPlayer) { this.recordedBufferPlayer.dispose(); this.recordedBufferPlayer = null; }
                     if (this.rhythmFollower) { this.rhythmFollower.dispose(); this.rhythmFollower = null; }
                     if (this.rhythmicLoop) { this.rhythmicLoop.dispose(); this.rhythmicLoop = null; }
-                    if(this.sparkleSynth && this.sparkleSynth.volume && this.sparkleSynth.volume.value === this.rhythmicPlaybackVolume) {
-                        this.sparkleSynth.volume.value = -Infinity;
+                    // REVERTED: Reset ambientSynth volume if it was set
+                    if(this.ambientSynth && this.ambientSynth.volume && this.ambientSynth.volume.value === this.rhythmicPlaybackVolume) {
+                        this.ambientSynth.volume.value = -Infinity;
                     }
                     return;
                 }
@@ -569,7 +576,8 @@ class LightHandler {
                 if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Recorded buffer player started and sent to destination.');
 
                 this.rhythmicLoop = new Tone.Loop(time => {
-                    if (!this.isRecordMode || !this.rhythmFollower || !this.sparkleSynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
+                    // REVERTED: Check for ambientSynth in loop condition
+                    if (!this.isRecordMode || !this.rhythmFollower || !this.ambientSynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
                         return;
                     }
 
@@ -577,26 +585,32 @@ class LightHandler {
                     const currentTime = Tone.now() * 1000;
 
                     if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
-                        const freqToPlay = Math.random() * 700 + 300; 
-                        const velocity = 0.2 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.045); 
+                        // REVERTED: Use a musical note for ambientSynth
+                        const noteToPlay = rhythmicNotes[Math.floor(Math.random() * rhythmicNotes.length)];
+                        const velocity = 0.3 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.04); // Velocity for ambientSynth
                         
                         if (this.debugMode) {
-                            const currentSynthVolume = this.sparkleSynth && this.sparkleSynth.volume ? this.sparkleSynth.volume.value : 'N/A';
-                            console.log(`💡 Rhythmic trigger (Light Sparkle): Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Freq: ${freqToPlay.toFixed(0)}, Velocity: ${velocity.toFixed(2)}, SynthVol: ${currentSynthVolume}`);
+                            // REVERTED: Update log for ambientSynth
+                            const currentSynthVolume = this.ambientSynth && this.ambientSynth.volume ? this.ambientSynth.volume.value : 'N/A';
+                            console.log(`💡 Rhythmic trigger (Light Ambient): Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}, SynthVol: ${currentSynthVolume}`);
                         }
                         
-                        if (this.sparkleSynth && this.sparkleSynth.volume.value !== -Infinity) { 
-                           this.sparkleSynth.triggerAttackRelease(freqToPlay, "32n", time, Math.min(0.7, velocity)); 
-                        } else if (this.debugMode && this.sparkleSynth) {
-                           console.warn(`💡 SparkleSynth not triggered. Volume is -Infinity or synth issue. Current Volume: ${this.sparkleSynth.volume.value}`);
+                        // REVERTED: Trigger ambientSynth
+                        // Ensure ambientSynth envelope is percussive (attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.2 from initTone is good)
+                        if (this.ambientSynth && this.ambientSynth.volume.value !== -Infinity) { 
+                           this.ambientSynth.triggerAttackRelease(noteToPlay, "16n", time, Math.min(0.8, velocity)); 
+                        } else if (this.debugMode && this.ambientSynth) {
+                           console.warn(`💡 AmbientSynth not triggered. Volume is -Infinity or synth issue. Current Volume: ${this.ambientSynth.volume.value}`);
                         }
 
                         this.triggerCreatureAnimation(); 
-                        this._displayNote("✨"); 
+                        // REVERTED: Display the actual note played
+                        this._displayNote(noteToPlay); 
                         this.lastRhythmNoteTime = currentTime;
                     }
                 }, "16n").start(0); 
-                if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Rhythmic loop with sparkleSynth initiated.');
+                // REVERTED: Update log
+                if (this.debugMode) console.log('💡 _setupRhythmicPlayback (onload): Rhythmic loop with ambientSynth initiated.');
             },
             onerror: (err) => {
                 console.error('❌ _setupRhythmicPlayback: Error loading recorded buffer player for Light:', err);
