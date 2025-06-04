@@ -267,7 +267,7 @@ body {
 }
 
 .light-creature {
-  background-image: url('../sprites/creatures/light-creature-sprites.png'); /* <<< NEW: Path to your light creature 6-frame sprite sheet */
+  background-image: url('../sprites/creatures/light-creature.png'); /* <<< NEW: Path to your light creature 6-frame sprite sheet */
   background-size: 600% 100%; /* <<< NEW: Assuming 6 frames, (6 * 100)% width */
   background-position: 0% 0%;   /* <<< NEW: Start at the first frame (controlled by JS) */
   z-index: 10; /* Optional: if it needs to be above other specific elements */
@@ -451,6 +451,12 @@ body {
   box-shadow: 2px 2px 0px var(--dark-slate); 
   user-select: none;
   -webkit-user-select: none;
+}
+
+#stoprecordmode:hover {
+  background-color: var(--light-gray); /* Or a slightly different shade */
+  transform: translateY(-1px) translateX(-1px);
+  box-shadow: 3px 3px 0px var(--dark-slate);
 }
 
 /* RE-ADD Record Mode Pulsing Feedback */
