@@ -16,26 +16,23 @@ class LightSoilHandler {
         // --- End State for individual sensors ---
 
         // --- Combined State ---
-        // isCombinedActive: True when BOTH light AND soil are connected AND active (for creature & generative sound)
         this.isCombinedActive = false; 
-        // showLightSoilVisualContext: True when BOTH light AND soil are connected (for background and muting others)
         this.showLightSoilVisualContext = false; 
         // --- End Combined State ---
 
         this.audioEnabled = false;
         this.toneInitialized = false;
-        this.isPlaying = false; // For LightSoil's generative audio
+        this.isPlaying = false; 
         this.isFadingOut = false;
         this.stopTimeoutId = null;
-        // LightSoilHandler does not have isExternallyMuted for itself. It controls others.
 
         // --- Tone.js components ---
-        this.mainSynth = null; // Renamed from ambientPadSynth for clarity
+        this.mainSynth = null; 
         this.padChorus = null;
         this.padReverb = null;
-        this.generativeLoop = null; // Renamed from padLoop
+        this.generativeLoop = null; 
         this.fadeDuration = 2.0;
-        this.baseVolume = 0; // Adjusted dynamically, PluckSynth is sensitive
+        this.baseVolume = 0; 
 
         // --- Record Mode Properties ---
         this.isRecordMode = false;
@@ -50,11 +47,15 @@ class LightSoilHandler {
         this.rhythmNoteCooldown = 150;
         this.lastRhythmNoteTime = 0;
         this.recordedAudioBlobUrl = null;
-        this.rhythmicPlaybackVolume = 0; // PluckSynth is sensitive, adjust based on its output
+        this.rhythmicPlaybackVolume = 0; 
 
         // --- Note Display ---
         this.noteDisplayTimeoutId = null;
         this.lastDisplayedNote = null;
+
+        // --- Sprite Animation State for LightSoil Creature ---
+        this.lightSoilCreatureCurrentFrame = 0;
+        this.lightSoilCreatureTotalFrames = 6; // For 0%, 20%, 40%, 60%, 80%, 100% (6 positions)
 
         // --- DOM Elements ---
         this.lightSoilCreatureVisual = document.querySelector('.lightsoil-creature');
@@ -366,12 +367,13 @@ class LightSoilHandler {
     }
 
     triggerCreatureAnimation() {
-        // LightSoil creature animation can be simpler or different if needed
-        if (this.isCurrentlyRecording) return;
+        if (this.isCurrentlyRecording) return; // Don't animate during the recording phase itself
         if (this.lightSoilCreatureVisual && this.lightSoilCreatureVisual.classList.contains('active')) {
-            // Placeholder for LightSoil specific animation if different from simple frame advance
-            if (this.debugMode) {
-                // console.log('🌿💡 LightSoil: Triggering creature animation (placeholder).');
+            this.lightSoilCreatureCurrentFrame = (this.lightSoilCreatureCurrentFrame + 1) % this.lightSoilCreatureTotalFrames;
+            // Simplified to match soil.js logic, assuming 6 total frames (0-5) and 20% step
+            this.lightSoilCreatureVisual.style.backgroundPositionX = (this.lightSoilCreatureCurrentFrame * 20) + '%';
+            if (this.debugMode && Math.random() < 0.03) {
+                 console.log(`🌿💡 LightSoil Creature Animation: Frame ${this.lightSoilCreatureCurrentFrame}, PosX: ${this.lightSoilCreatureVisual.style.backgroundPositionX}`);
             }
         }
     }
@@ -405,7 +407,6 @@ class LightSoilHandler {
             const generativeNotes = ["C3", "E3", "G3", "A3", "C4", "D4", "E4", "G4"];
             let generativeNoteIndex = 0;
             this.generativeLoop = new Tone.Loop(time => {
-                // Corrected: Use this.mainSynth and remove this.isExternallyMuted check for LightSoilHandler itself
                 if (!this.isPlaying || this.isRecordMode || !this.mainSynth || !this.isCombinedActive) return;
 
                 const note = generativeNotes[Math.floor(Math.random() * generativeNotes.length)];
@@ -415,7 +416,7 @@ class LightSoilHandler {
                 if (this.debugMode && Math.random() < 0.1) console.log(`🌿💡 GenLoop: Note=${note}, Vel=${velocity.toFixed(2)}, CombinedApp=${combinedAppValue.toFixed(2)}`);
                 this.mainSynth.triggerAttackRelease(note, "2n", time, Math.min(0.9, Math.max(0.1,velocity)));
                 this._displayNote(note);
-                this.triggerCreatureAnimation();
+                this.triggerCreatureAnimation(); // Call animation here
                 generativeNoteIndex++;
             }, "2n"); 
             this.generativeLoop.humanize = "8n";
@@ -503,11 +504,17 @@ class LightSoilHandler {
     }
 
     updateUI() {
-        // Creature active when both sensors connected & active, not in LS record mode
-        const showCreature = this.isCombinedActive && !this.isRecordMode;
+        const oldShowCreature = this.lightSoilCreatureVisual ? this.lightSoilCreatureVisual.classList.contains('active') : false;
+        // Condition for creature visibility: combined sensors active.
+        // Record mode no longer hides the creature.
+        const showCreature = this.isCombinedActive;
 
         if (this.lightSoilCreatureVisual) {
             this.lightSoilCreatureVisual.classList.toggle('active', showCreature);
+            if (!showCreature && oldShowCreature) { // Became inactive
+                this.lightSoilCreatureCurrentFrame = 0;
+                this.lightSoilCreatureVisual.style.backgroundPositionX = '0%';
+            }
         }
 
         if (this.frameBackground) {
@@ -767,7 +774,6 @@ class LightSoilHandler {
                 if (this.debugMode) console.log('🌿💡 LS _setupRhythmicPlayback (onload): Recorded audio Player started.');
 
                 this.rhythmicLoop = new Tone.Loop(time => {
-                    // Corrected: Use this.mainSynth and remove this.isExternallyMuted check
                     if (!this.isRecordMode || !this.rhythmFollower || !this.mainSynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
                         return;
                     }
@@ -783,11 +789,11 @@ class LightSoilHandler {
                             console.log(`🌿💡 LS Rhythmic trigger: Lvl: ${level.toFixed(2)}, Note: ${noteToPlay}, Vel: ${velocity.toFixed(2)}, Vol: ${currentSynthVolume.toFixed(1)}`);
                         }
                         this.mainSynth.triggerAttackRelease(noteToPlay, "16n", time, Math.min(0.9, velocity));
-                        this.triggerCreatureAnimation();
+                        this.triggerCreatureAnimation(); // Call animation here
                         this._displayNote(noteToPlay);
                         this.lastRhythmNoteTime = currentTime;
                     }
-                }, "16n").start(0);
+                }, "16n").start(0); 
                 if (this.debugMode) console.log('🌿💡 LS _setupRhythmicPlayback (onload): Rhythmic loop (for mainSynth) initiated.');
             },
             onerror: (err) => {

@@ -386,16 +386,16 @@ class LightHandler {
     }
 
     updateUI() {
-        // Condition for creature visibility
-        const showActiveSystem = this.deviceStates.light.connected && this.isActive && !this.isExternallyMuted && !this.isRecordMode;
+        // Condition for creature visibility: connected, sensor active, and not externally muted.
+        // Record mode no longer hides the creature.
+        const showActiveSystem = this.deviceStates.light.connected && this.isActive && !this.isExternallyMuted;
 
         if (this.lightCreatureVisual) {
             const wasCreatureActive = this.lightCreatureVisual.classList.contains('active');
             this.lightCreatureVisual.classList.toggle('active', showActiveSystem);
 
-            // Creature condition class (can remain for visual variants of the creature)
             this.lightCreatureVisual.classList.remove('light-dark', 'light-dim', 'light-bright', 'light-very-bright', 'light-extremely-bright');
-            if (showActiveSystem) {
+            if (showActiveSystem) { // Apply condition class if creature is to be shown
                 this.lightCreatureVisual.classList.add(`light-${this.currentLightCondition.replace('_', '-')}`);
             } else if (wasCreatureActive && !this.lightCreatureVisual.classList.contains('active')) {
                 this.lightCreatureCurrentFrame = 0;
@@ -722,7 +722,7 @@ class LightHandler {
                 console.error("❌ startAudio (generative) Light: Critical: Re-init failed. Cannot start.");
                 return;
              }
-             if (this.isPlaying) return; 
+             if this.isPlaying return; 
         }
 
         if (this.debugMode) console.log('💡 startAudio (generative): Starting...');

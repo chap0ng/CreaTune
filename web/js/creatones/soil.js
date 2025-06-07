@@ -405,16 +405,16 @@ class SoilHandler {
     }
 
     updateUI() {
-        // Condition for creature visibility
-        const showCreature = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted && !this.isRecordMode;
+        // Condition for creature visibility: connected, sensor active, and not externally muted.
+        // Record mode no longer hides the creature.
+        const showCreature = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted;
         
         if (this.soilCreatureVisual) {
             const wasCreatureActive = this.soilCreatureVisual.classList.contains('active');
             this.soilCreatureVisual.classList.toggle('active', showCreature);
             
-            // Creature condition class (can remain if you want visual variants for the creature itself)
             this.soilCreatureVisual.classList.remove('soil-dry', 'soil-humid', 'soil-wet');
-            if (showCreature) { 
+            if (showCreature) { // Apply condition class if creature is to be shown
                 this.soilCreatureVisual.classList.add(`soil-${this.currentSoilCondition.replace('_', '-')}`);
             } else if (wasCreatureActive && !this.soilCreatureVisual.classList.contains('active')) {
                 this.soilCreatureCurrentFrame = 0; 
