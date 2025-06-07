@@ -218,10 +218,6 @@ body {
   background-color: var(--coral-red); 
 }
 
-.framebackground.light-active-bg { 
-  background-color: var(--warm-yellow); 
-}
-
 .framebackground.soil-pattern-bg { 
   background-color: var(--sage-green);
   background-image: 
@@ -229,6 +225,16 @@ body {
     radial-gradient(circle at 75% 75%, rgba(142,164,125,0.2) 1px, transparent 1px);
   background-size: 30px 30px, 15px 15px;
   background-position: 0 0, 15px 15px;
+}
+
+/* LightSoil condition specific background styles */ 
+.framebackground.lightsoil-active-bg {
+  background-color: var(--blue-green); /* Your existing base color */
+  /* ADD a distinct pattern or image below */
+  background-image: 
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.08) 75%, transparent 75%, transparent),
+    linear-gradient(45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.05) 50%, rgba(0, 0, 0, 0.05) 75%, transparent 75%, transparent);
+  background-size: 50px 50px; /* Adjust size as needed */
 }
 
 /* ==========================================================================
@@ -375,7 +381,7 @@ body {
 
 /* LightSoil condition specific background styles */ 
 .framebackground.lightsoil-active-bg {
-  background-color: var(--all-three);
+  background-color: var(--warm-beige);
 }
 
 /* ==========================================================================
