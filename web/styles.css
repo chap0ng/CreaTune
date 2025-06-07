@@ -223,34 +223,16 @@ body {
   background-image: url(sprites/backgrounds/Background_light.gif);
 }
 
-/* LightSoil Active Background (already defined, ensure it's as desired) */
 .framebackground.lightsoil-active-bg {
-  background-color: var(--blue-green); /* Your existing base color or var(--warm-beige) if using a full GIF */
-  /* If using a GIF for lightsoil, add it here:
-  background-image: url(sprites/backgrounds/Background_lightsoil.gif);
   background-size: cover;
+  background-color: var(--warm-beige); /* Fallback color */
   background-position: center;
   background-repeat: repeat;
-  */
-  /* Or keep your pattern if preferred over a GIF for this state */
-  background-image: 
-    linear-gradient(135deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.08) 75%, transparent 75%, transparent),
-    linear-gradient(45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.05) 50%, rgba(0, 0, 0, 0.05) 75%, transparent 75%, transparent);
-  background-size: 50px 50px;
+  background-image: url(sprites/backgrounds/Background_light.gif);
+  background-image: url(sprites/backgrounds/Background_soil.gif);
+
 }
 
-/* Remove or comment out old specific condition backgrounds */
-/*
-.framebackground.soil-dry-bg { ... }
-.framebackground.soil-humid-bg { ... }
-.framebackground.soil-wet-bg { ... }
-.framebackground.light-dark-bg { ... }
-.framebackground.light-dim-bg { ... }
-.framebackground.light-bright-bg { ... }
-.framebackground.light-very-bright-bg { ... }
-.framebackground.light-extremely-bright-bg { ... }
-.framebackground.soil-pattern-bg { ... }
-*/
 
 /* ==========================================================================
    CREATURES
