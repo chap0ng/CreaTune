@@ -1,43 +1,67 @@
 class LightSoilHandler {
     constructor() {
-        this.debugMode = true; // Ensure debugMode is on
+        this.debugMode = true; 
         if (this.debugMode) console.log('🌿💡 LightSoil Handler: Constructor called.');
 
         // --- State for individual sensors ---
         this.lightConnected = false;
         this.lightActive = false;
-        this.currentLightAppValue = 0.0; // Normalized 0-1
+        this.currentLightAppValue = 0.0; 
         this.currentLightCondition = "dark";
 
         this.soilConnected = false;
         this.soilActive = false;
-        this.currentSoilAppValue = 0.0; // Normalized 0-1
+        this.currentSoilAppValue = 0.0; 
         this.currentSoilCondition = "dry";
         // --- End State for individual sensors ---
 
-        this.isCombinedActive = false; // True when both light AND soil are active and connected
+        this.isCombinedActive = false; 
         this.audioEnabled = false;
         this.toneInitialized = false;
-        this.isPlaying = false;
+        this.isPlaying = false; // For generative audio
         this.isFadingOut = false;
         this.stopTimeoutId = null;
+        this.isExternallyMuted = false; 
 
         // --- Tone.js components for "Very Bright Ambient Pad" ---
         this.ambientPadSynth = null;
         this.padChorus = null;
         this.padReverb = null;
         this.padLoop = null;
-        this.fadeDuration = 2.0; // Longer fade for pads
-        this.basePadVolume = 6; // dB, fairly loud for "bright"
+        this.fadeDuration = 2.0; 
+        this.basePadVolume = 6; 
         // --- End Tone.js components ---
+
+        // --- Record Mode Properties ---
+        this.isRecordMode = false;
+        this.isCurrentlyRecording = false;
+        this.mic = null;
+        this.recorder = null;
+        this.recordedBufferPlayer = null;
+        this.rhythmFollower = null;
+        this.rhythmicLoop = null; 
+        this.recordingDuration = 5000;
+        this.rhythmThreshold = -30;
+        this.rhythmNoteCooldown = 150;
+        this.lastRhythmNoteTime = 0;
+        this.recordedAudioBlobUrl = null;
+        this.rhythmicPlaybackVolume = 9; 
+
+        // --- Note Display ---
+        this.noteDisplayTimeoutId = null;
+        this.lastDisplayedNote = null;
+        // --- End Note Display ---
 
         // --- DOM Elements ---
         this.lightSoilCreatureVisual = document.querySelector('.lightsoil-creature');
         this.frameBackground = document.querySelector('.framebackground');
+        this.stopRecordModeButton = document.getElementById('stoprecordmode'); 
         // --- End DOM Elements ---
 
         if (!this.lightSoilCreatureVisual && this.debugMode) console.warn('🌿💡 .lightsoil-creature element not found.');
         if (!this.frameBackground && this.debugMode) console.warn('🌿💡 .framebackground element not found for LightSoilHandler.');
+        if (!this.stopRecordModeButton && this.debugMode) console.warn('🌿💡 #stoprecordmode button not found for LightSoilHandler.');
+
 
         this.initializeWhenReady();
     }
@@ -71,7 +95,7 @@ class LightSoilHandler {
     handleAudioContextRunning() {
         if (this.debugMode) console.log('🌿💡 LightSoilHandler: AudioContext is running.');
         this.audioEnabled = true;
-        if (!this.toneInitialized && this.isCombinedActive) {
+        if (!this.toneInitialized && this.isCombinedActive && !this.isRecordMode) { // Don't init if in record mode
             if (this.debugMode) console.log('🌿💡 LightSoilHandler: AudioContext running, combined active, trying to initTone.');
             this.initTone();
         }
@@ -157,21 +181,22 @@ class LightSoilHandler {
 
             if (stateChanged) { 
                 this.updateCombinedState();
-            } else if (this.isCombinedActive && this.isPlaying) { 
+            } else if (this.isCombinedActive && this.isPlaying && !this.isRecordMode) { 
                 this.updateSoundParameters();
-                this.updateUI(); // Update UI as sound params might affect it indirectly
+                this.updateUI(); 
             } else {
-                 this.updateUI(); // If no major state change, still update UI for minor data changes
+                 this.updateUI(); 
             }
         };
 
         window.creatune.on('connected', (deviceType) => {
             if (this.debugMode) console.log(`🌿💡 LightSoilHandler: Received 'connected' for ${deviceType}`);
-            handleDeviceUpdate(deviceType, { connected: true, active: (deviceType === 'light' ? this.lightActive : this.soilActive) }); // Keep current active state until stateChange
+            handleDeviceUpdate(deviceType, { connected: true, active: (deviceType === 'light' ? this.lightActive : this.soilActive) }); 
         });
         window.creatune.on('disconnected', (deviceType) => {
             if (this.debugMode) console.log(`🌿💡 LightSoilHandler: Received 'disconnected' for ${deviceType}`);
             handleDeviceUpdate(deviceType, { connected: false, active: false });
+            if (this.isRecordMode) this.exitRecordMode(true); 
         });
         window.creatune.on('stateChange', (deviceType, state) => { 
             if (this.debugMode) console.log(`🌿💡 LightSoilHandler: Received 'stateChange' for ${deviceType}`, state);
@@ -179,7 +204,7 @@ class LightSoilHandler {
         });
         window.creatune.on('data', (deviceType, data) => { 
             this.updateInternalDeviceData(deviceType, data);
-            if (this.isCombinedActive && this.isPlaying) {
+            if (this.isCombinedActive && this.isPlaying && !this.isRecordMode) {
                 this.updateSoundParameters();
             }
         });
@@ -191,8 +216,34 @@ class LightSoilHandler {
         document.addEventListener('creaTuneAudioDisabled', () => {
             if (this.debugMode) console.log("🌿💡 LightSoilHandler detected creaTuneAudioDisabled event.");
             this.audioEnabled = false;
-            this.manageAudioAndVisuals();
+            if (this.isRecordMode) this.exitRecordMode(true); 
+            else this.manageAudioAndVisuals();
         });
+
+        if (this.frameBackground) {
+            this.frameBackground.addEventListener('click', () => {
+                if (this.isCombinedActive && 
+                    !this.isRecordMode &&
+                    this.audioEnabled &&
+                    this.toneInitialized &&
+                    (!window.lightHandlerInstance || !window.lightHandlerInstance.isRecordMode) &&
+                    (!window.soilHandlerInstance || !window.soilHandlerInstance.isRecordMode)
+                ) {
+                    this.enterRecordMode();
+                } else if (this.debugMode && !this.isRecordMode) {
+                    console.log(`🌿💡 Record mode NOT entered for LightSoil. Conditions: isCombinedActive=${this.isCombinedActive}, isRecordMode=${this.isRecordMode}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}, lightRec=${window.lightHandlerInstance?.isRecordMode}, soilRec=${window.soilHandlerInstance?.isRecordMode}`);
+                }
+            });
+        }
+
+        if (this.stopRecordModeButton) {
+            this.stopRecordModeButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                if (this.isRecordMode) {
+                    this.exitRecordMode();
+                }
+            });
+        }
     }
 
     updateCombinedState() {
@@ -210,38 +261,69 @@ class LightSoilHandler {
             this.isCombinedActive = newCombinedActiveState;
             if (this.debugMode) console.log(`%c🌿💡 LightSoilHandler: Combined active state CHANGED to: ${this.isCombinedActive}`, 'color: #e67e22; font-weight: bold;');
 
-            if (window.lightHandlerInstance && typeof window.lightHandlerInstance.setExternallyMuted === 'function') {
-                if (this.debugMode) console.log(`🌿💡 LightSoilHandler: Setting LightHandler externallyMuted to ${this.isCombinedActive}`);
-                window.lightHandlerInstance.setExternallyMuted(this.isCombinedActive);
-            }
-            if (window.soilHandlerInstance && typeof window.soilHandlerInstance.setExternallyMuted === 'function') {
-                if (this.debugMode) console.log(`🌿💡 LightSoilHandler: Setting SoilHandler externallyMuted to ${this.isCombinedActive}`);
-                window.soilHandlerInstance.setExternallyMuted(this.isCombinedActive);
+            if (!this.isRecordMode) { // Only mute/unmute if LightSoil is NOT in record mode
+                if (window.lightHandlerInstance && typeof window.lightHandlerInstance.setExternallyMuted === 'function') {
+                    if (this.debugMode) console.log(`🌿💡 LightSoilHandler: Setting LightHandler externallyMuted to ${this.isCombinedActive}`);
+                    window.lightHandlerInstance.setExternallyMuted(this.isCombinedActive);
+                }
+                if (window.soilHandlerInstance && typeof window.soilHandlerInstance.setExternallyMuted === 'function') {
+                    if (this.debugMode) console.log(`🌿💡 LightSoilHandler: Setting SoilHandler externallyMuted to ${this.isCombinedActive}`);
+                    window.soilHandlerInstance.setExternallyMuted(this.isCombinedActive);
+                }
             }
             this.manageAudioAndVisuals();
-        } else if (this.isCombinedActive) { // Combined state didn't change but IS active
-            if (this.isPlaying) {
+        } else if (this.isCombinedActive) { 
+            if (this.isPlaying && !this.isRecordMode) { 
                  if (this.debugMode) console.log(`🌿💡 LightSoilHandler: Combined state unchanged but active & playing. Updating sound params.`);
                  this.updateSoundParameters();
-            } else {
+            } else if (!this.isRecordMode) { 
                  if (this.debugMode) console.log(`🌿💡 LightSoilHandler: Combined state active, but not playing. Calling manageAudioAndVisuals.`);
-                 this.manageAudioAndVisuals(); // Attempt to start audio if not already playing
+                 this.manageAudioAndVisuals(); 
             }
-            this.updateUI(); // Always update UI if combined active
-        } else { // Not combined active (newCombinedActiveState is false and oldCombinedActiveState was false)
+            this.updateUI(); 
+        } else { 
             if (this.debugMode && oldCombinedActiveState) { 
-                // This case is covered by the first 'if' when it transitions from true to false.
-                // This 'else' means it's consistently not active.
                 console.log(`🌿💡 LightSoilHandler: Combined state remains not active. Updating UI.`);
+            }
+            if (oldCombinedActiveState && !newCombinedActiveState && !this.isRecordMode) { 
+                if (window.lightHandlerInstance && typeof window.lightHandlerInstance.setExternallyMuted === 'function') {
+                    window.lightHandlerInstance.setExternallyMuted(false);
+                }
+                if (window.soilHandlerInstance && typeof window.soilHandlerInstance.setExternallyMuted === 'function') {
+                    window.soilHandlerInstance.setExternallyMuted(false);
+                }
             }
             this.updateUI();
         }
     }
 
+    _displayNote(note) {
+        const noteDisplayElement = document.querySelector('#notes-display p');
+        if (noteDisplayElement) {
+            if (this.noteDisplayTimeoutId) {
+                clearTimeout(this.noteDisplayTimeoutId);
+            }
+            noteDisplayElement.textContent = note;
+            this.lastDisplayedNote = note;
+            this.noteDisplayTimeoutId = setTimeout(() => {
+                if (noteDisplayElement.textContent === this.lastDisplayedNote) {
+                    noteDisplayElement.textContent = '-';
+                }
+            }, 750);
+        }
+    }
+
+    triggerCreatureAnimation() {
+        if (this.isCurrentlyRecording) {
+            return;
+        }
+        if (this.lightSoilCreatureVisual && this.lightSoilCreatureVisual.classList.contains('active')) {
+            if (this.debugMode) console.log('🌿💡 LightSoil: Triggering creature animation (placeholder).');
+        }
+    }
 
     initTone() {
         if (this.toneInitialized) {
-            if (this.debugMode) console.log('🌿💡 LightSoilHandler.initTone: Already initialized.');
             return;
         }
         if (!window.Tone || !this.audioEnabled) {
@@ -257,43 +339,45 @@ class LightSoilHandler {
         try {
             this.padReverb = new Tone.Reverb({ decay: 4, wet: 0.6 }).toDestination();
             this.padChorus = new Tone.Chorus({ frequency: 0.5, delayTime: 3.5, depth: 0.7, wet: 0.5 }).connect(this.padReverb);
+            
             this.ambientPadSynth = new Tone.PolySynth(Tone.Synth, {
                 oscillator: { type: "sine", count: 3, spread: 40 },
-                envelope: { attack: 0.05, decay: 0.5, sustain: 0.8, release: 1.0 },
+                envelope: { attack: 0.05, decay: 0.5, sustain: 0.8, release: 1.0 }, 
                 volume: -Infinity
             }).connect(this.padChorus);
 
-            const padChords = [ /* Cmaj7, Fmaj7, Gmaj7(#11), Amaj7 */
+            const padChords = [
                 ["C4", "E4", "G4", "B4"], ["F4", "A4", "C5", "E5"],
                 ["G4", "B4", "D5", "F#5"],["A3", "C#4", "E4", "G#4"]
             ];
             let chordIndex = 0;
             this.padLoop = new Tone.Loop(time => {
+                if (!this.isPlaying || this.isRecordMode || !this.ambientPadSynth) return; 
                 const chord = padChords[chordIndex % padChords.length];
                 const velocity = (this.currentLightAppValue + this.currentSoilAppValue) / 2 * 0.3 + 0.4;
                 this.ambientPadSynth.triggerAttackRelease(chord, "4m", time, velocity);
                 chordIndex++;
-            }, "4m").start(0);
+            }, "4m"); 
             this.padLoop.humanize = "16n";
+            if (this.padLoop.state === "started") this.padLoop.stop(0); 
 
             this.toneInitialized = true;
             if (this.debugMode) console.log('🌿💡 LightSoilHandler.initTone: "Very Bright Ambient Pad" Tone.js components initialized.');
-            this.manageAudioAndVisuals(); // Re-evaluate now that tone is ready
+            this.manageAudioAndVisuals(); 
 
         } catch (error) {
             console.error('❌ LightSoilHandler.initTone: Error during Tone.js component initialization:', error);
             this.toneInitialized = false;
-            if(this.ambientPadSynth) this.ambientPadSynth.dispose();
-            if(this.padChorus) this.padChorus.dispose();
-            if(this.padReverb) this.padReverb.dispose();
-            if(this.padLoop) this.padLoop.dispose();
+            if(this.ambientPadSynth) { this.ambientPadSynth.dispose(); this.ambientPadSynth = null; }
+            if(this.padChorus) { this.padChorus.dispose(); this.padChorus = null; }
+            if(this.padReverb) { this.padReverb.dispose(); this.padReverb = null; }
+            if(this.padLoop) { this.padLoop.dispose(); this.padLoop = null; }
         }
     }
 
-    updateSoundParameters() {
-        if (!this.toneInitialized || !this.audioEnabled || !this.isCombinedActive) return;
-        // if (this.debugMode) console.log('🌿💡 LightSoilHandler: Updating sound parameters...');
-
+    updateSoundParameters() { 
+        if (!this.toneInitialized || !this.audioEnabled || !this.isCombinedActive || this.isRecordMode || !this.isPlaying) return;
+        
         if (this.ambientPadSynth) {
             const lightFactor = this.currentLightAppValue * 8; 
             const soilFactor = this.currentSoilAppValue * 2;   
@@ -310,65 +394,92 @@ class LightSoilHandler {
 
     manageAudioAndVisuals() {
         if (this.debugMode) console.log(`%c🌿💡 LightSoilHandler.manageAudioAndVisuals:
-    isCombinedActive=${this.isCombinedActive}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}, isPlaying=${this.isPlaying}, isFadingOut=${this.isFadingOut}`, 'color: #2ecc71');
+    isCombinedActive=${this.isCombinedActive}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}, isPlayingGen=${this.isPlaying}, isFadingOut=${this.isFadingOut}, isRecordMode=${this.isRecordMode}`, 'color: #2ecc71');
 
         if (Tone.context.state !== 'running') this.audioEnabled = false;
-        else this.audioEnabled = true;
+        else this.audioEnabled = true; 
 
         if (!this.audioEnabled) {
-            if (this.isPlaying || this.isFadingOut) this.stopAudio(true);
+            if (this.isRecordMode) this.exitRecordMode(true);
+            else if (this.isPlaying || this.isFadingOut) this.stopAudio(true); 
             if (this.debugMode) console.log(`🌿💡 LightSoilHandler.manageAudioAndVisuals: AudioContext not running or audio disabled. Audio remains off.`);
+            this.updateUI();
+            return;
+        }
+
+        if (this.isRecordMode) {
+            if (this.isPlaying || this.isFadingOut) { 
+                if (this.debugMode) console.log('🌿💡 LS MAV: In Record Mode, stopping generative audio.');
+                this.stopAudio(true); 
+            }
             this.updateUI();
             return;
         }
 
         if (this.isCombinedActive) {
             if (!this.toneInitialized) {
-                if (this.debugMode) console.log('🌿💡 LightSoilHandler.manageAudioAndVisuals: Combined active, Tone not initialized. Attempting initTone.');
+                if (this.debugMode) console.log('🌿💡 LS MAV: Combined active, Tone not initialized. Attempting initTone.');
                 this.initTone(); 
                 if (!this.toneInitialized) { 
-                     if (this.debugMode) console.log('🌿💡 LightSoilHandler.manageAudioAndVisuals: initTone failed or deferred. Returning.');
+                     if (this.debugMode) console.log('🌿💡 LS MAV: initTone failed or deferred. Returning.');
                      this.updateUI(); return;
                 }
             }
             
             if (this.toneInitialized && (!this.isPlaying || this.isFadingOut)) {
-                if (this.debugMode) console.log('🌿💡 LightSoilHandler.manageAudioAndVisuals: Combined active, Tone initialized, should play. Calling startAudio.');
-                this.startAudio();
+                if (this.debugMode) console.log('🌿💡 LS MAV: Combined active, Tone initialized, should play generative. Calling startAudio.');
+                this.startAudio(); 
             } else if (this.toneInitialized && this.isPlaying) {
-                if (this.debugMode) console.log('🌿💡 LightSoilHandler.manageAudioAndVisuals: Combined active, Tone initialized, already playing. Updating sound params.');
+                if (this.debugMode) console.log('🌿💡 LS MAV: Combined active, Tone initialized, generative already playing. Updating sound params.');
                 this.updateSoundParameters(); 
             }
         } else { 
-            if (this.isPlaying && !this.isFadingOut) {
-                if (this.debugMode) console.log('🌿💡 LightSoilHandler.manageAudioAndVisuals: NOT combined active, but was playing. Calling stopAudio.');
-                this.stopAudio();
+            if (this.isPlaying && !this.isFadingOut) { 
+                if (this.debugMode) console.log('🌿💡 LS MAV: NOT combined active, but generative was playing. Calling stopAudio.');
+                this.stopAudio(); 
             }
         }
         this.updateUI(); 
     }
 
     updateUI() {
-        // if (this.debugMode) console.log(`🌿💡 LightSoilHandler.updateUI: isCombinedActive=${this.isCombinedActive}`);
         if (this.lightSoilCreatureVisual) {
-            this.lightSoilCreatureVisual.classList.toggle('active', this.isCombinedActive);
+            this.lightSoilCreatureVisual.classList.toggle('active', this.isCombinedActive && !this.isRecordMode); 
         }
         if (this.frameBackground) {
-            if (this.isCombinedActive) {
+            if (this.isCombinedActive && !this.isRecordMode) { 
                 this.frameBackground.classList.add('lightsoil-active-bg');
-                this.frameBackground.classList.remove('light-active-bg', 'soil-active-bg', 'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg', 'soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg');
-            } else {
+                this.frameBackground.classList.remove('light-active-bg', 'soil-active-bg', 'record-mode-pulsing');
+                this.frameBackground.classList.remove('light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg', 'soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg');
+
+            } else if (!this.isRecordMode) { 
                 this.frameBackground.classList.remove('lightsoil-active-bg');
+            }
+
+            if (this.isRecordMode) {
+                this.frameBackground.classList.add('record-mode-pulsing');
+                this.frameBackground.classList.remove('lightsoil-active-bg'); 
+            } else if (!window.lightHandlerInstance?.isRecordMode && !window.soilHandlerInstance?.isRecordMode) {
+                this.frameBackground.classList.remove('record-mode-pulsing');
+            }
+        }
+        if (this.stopRecordModeButton) {
+            const lightInRec = window.lightHandlerInstance && window.lightHandlerInstance.isRecordMode;
+            const soilInRec = window.soilHandlerInstance && window.soilHandlerInstance.isRecordMode;
+            if (this.isRecordMode) { 
+                this.stopRecordModeButton.style.display = 'block';
+            } else if (!lightInRec && !soilInRec) { 
+                this.stopRecordModeButton.style.display = 'none';
             }
         }
     }
 
-    startAudio() {
-        if (this.debugMode) console.log(`%c🌿💡 LightSoilHandler.startAudio:
-    audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}, isCombinedActive=${this.isCombinedActive}, isPlaying=${this.isPlaying}, isFadingOut=${this.isFadingOut}`, 'color: #9b59b6; font-weight: bold;');
+    startAudio() { 
+        if (this.debugMode) console.log(`%c🌿💡 LightSoilHandler.startAudio (Generative):
+    audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}, isCombinedActive=${this.isCombinedActive}, isPlaying=${this.isPlaying}, isFadingOut=${this.isFadingOut}, isRecordMode=${this.isRecordMode}`, 'color: #9b59b6; font-weight: bold;');
 
-        if (!this.audioEnabled || !this.toneInitialized || !this.isCombinedActive) {
-            if (this.debugMode) console.warn("🌿💡 LightSoilHandler.startAudio: Conditions not met. Returning.");
+        if (!this.audioEnabled || !this.toneInitialized || !this.isCombinedActive || this.isRecordMode) { 
+            if (this.debugMode) console.warn("🌿💡 LightSoilHandler.startAudio (Generative): Conditions not met. Returning.");
             this.updateUI(); return;
         }
         if (this.isFadingOut) {
@@ -393,13 +504,13 @@ class LightSoilHandler {
         this.updateUI();
     }
 
-    stopAudio(force = false) {
-         if (this.debugMode) console.log(`%c🌿💡 LightSoilHandler.stopAudio:
+    stopAudio(force = false) { 
+         if (this.debugMode) console.log(`%c🌿💡 LightSoilHandler.stopAudio (Generative):
     force=${force}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}, isPlaying=${this.isPlaying}, isFadingOut=${this.isFadingOut}`, 'color: #c0392b; font-weight: bold;');
 
         if (!this.audioEnabled || !this.toneInitialized) {
             this.isPlaying = false; this.isFadingOut = false;
-            if (this.debugMode && !force) console.warn("🌿💡 LightSoilHandler.stopAudio: Audio system not ready.");
+            if (this.debugMode && !force) console.warn("🌿💡 LightSoilHandler.stopAudio (Generative): Audio system not ready.");
             this.updateUI(); return;
         }
         if (!this.isPlaying && !this.isFadingOut && !force) {
@@ -412,11 +523,11 @@ class LightSoilHandler {
         }
 
         if (this.debugMode) console.log(`🌿💡 LightSoilHandler.stopAudio: Stopping "Very Bright Ambient Pad" audio ${force ? '(forced)' : '(with fade-out)'}...`);
-        this.isPlaying = false;
+        this.isPlaying = false; 
         this.isFadingOut = true;
         const fadeTime = force ? 0.01 : this.fadeDuration;
 
-        if (this.ambientPadSynth) {
+        if (this.ambientPadSynth && this.ambientPadSynth.volume) { 
             this.ambientPadSynth.volume.cancelScheduledValues(Tone.now());
             this.ambientPadSynth.volume.rampTo(-Infinity, fadeTime, Tone.now());
         }
@@ -424,7 +535,7 @@ class LightSoilHandler {
         if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
         this.stopTimeoutId = setTimeout(() => {
             if (this.padLoop && this.padLoop.state === "started") this.padLoop.stop(0);
-            if (this.ambientPadSynth) this.ambientPadSynth.volume.value = -Infinity; 
+            if (this.ambientPadSynth && this.ambientPadSynth.volume) this.ambientPadSynth.volume.value = -Infinity; 
 
             this.isFadingOut = false;
             if (this.debugMode) console.log('🌿💡 LightSoilHandler.stopAudio: "Very Bright Ambient Pad" audio fully stopped.');
@@ -433,6 +544,208 @@ class LightSoilHandler {
         
         if(force) this.updateUI();
     }
+
+    async enterRecordMode() {
+        if (this.isRecordMode || !this.audioEnabled || !this.toneInitialized || !this.isCombinedActive) {
+            if(this.debugMode) console.warn(`🌿💡 LS enterRecordMode: Blocked. isRecordMode=${this.isRecordMode}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}, isCombinedActive=${this.isCombinedActive}`);
+            return;
+        }
+        if ((window.lightHandlerInstance && window.lightHandlerInstance.isRecordMode) || (window.soilHandlerInstance && window.soilHandlerInstance.isRecordMode)) {
+            if(this.debugMode) console.warn(`🌿💡 LS enterRecordMode: Blocked. Another creature is already in record mode.`);
+            return;
+        }
+        if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+            console.error('❌ LS enterRecordMode: getUserMedia API not available.');
+            alert('Microphone access not available. Please ensure the page is served over HTTPS or on localhost.');
+            return;
+        }
+
+        if (this.debugMode) console.log('🌿💡 LS enterRecordMode: Starting...');
+        this.isRecordMode = true;
+        
+        if (this.isPlaying) { 
+            if (this.debugMode) console.log('🌿💡 LS enterRecordMode: Stopping generative audio forcefully.');
+            this.stopAudio(true); 
+        }
+        if (window.lightHandlerInstance) window.lightHandlerInstance.setExternallyMuted(false);
+        if (window.soilHandlerInstance) window.soilHandlerInstance.setExternallyMuted(false);
+
+        this.updateUI(); 
+
+        await new Promise(resolve => setTimeout(resolve, 200)); 
+
+        if (!this.isRecordMode) { 
+            if(this.debugMode) console.log('🌿💡 LS enterRecordMode: Exited during pre-recording wait. Not proceeding.');
+            return; 
+        }
+
+        try {
+            this.mic = new Tone.UserMedia();
+            await this.mic.open(); 
+            
+            if (!this.isRecordMode) { 
+                if(this.debugMode) console.log('🌿💡 LS enterRecordMode: Exited after mic permission.');
+                if (this.mic.state === "started") this.mic.close(); 
+                this.mic = null;
+                return; 
+            }
+
+            if (this.debugMode) console.log('🌿💡 LS enterRecordMode: Mic opened.');
+            this.isCurrentlyRecording = true; 
+            this.recorder = new Tone.Recorder();
+            this.mic.connect(this.recorder);
+            this.recorder.start();
+            if (this.debugMode) console.log(`🌿💡 LS enterRecordMode: Recording started for ${this.recordingDuration / 1000}s...`);
+
+            setTimeout(async () => {
+                this.isCurrentlyRecording = false; 
+                if (!this.recorder || !this.isRecordMode) { 
+                    if(this.debugMode) console.log('🌿💡 LS enterRecordMode (timeout): No longer in active recording or record mode.');
+                    if (this.mic && this.mic.state === "started") this.mic.close(); this.mic = null;
+                    if (this.recorder && this.recorder.state === "started") { try { await this.recorder.stop(); } catch(e) {/*ignore*/} }
+                    if (this.isRecordMode) this.exitRecordMode(true); 
+                    return;
+                }
+                
+                const audioBlob = await this.recorder.stop();
+                if (this.mic && this.mic.state === "started") this.mic.close(); this.mic = null; 
+                if (this.debugMode) console.log('🌿💡 LS enterRecordMode (timeout): Recording stopped. Blob size:', audioBlob.size);
+
+                if (!this.isRecordMode) { 
+                     if(this.debugMode) console.log('🌿💡 LS enterRecordMode (timeout): Exited during recording. Not setting up playback.');
+                     return; 
+                }
+                this._setupRhythmicPlayback(audioBlob); 
+
+            }, this.recordingDuration);
+
+        } catch (err) {
+            console.error(`❌ LS enterRecordMode: Error: ${err.message}`, err);
+            alert(`Could not start recording for LightSoil: ${err.message}.`);
+            this.isCurrentlyRecording = false; 
+            this.exitRecordMode(true); 
+        }
+    }
+
+    _setupRhythmicPlayback(audioBlob) {
+        if (!this.isRecordMode || !this.toneInitialized || !this.ambientPadSynth) { 
+            if(this.debugMode) console.warn(`🌿💡 LS _setupRhythmicPlayback: Blocked. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, ambientPadSynth=${!!this.ambientPadSynth}. Forcing exit.`);
+            this.exitRecordMode(true); 
+            return;
+        }
+        if (this.debugMode) console.log('🌿💡 LS _setupRhythmicPlayback: Starting using ambientPadSynth...');
+        
+        if (this.ambientPadSynth && this.ambientPadSynth.volume) {
+            this.ambientPadSynth.releaseAll(); 
+            this.ambientPadSynth.volume.value = this.rhythmicPlaybackVolume; 
+            if (this.debugMode) console.log(`🌿💡 LS _setupRhythmicPlayback: ambientPadSynth volume set to ${this.rhythmicPlaybackVolume}.`);
+        } else if (this.debugMode) {
+            console.warn(`🌿💡 LS _setupRhythmicPlayback: ambientPadSynth or volume not available.`);
+        }
+
+        if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl); 
+        this.recordedAudioBlobUrl = URL.createObjectURL(audioBlob);
+        
+        this.rhythmFollower = new Tone.Meter({ smoothing: 0.2 }); 
+        this.lastRhythmNoteTime = 0; 
+        const rhythmicNotes = ["C3", "D3", "E3", "G3", "A3", "C4"]; 
+
+        this.recordedBufferPlayer = new Tone.Player({
+            url: this.recordedAudioBlobUrl,
+            loop: true,
+            onload: () => {
+                if (!this.isRecordMode) { 
+                    if (this.debugMode) console.log('🌿💡 LS _setupRhythmicPlayback (onload): Record mode exited. Aborting.');
+                    if (this.recordedBufferPlayer) { this.recordedBufferPlayer.dispose(); this.recordedBufferPlayer = null; }
+                    if (this.rhythmFollower) { this.rhythmFollower.dispose(); this.rhythmFollower = null; }
+                    if (this.rhythmicLoop) { this.rhythmicLoop.dispose(); this.rhythmicLoop = null; }
+                    if(this.ambientPadSynth && this.ambientPadSynth.volume && this.ambientPadSynth.volume.value === this.rhythmicPlaybackVolume) {
+                        this.ambientPadSynth.volume.value = -Infinity; 
+                    }
+                    return;
+                }
+                if (!this.recordedBufferPlayer) { 
+                     if (this.debugMode) console.warn('🌿💡 LS _setupRhythmicPlayback (onload): player became null. Aborting.'); return;
+                }
+
+                if (this.debugMode) console.log('🌿💡 LS _setupRhythmicPlayback (onload): Player loaded.');
+                this.recordedBufferPlayer.connect(this.rhythmFollower); 
+                this.recordedBufferPlayer.toDestination(); 
+                this.recordedBufferPlayer.start();
+                if (this.debugMode) console.log('🌿💡 LS _setupRhythmicPlayback (onload): Player started.');
+
+                this.rhythmicLoop = new Tone.Loop(time => {
+                    if (!this.isRecordMode || !this.rhythmFollower || !this.ambientPadSynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
+                        return;
+                    }
+                    const level = this.rhythmFollower.getValue(); 
+                    const currentTime = Tone.now() * 1000;
+
+                    if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
+                        const noteToPlay = rhythmicNotes[Math.floor(Math.random() * rhythmicNotes.length)];
+                        const velocity = 0.4 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.03); 
+                        
+                        if (this.debugMode) {
+                            const currentSynthVolume = this.ambientPadSynth.volume.value;
+                            console.log(`🌿💡 LS Rhythmic trigger: Lvl: ${level.toFixed(2)}, Note: ${noteToPlay}, Vel: ${velocity.toFixed(2)}, Vol: ${currentSynthVolume.toFixed(1)}`);
+                        }
+                        this.ambientPadSynth.triggerAttackRelease(noteToPlay, "16n", time, Math.min(0.9, velocity)); 
+                        this.triggerCreatureAnimation(); 
+                        this._displayNote(noteToPlay); 
+                        this.lastRhythmNoteTime = currentTime;
+                    }
+                }, "16n").start(0); 
+                if (this.debugMode) console.log('🌿💡 LS _setupRhythmicPlayback (onload): Rhythmic loop initiated.');
+            },
+            onerror: (err) => {
+                console.error('❌ LS _setupRhythmicPlayback: Error loading player:', err);
+                this.exitRecordMode(true); 
+            }
+        });
+        if (Tone.Transport.state !== "started") Tone.Transport.start();
+    }
+
+    exitRecordMode(force = false) {
+        if (!this.isRecordMode && !force) return;
+        if (this.debugMode) console.log(`🌿💡 LS exitRecordMode: Starting. Forced: ${force}. Was: ${this.isRecordMode}`);
+        
+        const wasRecordMode = this.isRecordMode; 
+        this.isRecordMode = false;
+        this.isCurrentlyRecording = false; 
+
+        if (this.mic && this.mic.state === "started") this.mic.close(); this.mic = null;
+        if (this.recorder) {
+            if (this.recorder.state === "started") try { this.recorder.stop(); } catch(e) { /* ignore */ }
+            this.recorder.dispose(); this.recorder = null;
+        }
+        if (this.rhythmicLoop) {
+            if (this.rhythmicLoop.state === "started") this.rhythmicLoop.stop(0);
+            this.rhythmicLoop.dispose(); this.rhythmicLoop = null;
+        }
+        if (this.recordedBufferPlayer) {
+            if (this.recordedBufferPlayer.state === "started") this.recordedBufferPlayer.stop(0);
+            this.recordedBufferPlayer.dispose(); this.recordedBufferPlayer = null;
+            if (this.recordedAudioBlobUrl) { URL.revokeObjectURL(this.recordedAudioBlobUrl); this.recordedAudioBlobUrl = null; }
+        }
+        if (this.rhythmFollower) { this.rhythmFollower.dispose(); this.rhythmFollower = null; }
+        
+        if (this.ambientPadSynth && this.ambientPadSynth.volume) {
+            this.ambientPadSynth.volume.value = -Infinity;
+        }
+        
+        if (this.noteDisplayTimeoutId) { 
+            clearTimeout(this.noteDisplayTimeoutId);
+            const noteDisplayElement = document.querySelector('#notes-display p');
+            if (noteDisplayElement) noteDisplayElement.textContent = '-';
+        }
+        
+        this.updateUI(); 
+        
+        if (wasRecordMode || force) {
+            this.updateCombinedState(); 
+        }
+        if (this.debugMode) console.log(`🌿💡 LS exitRecordMode: Finished. isRecordMode=${this.isRecordMode}`);
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -440,7 +753,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.creatune && window.Tone) {
             if (!window.lightSoilHandlerInstance) {
                 window.lightSoilHandlerInstance = new LightSoilHandler();
-                // Ensure debugMode is accessible for the log below
                 if (window.lightSoilHandlerInstance && window.lightSoilHandlerInstance.debugMode) console.log('🌿💡 LightSoil Handler instance created.');
                 else if (!window.lightSoilHandlerInstance) console.error("Failed to create LightSoilHandler instance");
             }
