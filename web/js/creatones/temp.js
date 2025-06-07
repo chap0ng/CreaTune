@@ -8,9 +8,9 @@ class TemperatureHandler {
 
         // Audio Params - Temperature Style
         this.fadeDuration = 1.8;
-        this.baseLiquidVolume = -12; // Quieter base for more dynamic range
-        this.basePunchyVolume = -9;
-        this.rhythmicPlaybackVolume = -6; // For recorded audio playback
+        this.baseLiquidVolume = 6; // Quieter base for more dynamic range
+        this.basePunchyVolume = 9;
+        this.rhythmicPlaybackVolume = 6; // For recorded audio playback
 
         // State
         this.isActive = false;
@@ -122,46 +122,48 @@ class TemperatureHandler {
             return;
         }
 
-        if (this.debugMode) console.log('🌡️ TemperatureHandler: Initializing Tone.js components...');
+        if (this.debugMode) console.log('🌡️ TemperatureHandler: Initializing Tone.js components (Gamelan-inspired)...');
         try {
             if (Tone.Transport.state !== "started") {
                 Tone.Transport.start();
                 if (this.debugMode) console.log('🌡️ TemperatureHandler: Tone.Transport started in initTone.');
             }
 
-            const masterReverb = new Tone.Reverb(2.5).toDestination(); // Slightly longer reverb for liquid feel
-            const masterDelay = new Tone.FeedbackDelay("4n", 0.35).connect(masterReverb);
-            const masterChorus = new Tone.Chorus(2, 1.5, 0.7).connect(masterDelay); // Chorus for liquid feel
+            // Effects: Reverb is good for Gamelan-like space. Delay can add rhythmic complexity. Chorus made more subtle.
+            const masterReverb = new Tone.Reverb(1.5).toDestination(); // Longer reverb for spacious feel
+            masterReverb.wet.value = 0.3; // Adjust wetness of reverb
+            const masterDelay = new Tone.FeedbackDelay("8n.", 0.3).connect(masterReverb); // Dotted 8th note delay
+            const masterChorus = new Tone.Chorus(0.5, 3.5, 0.2).connect(masterDelay); // Subtle chorus: freq, delayTime, depth
 
-            // Liquid Synth: FMSynth for evolving timbres
+            // Liquid Synth: Aiming for a resonant, metallic, gong-like or metallophone sound (mid-deep)
             this.liquidSynth = new Tone.FMSynth({
-                harmonicity: 1.5,
-                modulationIndex: 5,
+                harmonicity: 1.414, // Inharmonic ratio (sqrt(2)) for metallic timbre
+                modulationIndex: 12,
                 carrier: {
-                    oscillator: { type: "sine" },
-                    envelope: { attack: 0.1, decay: 0.5, sustain: 0.3, release: 1.2 }
+                    oscillator: { type: "sine" }, // Sine for roundness
+                    envelope: { attack: 0.02, decay: 0.6, sustain: 0.2, release: 1.8 } // Clear attack, resonant release
                 },
                 modulator: {
-                    oscillator: { type: "triangle" },
-                    envelope: { attack: 0.2, decay: 0.3, sustain: 0.2, release: 1.0 }
+                    oscillator: { type: "sine" }, // Sine modulator for smoother metallic tone
+                    envelope: { attack: 0.03, decay: 0.4, sustain: 0.1, release: 1.0 }
                 },
                 volume: -Infinity
             }).connect(masterChorus);
 
-            // Punchy Synth: MembraneSynth for percussive hits
+            // Punchy Synth: Aiming for a bonang or kenong-like percussive hit (mid-deep)
             this.punchySynth = new Tone.MembraneSynth({
-                pitchDecay: 0.02,
-                octaves: 5,
-                oscillator: { type: "sine" },
-                envelope: { attack: 0.005, decay: 0.2, sustain: 0.01, release: 0.3 },
+                pitchDecay: 0.04, // Slightly more decay for a 'bonk'
+                octaves: 4,       // Mid-range focus
+                oscillator: { type: "sine" }, // Round fundamental
+                envelope: { attack: 0.002, decay: 0.4, sustain: 0.0, release: 0.3 }, // Sharp attack, quick decay
                 volume: -Infinity
-            }).connect(masterReverb); // Connect to reverb for some space
+            }).connect(masterReverb); // Directly to reverb for a sense of space
 
             this.createMainTempLoop();
             this.createAccentLoop();
 
             this.toneInitialized = true;
-            if (this.debugMode) console.log('🌡️ TemperatureHandler: Tone.js components initialized successfully.');
+            if (this.debugMode) console.log('🌡️ TemperatureHandler: Tone.js components initialized successfully (Gamelan-inspired).');
             this.manageAudioAndVisuals();
 
         } catch (error) {
@@ -180,7 +182,8 @@ class TemperatureHandler {
         }
         if (this.tempCreatureVisual && this.tempCreatureVisual.classList.contains('active')) {
             this.tempCreatureCurrentFrame = (this.tempCreatureCurrentFrame + 1) % this.tempCreatureTotalFrames;
-            this.tempCreatureVisual.style.backgroundPositionX = (this.tempCreatureCurrentFrame * (100 / this.tempCreatureTotalFrames) * (this.tempCreatureTotalFrames / 6)) + '%'; // Adjusted for 6-frame standard
+            // Changed to match the sprite reading method in soil.js
+            this.tempCreatureVisual.style.backgroundPositionX = (this.tempCreatureCurrentFrame * 20) + '%'; 
         }
     }
 
@@ -196,21 +199,22 @@ class TemperatureHandler {
                 if (noteDisplayElement.textContent === `🌡️ ${this.lastDisplayedNote}`) {
                     noteDisplayElement.textContent = '-';
                 }
-            }, 850);
+            }, 1200); // Increased display time slightly for slower Gamelan feel
         }
     }
 
     createMainTempLoop() {
         if (!this.liquidSynth) return;
-        const tempNotes = ["C3", "D#3", "G3", "A#3", "C4", "D4", "F4"]; // Minor feel, can be adjusted
+        // Adjusted notes to be lower for mid/deep Gamelan feel
+        const tempNotes = ["C2", "D#2", "G2", "A#2", "C3", "D3", "F3"]; 
         this.mainTempLoop = new Tone.Pattern((time, note) => {
             if (!this.isPlaying || !this.liquidSynth || this.liquidSynth.volume.value === -Infinity) return;
-            const velocity = Math.max(0.2, this.currentTempAppValue * 0.6 + 0.1); // Softer base
-            this.liquidSynth.triggerAttackRelease(note, "1n", time, velocity); // Longer notes for liquid feel
+            const velocity = Math.max(0.25, this.currentTempAppValue * 0.5 + 0.2); 
+            this.liquidSynth.triggerAttackRelease(note, "0:2", time, velocity); // Longer duration, like "half note"
             this.triggerCreatureAnimation();
             this._displayNote(note);
         }, tempNotes, "randomWalk");
-        this.mainTempLoop.interval = "1m"; // Slower base interval
+        this.mainTempLoop.interval = "0:3"; // Slower base interval (e.g., 3 beats)
         this.mainTempLoop.humanize = "8n";
     }
 
@@ -218,13 +222,13 @@ class TemperatureHandler {
         if (!this.punchySynth) return;
         this.accentLoop = new Tone.Loop(time => {
             if (!this.isPlaying || !this.punchySynth || this.punchySynth.volume.value === -Infinity) return;
-            // Trigger based on temp condition or app value changes
-            const velocity = Math.max(0.3, (1 - this.currentTempAppValue) * 0.5 + 0.2); // Punchier when colder (inverted appValue)
-            this.punchySynth.triggerAttackRelease("C2", "8n", time, velocity); // Low punchy note
-            // this._displayNote("❄️"); // Or some other indicator
-        }, "2n"); // Interval for accents
-        this.accentLoop.probability = 0.1; // Low base probability, can be modulated
-        this.accentLoop.humanize = "16n";
+            const velocity = Math.max(0.35, (1 - this.currentTempAppValue) * 0.45 + 0.25); 
+            // Lower, deeper note for punchy Gamelan accent
+            this.punchySynth.triggerAttackRelease("G1", "8n", time, velocity); 
+            // this._displayNote("🔔"); // Gamelan-like indicator
+        }, "1m"); // Slower interval for accents, like a larger gong
+        this.accentLoop.probability = 0.15; 
+        this.accentLoop.humanize = "8n";
     }
 
     setupListeners() {
@@ -332,48 +336,48 @@ class TemperatureHandler {
 
         const isSensorActive = this.isActive && this.deviceStates.temperature.connected;
 
-        // Liquid Synth Parameters
+        // Liquid Synth Parameters (Gamelan-inspired)
         if (this.liquidSynth && this.liquidSynth.volume) {
-            const dynamicVolumePart = this.currentTempAppValue * 12; // More range
-            const targetVolume = isSensorActive ? (this.baseLiquidVolume + dynamicVolumePart) : -Infinity;
+            const dynamicVolumePart = this.currentTempAppValue * 10; 
+            const targetVolume = isSensorActive ? (this.baseLiquidVolume - 3 + dynamicVolumePart) : -Infinity; // Adjusted base for new timbre
             this.liquidSynth.volume.linearRampTo(targetVolume, 0.7);
 
-            // Modulate FM synth parameters based on temperature
-            let harmonicityTarget = 1.5;
-            let modIndexTarget = 5;
-            if (this.currentTempCondition === "very_cold") { harmonicityTarget = 1.2; modIndexTarget = 3; }
-            else if (this.currentTempCondition === "cold") { harmonicityTarget = 1.35; modIndexTarget = 4; }
-            else if (this.currentTempCondition === "cool") { harmonicityTarget = 1.5; modIndexTarget = 5; }
-            else if (this.currentTempCondition === "mild") { harmonicityTarget = 1.65; modIndexTarget = 6; }
-            else if (this.currentTempCondition === "warm") { harmonicityTarget = 1.8; modIndexTarget = 7; }
-            else if (this.currentTempCondition === "hot") { harmonicityTarget = 2.0; modIndexTarget = 8; }
+            // Modulate FM synth parameters based on temperature for timbral variation
+            let harmonicityTarget = 1.414; // Base inharmonic
+            let modIndexTarget = 12;     // Base complexity
+            if (this.currentTempCondition === "very_cold") { harmonicityTarget = 1.2; modIndexTarget = 8; }
+            else if (this.currentTempCondition === "cold") { harmonicityTarget = 1.3; modIndexTarget = 10; }
+            else if (this.currentTempCondition === "cool") { harmonicityTarget = 1.414; modIndexTarget = 12; }
+            else if (this.currentTempCondition === "mild") { harmonicityTarget = 1.5; modIndexTarget = 14; }
+            else if (this.currentTempCondition === "warm") { harmonicityTarget = 1.6; modIndexTarget = 16; }
+            else if (this.currentTempCondition === "hot") { harmonicityTarget = 1.7; modIndexTarget = 18; }
 
-            if (this.liquidSynth.harmonicity) this.liquidSynth.harmonicity.linearRampTo(harmonicityTarget, 0.5);
-            if (this.liquidSynth.modulationIndex) this.liquidSynth.modulationIndex.linearRampTo(modIndexTarget, 0.5);
+            if (this.liquidSynth.harmonicity) this.liquidSynth.harmonicity.linearRampTo(harmonicityTarget, 0.8);
+            if (this.liquidSynth.modulationIndex) this.liquidSynth.modulationIndex.linearRampTo(modIndexTarget, 0.8);
         }
 
-        // Main Temp Loop Interval (Liquid Synth)
+        // Main Temp Loop Interval (Liquid Synth) - Slower for Gamelan feel
         if (this.mainTempLoop) {
-            if (this.currentTempAppValue < 0.2) this.mainTempLoop.interval = "0:3"; // Slower (3 beats)
-            else if (this.currentTempAppValue < 0.4) this.mainTempLoop.interval = "0:2"; // 2 beats
-            else if (this.currentTempAppValue < 0.6) this.mainTempLoop.interval = "1n";   // 1 whole note
-            else if (this.currentTempAppValue < 0.8) this.mainTempLoop.interval = "2n";   // Half note
-            else this.mainTempLoop.interval = "4n"; // Quarter note (faster)
+            if (this.currentTempAppValue < 0.2) this.mainTempLoop.interval = "0:4"; // 4 beats
+            else if (this.currentTempAppValue < 0.4) this.mainTempLoop.interval = "0:3"; // 3 beats
+            else if (this.currentTempAppValue < 0.6) this.mainTempLoop.interval = "0:2";   // 2 beats
+            else if (this.currentTempAppValue < 0.8) this.mainTempLoop.interval = "1m";   // 1 measure (can be long)
+            else this.mainTempLoop.interval = "1:2"; // 1 measure + 2 beats (even longer)
         }
 
-        // Punchy Synth Parameters & Accent Loop
+        // Punchy Synth Parameters & Accent Loop (Gamelan-inspired)
         if (this.punchySynth && this.punchySynth.volume && this.accentLoop) {
-            const targetPunchyVol = isSensorActive ? this.basePunchyVolume + (this.currentTempAppValue * 5) : -Infinity;
+            const targetPunchyVol = isSensorActive ? (this.basePunchyVolume - 2 + (this.currentTempAppValue * 4)) : -Infinity; // Adjusted base
             this.punchySynth.volume.linearRampTo(targetPunchyVol, 0.6);
 
-            let accentProb = 0.1;
-            if (this.currentTempCondition === "very_cold") accentProb = 0.05;
-            else if (this.currentTempCondition === "cold") accentProb = 0.1;
-            else if (this.currentTempCondition === "hot") accentProb = 0.3;
-            else if (this.currentTempCondition === "warm") accentProb = 0.2;
+            let accentProb = 0.15; // Base probability
+            if (this.currentTempCondition === "very_cold") accentProb = 0.08;
+            else if (this.currentTempCondition === "cold") accentProb = 0.12;
+            else if (this.currentTempCondition === "hot") accentProb = 0.25;
+            else if (this.currentTempCondition === "warm") accentProb = 0.20;
             this.accentLoop.probability = isSensorActive ? accentProb : 0;
         }
-         if (this.debugMode && Math.random() < 0.03) console.log(`🌡️ USParams: LiquidVol=${this.liquidSynth?.volume.value.toFixed(1)}, PunchyVol=${this.punchySynth?.volume.value.toFixed(1)}, MainLoopInterval=${this.mainTempLoop?.interval}, AccentProb=${this.accentLoop?.probability.toFixed(2)}`);
+         if (this.debugMode && Math.random() < 0.03) console.log(`🌡️ USParams (Gamelan): LiquidVol=${this.liquidSynth?.volume.value.toFixed(1)}, PunchyVol=${this.punchySynth?.volume.value.toFixed(1)}, MainLoopInterval=${this.mainTempLoop?.interval}, AccentProb=${this.accentLoop?.probability.toFixed(2)}`);
     }
 
     manageAudioAndVisuals() {
@@ -435,8 +439,12 @@ class TemperatureHandler {
         if (this.tempCreatureVisual) {
             const wasCreatureActive = this.tempCreatureVisual.classList.contains('active');
             this.tempCreatureVisual.classList.toggle('active', showCreature);
+            
+            if (this.debugMode) {
+                console.log(`🌡️ updateUI: showCreature is ${showCreature}. Creature classList after toggle: ${this.tempCreatureVisual.classList}`);
+            }
 
-            // Remove all temp condition classes first
+            // Creature visual still uses condition-specific classes for its appearance
             ['temp-very-cold', 'temp-cold', 'temp-cool', 'temp-mild', 'temp-warm', 'temp-hot'].forEach(cls => this.tempCreatureVisual.classList.remove(cls));
             if (showCreature) {
                 this.tempCreatureVisual.classList.add(`temp-${this.currentTempCondition.replace('_', '-')}`);
@@ -447,41 +455,35 @@ class TemperatureHandler {
         }
 
         if (this.frameBackground) {
-            const isConnected = this.deviceStates.temperature.connected;
-            const tempActiveBgBaseClass = 'temp-active-bg'; // Base class for temp active
-            const currentTempBgClass = `temp-${this.currentTempCondition.replace('_', '-')}-bg`; // e.g., temp-cold-bg
-
+            const tempBgClass = 'temp-active-bg';
             const otherHandlersBgClasses = [
-                'soil-active-bg', 'light-active-bg', 'lightsoil-active-bg', 'idle-bg',
-                'soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg', // Soil specific conditions
-                'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg' // Light specific
+                'soil-active-bg', 'soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg',
+                'light-active-bg', 'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg',
+                'lightsoil-active-bg',
+                'idle-bg' 
             ];
-            const allTempConditionBgs = ['temp-very-cold-bg', 'temp-cold-bg', 'temp-cool-bg', 'temp-mild-bg', 'temp-warm-bg', 'temp-hot-bg'];
-
+            // Ensure any old specific temperature condition background classes are removed from the frameBackground
+            const allOldTempConditionBgs = ['temp-very-cold-bg', 'temp-cold-bg', 'temp-cool-bg', 'temp-mild-bg', 'temp-warm-bg', 'temp-hot-bg'];
+            allOldTempConditionBgs.forEach(cls => this.frameBackground.classList.remove(cls));
 
             if (this.isRecordMode) {
                 this.frameBackground.classList.add('record-mode-pulsing');
-                allTempConditionBgs.forEach(cls => this.frameBackground.classList.remove(cls)); // Clear other temp BGs
-                this.frameBackground.classList.add(currentTempBgClass); // Show its specific condition BG with pulsing
-                // In its own record mode, TemperatureHandler does not clear other handlers' BGs.
+                this.frameBackground.classList.add(tempBgClass);
+                // When temp is in record mode, it takes precedence and clears other backgrounds.
+                otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
             } else {
                 this.frameBackground.classList.remove('record-mode-pulsing');
-                allTempConditionBgs.forEach(cls => this.frameBackground.classList.remove(cls)); // Clear all temp BGs first
 
-                if (isConnected && this.isActive) { // Sensor connected AND active for its specific BG
-                    this.frameBackground.classList.add(currentTempBgClass);
-                    if (!this.isExternallyMuted) {
-                        otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
-                    }
-                } else if (isConnected) { // Sensor connected but NOT active (e.g. temp is "unknown" or out of active range)
-                     this.frameBackground.classList.add(tempActiveBgBaseClass); // Generic temp connected BG
-                     if (!this.isExternallyMuted) {
-                        otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
-                        allTempConditionBgs.forEach(cls => this.frameBackground.classList.remove(cls));
-                    }
-                } else { // Not connected
-                    this.frameBackground.classList.remove(tempActiveBgBaseClass);
-                    allTempConditionBgs.forEach(cls => this.frameBackground.classList.remove(cls));
+                const shouldShowTempBackground = this.deviceStates.temperature.connected && this.isActive && !this.isExternallyMuted;
+
+                if (shouldShowTempBackground) {
+                    this.frameBackground.classList.add(tempBgClass);
+                    // This handler is active, clear other handlers' backgrounds.
+                    otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
+                } else {
+                    // This handler is not responsible for the background. Remove its class.
+                    // It won't clear other handler's classes here, as another handler might be active.
+                    this.frameBackground.classList.remove(tempBgClass);
                 }
             }
         }
@@ -494,6 +496,7 @@ class TemperatureHandler {
             if (this.isRecordMode) {
                 this.stopRecordModeButton.style.display = 'block';
             } else if (!lightInRec && !soilInRec && !lightSoilInRec) {
+                // Hide button only if NO handler is in record mode
                 this.stopRecordModeButton.style.display = 'none';
             }
         }
@@ -590,17 +593,18 @@ class TemperatureHandler {
     }
 
     _setupRhythmicPlayback(audioBlob) {
-        // Use punchySynth for rhythmic playback
+        // Use punchySynth for rhythmic playback, ensure it sounds Gamelan-like
         if (!this.isRecordMode || !this.toneInitialized || !this.punchySynth) {
             if (this.debugMode) console.warn(`🌡️ _setupRhythmicPlayback: Blocked. isRecMode=${this.isRecordMode}, toneInit=${this.toneInitialized}, punchySynth=${!!this.punchySynth}. Forcing exit.`);
             this.exitRecordMode(true);
             return;
         }
-        if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback: Starting with punchySynth...');
+        if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback: Starting with punchySynth (Gamelan-style)...');
 
         if (this.punchySynth && this.punchySynth.volume) {
-            this.punchySynth.volume.value = this.rhythmicPlaybackVolume;
-            if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to ${this.rhythmicPlaybackVolume} dB.`);
+            // Use a slightly different volume for playback to distinguish from generative accents
+            this.punchySynth.volume.value = this.rhythmicPlaybackVolume - 2; 
+            if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to ${this.punchySynth.volume.value} dB for recording playback.`);
         }
 
         if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl);
@@ -618,8 +622,9 @@ class TemperatureHandler {
                     if (this.recordedBufferPlayer) { this.recordedBufferPlayer.dispose(); this.recordedBufferPlayer = null; }
                     if (this.rhythmFollower) { this.rhythmFollower.dispose(); this.rhythmFollower = null; }
                     if (this.rhythmicLoop) { this.rhythmicLoop.dispose(); this.rhythmicLoop = null; }
-                    if (this.punchySynth && this.punchySynth.volume.value === this.rhythmicPlaybackVolume) {
-                        this.punchySynth.volume.value = -Infinity;
+                    // Reset punchySynth volume if it was set for playback
+                    if (this.punchySynth && this.punchySynth.volume.value === (this.rhythmicPlaybackVolume -2)) {
+                         this.punchySynth.volume.value = -Infinity; // Or to its generative base if applicable
                     }
                     return;
                 }
@@ -627,7 +632,7 @@ class TemperatureHandler {
 
                 if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Recorded buffer player loaded.');
                 this.recordedBufferPlayer.connect(this.rhythmFollower);
-                this.recordedBufferPlayer.toDestination(); // Player output to speakers
+                this.recordedBufferPlayer.toDestination(); 
                 this.recordedBufferPlayer.start();
                 if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Recorded buffer player started.');
 
@@ -639,18 +644,19 @@ class TemperatureHandler {
                     const currentTime = Tone.now() * 1000;
 
                     if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
-                        const notes = ["C2", "D#2", "G1"]; // Low punchy notes
+                        // Deeper notes for Gamelan-like rhythmic response
+                        const notes = ["C1", "D#1", "G1", "A#1"]; 
                         const noteToPlay = notes[Math.floor(Math.random() * notes.length)];
-                        const velocity = 0.5 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.03);
+                        const velocity = 0.4 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.035);
 
-                        if (this.debugMode && Math.random() < 0.25) console.log(`🌡️ Rhythmic trigger! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Vel: ${velocity.toFixed(2)}`);
-                        this.punchySynth.triggerAttackRelease(noteToPlay, "32n", time, Math.min(1.0, Math.max(0.1, velocity))); // Short note
+                        if (this.debugMode && Math.random() < 0.25) console.log(`🌡️ Rhythmic trigger (Gamelan)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Vel: ${velocity.toFixed(2)}`);
+                        this.punchySynth.triggerAttackRelease(noteToPlay, "16n", time, Math.min(1.0, Math.max(0.15, velocity))); 
                         this.triggerCreatureAnimation();
                         this._displayNote(`🎤 ${noteToPlay}`);
                         this.lastRhythmNoteTime = currentTime;
                     }
                 }, "16n").start(0);
-                if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Rhythmic loop initiated.');
+                if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Rhythmic loop initiated (Gamelan-style).');
             },
             onerror: (err) => {
                 console.error('❌ _setupRhythmicPlayback: Error loading recorded buffer player:', err);

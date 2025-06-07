@@ -50,16 +50,13 @@ body {
   justify-content: center;
   min-height: 100vh; 
   margin: 0; 
-  overflow: auto;
-  padding-top: 0px;
-  padding-bottom: 0px;
-  padding-left: 50px;
-  padding-right: 70px;
+  overflow: auto; /* Changed from hidden to allow scrolling if content overflows */
+  padding: 30px 70px 30px 50px; /* Consistent padding order: top right bottom left */
   box-sizing: border-box; 
 }
 
 /* ==========================================================================
-   MAIN LAYOUT
+   MAIN LAYOUT - FRAMEIDLE
    ========================================================================== */
 
 .frameidle {
@@ -67,27 +64,24 @@ body {
   grid-template-columns: 20px 1fr 20px;
   grid-template-rows: 20px 1fr 20px;
   grid-template-areas:
-
     "corner1   frametop   corner2"
     "frameleft framebackground frameright"
     "corner3   framebottom  corner4";
-
   aspect-ratio: 2412 / 1080;
   width: 100%;
-  height: 100%;
+  /* height: 100%; /* Consider using min-height or letting aspect-ratio handle height */
   max-width: 100%; 
-  max-height: 100%;
+  max-height: 100vh; /* Ensure it doesn't exceed viewport height */
   margin: auto;
-  padding: 30px; 
+  /* padding: 30px; /* Padding is on body, or adjust if frameidle needs its own */
   position: relative;
   background-color: var(--warm-beige);
-  z-index: 1; /*ensure it sits above other content*/
+  z-index: 1;
 }
 
 /* ==========================================================================
-   FRAME COMPONENTS (Borders, Corners)
+   FRAME COMPONENTS (Borders & Corners)
    ========================================================================== */
-
 
 .frametop { 
   grid-area: frametop; 
@@ -102,7 +96,6 @@ body {
   background-repeat: no-repeat;
 }
 
-/* Frame Sides & Bottom */
 .frameleft { 
   grid-area: frameleft; 
   background-color: var(--warm-beige);
@@ -111,6 +104,7 @@ body {
   background-position: center; 
   background-repeat: no-repeat; 
 }
+
 .frameright { 
   grid-area: frameright; 
   background-color: var(--warm-beige);
@@ -119,6 +113,7 @@ body {
   background-position: center;
   background-repeat: no-repeat;
 }
+
 .framebottom { 
   grid-area: framebottom; 
   background-color: var(--warm-beige);
@@ -128,7 +123,6 @@ body {
   background-repeat: no-repeat; 
 }
 
-/* Frame Corners */
 .corner1 { 
   grid-area: corner1; 
   background-color: var(--warm-beige);
@@ -139,54 +133,60 @@ body {
   background-position: center;
   background-repeat: no-repeat; 
 }
+
 .corner2 { 
   grid-area: corner2; 
   background-color: var(--warm-beige);
   background-image: url(sprites/frame/knottopright.png);
   height: 90%; 
   width: 90%;
-  margin-left: 2px;
+  margin-left: 2px; /* Consider if this offset is truly needed or can be part of sprite */
   background-size: 100% 100%;
   background-position: center;
   background-repeat: no-repeat; 
 }
+
 .corner3 { 
   grid-area: corner3; 
   background-color: var(--warm-beige);
   background-image: url(sprites/frame/knotbotleft.png);
   height: 90%; 
   width: 90%;
+  margin-top: 2px; /* Consider if this offset is truly needed */
   background-size: 100% 100%;
-  margin-top: 2px;
   background-position: center;
   background-repeat: no-repeat; 
 }
+
 .corner4 { 
   grid-area: corner4; 
   background-color: var(--warm-beige);
   background-image: url(sprites/frame/knotbotright.png);
   height: 90%; 
   width: 90%;
+  margin-top: 2px;  /* Consider if this offset is truly needed */
+  margin-left: 2px; /* Consider if this offset is truly needed */
   background-size: 100% 100%;
-  margin-top: 2px;
-  margin-left: 2px;
   background-position: center;
   background-repeat: no-repeat; 
 }
 
-/* Performance optimizations */
-.frametop, .corner1, .corner2 {
-  will-change: transform;
+/* Performance optimizations for frame components */
+.frametop, .corner1, .corner2, .framebottom, .corner3, .corner4 {
+  will-change: transform; /* Apply to all if they might move/scale */
   transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
 .frameleft, .frameright, .framebackground {
-  will-change: margin-top;
+  will-change: margin-top, background-image, background-color, filter, box-shadow; /* Consolidate will-change */
+  transform: translateZ(0); /* Promote to their own layer */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 /* ==========================================================================
-   FRAME BACKGROUND & STATES
+   FRAME BACKGROUND & DYNAMIC STATES
    ========================================================================== */
 
 .framebackground {
@@ -198,220 +198,188 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  transition: background-color 0.8s ease-in-out, background-image 0.8s ease-in-out;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  z-index: 10;
+  transition: background-color 0.8s ease-in-out, background-image 0.8s ease-in-out, filter 0.8s ease-in-out, box-shadow 0.5s ease-in-out;
+  z-index: 2; /* Above frame components if needed, below creatures */
 }
 
-/* Soil Active Background */
-.framebackground.soil-active-bg { /* Renamed from soil-connected-bg or new class */
-  background-size: cover;
-  background-color: var(--warm-beige); /* Fallback color */
-  background-position: center;
-  background-repeat: repeat;
+/* --- Soil Background States --- */
+.framebackground.soil-active-bg {
   background-image: url(sprites/backgrounds/Background_soil.gif);
-}
-
-/* Light Active Background */
-.framebackground.light-active-bg {
   background-size: cover;
-  background-color: var(--warm-beige); /* Fallback color */
   background-position: center;
-  background-repeat: repeat;
+  background-repeat: repeat; /* Or no-repeat if GIF is designed for it */
+  /* background-color: var(--warm-beige); /* Fallback if needed */
+}
+/* Add .soil-dry-bg, .soil-humid-bg, .soil-wet-bg if they differ from soil-active-bg */
+
+/* --- Light Background States --- */
+.framebackground.light-active-bg, /* Generic light active */
+.framebackground.light-dark-bg,
+.framebackground.light-dim-bg,
+.framebackground.light-bright-bg,
+.framebackground.light-very-bright-bg,
+.framebackground.light-extremely-bright-bg {
   background-image: url(sprites/backgrounds/Background_light.gif);
-}
-
-/* LightSoil Active Background (already defined, ensure it's as desired) */
-.framebackground.lightsoil-active-bg {
   background-size: cover;
-  background-color: var(--warm-beige); /* Fallback color */
   background-position: center;
   background-repeat: repeat;
-  /*background-image: url(sprites/backgrounds/Background_lightsoil.gif); */
+  /* Specific filters for light conditions can be added here if desired,
+     e.g., .framebackground.light-dark-bg { filter: brightness(0.8); } */
 }
 
+/* --- Temperature Background States --- */
+.framebackground.temp-active-bg { /* Generic active, if no specific condition matches */
+  background-image: url(sprites/backgrounds/Background_temp.gif);
+  background-color: var(--blue-green); /* Fallback color */
+  background-size: cover;
+  background-position: center;
+}
+
+/* --- LightSoil Background State --- */
+.framebackground.lightsoil-active-bg {
+  /* background-image: url(sprites/backgrounds/Background_lightsoil.gif); /* Uncomment if you have this */
+  background-color: var(--blue-green); /* Your existing base color */
+  background-size: cover;
+  background-position: center;
+}
+
+/* --- Record Mode Background --- */
+.framebackground.record-mode-pulsing {
+  animation: recordPulseEffect 1.2s ease-in-out infinite alternate;
+  /* This animation adds a box-shadow, preserving the underlying background-image */
+}
+
+@keyframes recordPulseEffect {
+  0% {
+    box-shadow: 0 0 5px 2px rgba(230, 105, 90, 0.35); /* var(--coral-red) with alpha */
+  }
+  100% {
+    box-shadow: 0 0 20px 8px rgba(230, 105, 90, 0.65); /* var(--coral-red) with alpha */
+  }
+}
 
 /* ==========================================================================
-   CREATURES
+   CREATURES - GENERAL STYLES
    ========================================================================== */
 
 .idle-creature, 
 .soil-creature,
 .light-creature,
+.temp-creature, /* Included here */
 .lightsoil-creature {
   position: absolute; 
   top: 50%; 
   left: 50%;
-  transform: translate(-50%, -50%) translateZ(0); /* Center the creature */
-  width: min(80vw, 60vh); /* Responsive width */
-  height: min(80vw, 60vh); /* Responsive height */
-  background-size: contain; /* Default, overridden by .soil-creature */
+  transform: translate(-50%, -50%) translateZ(0); /* Center & promote */
+  width: min(80vw, 60vh); /* Responsive width, overridden in media queries */
+  height: min(80vw, 60vh); /* Responsive height, overridden in media queries */
   background-repeat: no-repeat;
-  background-position: center; /* Default, overridden by .soil-creature */
-  display: none;
-  opacity: 0;
-  z-index: 5;
+  background-position: center; /* Default, overridden by sprite sheets */
+  display: none; /* Hidden by default */
+  opacity: 0;    /* Fades in when active */
+  z-index: 10;   /* Above background */
   transition: 
     opacity 0.6s ease-in-out,
-    transform 1s ease-in-out;
-  will-change: opacity, transform, background-position; /* background-position is important here */
+    transform 1s ease-in-out, /* For general creature animations */
+    filter 0.5s ease-in-out;  /* For condition-specific filters */
+  will-change: opacity, transform, background-position, filter;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
 
-/* Specific creature images */
+/* --- Idle Creature --- */
+/* .idle-creature { background-image: url('../sprites/creatures/idle-creature.png'); } */
+/* Add if you have a specific idle creature sprite, otherwise it might be a placeholder */
+
+/* --- Soil Creature --- */
 .soil-creature {
-  background-image: url('../sprites/creatures/soil-creature.png'); /* Path to your 6-frame sprite sheet */
-  background-size: 600% 100%; /* 6 columns, 1 row */
-  background-position: 0% 0%;   /* Start at the first frame (controlled by JS) */
-  z-index: 10; /* Ensure soil creature is above the background */
+  background-image: url('../sprites/creatures/soil-creature.png');
+  background-size: 600% 100%; /* 6 columns, 1 row for sprite sheet */
+  background-position: 0% 0%;   /* Start at the first frame (JS controlled) */
 }
+/* Add .soil-creature.soil-dry etc. if creature appearance changes with soil state beyond animation */
 
+/* --- Light Creature --- */
 .light-creature {
-  background-image: url('../sprites/creatures/light-creature.png'); /* <<< NEW: Path to your light creature 6-frame sprite sheet */
-  background-size: 600% 100%; /* <<< NEW: Assuming 6 frames, (6 * 100)% width */
-  background-position: 0% 0%;   /* <<< NEW: Start at the first frame (controlled by JS) */
-  z-index: 10; /* Optional: if it needs to be above other specific elements */
-}
-
-
-.lightsoil-creature { 
-  background-image: url('../sprites/creatures/lightsoil-creature.png');
-  background-size: 600% 100%; /* <<< NEW: Assuming 6 frames, (6 * 100)% width */
-  background-position: 0% 0%;   /* <<< NEW: Start at the first frame (controlled by JS) */
-  z-index: 10; /* Optional: if it needs to be above other specific elements */
-}
-
-/* ADD STYLES FOR TEMP CREATURE */
-.temp-creature {
-  background-image: url('../sprites/creatures/temp-creature.png'); 
-  background-size: 600% 100%; /* Assuming 6 frames */
+  background-image: url('../sprites/creatures/light-creature.png');
+  background-size: 600% 100%; 
   background-position: 0% 0%;
-  z-index: 10;
 }
-
-/* Active state for creatures (controlled by JS) */
-.idle-creature.active,
-.soil-creature.active, 
-.light-creature.active,
-.temp-creature.active, /* ADD THIS */
-.lightsoil-creature.active { 
-  display: block;
-  opacity: 1;
-}
-
-/* 
-   CSS Animation for soil creature is REMOVED. 
-   Animation is now controlled by JavaScript by changing background-position-x.
-*/
-
-
-/* ==========================================================================
-   LIGHT CREATURE - SPECIFIC STYLES & ANIMATIONS
-   ========================================================================== */
-
 .light-creature.active {
   animation: lightCreaturePulse 4s ease-in-out infinite;
 }
-
 /* Light condition specific visual styles for the creature itself */
-.light-creature.light-dark {
-  filter: brightness(1.0);
-  animation-duration: 5s; 
+.light-creature.light-dark { filter: brightness(1.0); animation-duration: 5s; }
+.light-creature.light-dim { filter: brightness(1.0) drop-shadow(0 0 1px var(--warm-yellow)); animation-duration: 5s; }
+.light-creature.light-bright { filter: brightness(1.0) drop-shadow(0 0 3px var(--warm-yellow)); animation-duration: 3.5s; }
+.light-creature.light-very-bright { filter: brightness(1.0) drop-shadow(0 0 6px var(--warm-yellow)); animation-duration: 2.5s; }
+.light-creature.light-extremely-bright { filter: brightness(1.0) drop-shadow(0 0 9px var(--warm-red)); animation-duration: 1.8s; }
+
+/* --- Temperature Creature --- */
+.temp-creature {
+  background-image: url('../sprites/creatures/temp-creature.png'); 
+  background-size: 600% 100%; 
+  background-position: 0% 0%;
 }
-
-.light-creature.light-dim {
-  filter: brightness(1.0)drop-shadow(0 0 1px var(--warm-yellow)); 
-  animation-duration: 5s; 
+.temp-creature.active {
+  animation: tempCreatureShiverPulse 3s ease-in-out infinite alternate;
 }
+/* Temperature condition specific visual styles */
+.temp-creature.temp-very-cold { filter: brightness(0.8) saturate(0.7) hue-rotate(180deg); animation-duration: 4s; }
+.temp-creature.temp-cold { filter: brightness(0.9) saturate(0.8) hue-rotate(160deg); animation-duration: 3.5s; }
+.temp-creature.temp-cool { filter: brightness(1.0) saturate(0.9); animation-duration: 3s; }
+.temp-creature.temp-mild { filter: brightness(1.05) saturate(1.0); animation-duration: 2.5s; }
+.temp-creature.temp-warm { filter: brightness(1.1) saturate(1.1) hue-rotate(-15deg); animation-duration: 2s; }
+.temp-creature.temp-hot { filter: brightness(1.2) saturate(1.2) hue-rotate(-30deg) drop-shadow(0 0 5px var(--coral-red)); animation-duration: 1.5s; }
 
-.light-creature.light-bright {
-  filter: brightness(1.0) drop-shadow(0 0 3px var(--warm-yellow)); 
-  animation-duration: 3.5s;
+/* --- LightSoil Creature --- */
+.lightsoil-creature { 
+  background-image: url('../sprites/creatures/lightsoil-creature.png');
+  background-size: 600% 100%; 
+  background-position: 0% 0%;
 }
-
-.light-creature.light-very-bright {
-  filter: brightness(1.0) drop-shadow(0 0 6px var(--warm-yellow));
-  animation-duration: 2.5s; 
-}
-
-.light-creature.light-extremely-bright {
-  filter: brightness(1.0) drop-shadow(0 0 9px var(--coral-red)); 
-  animation-duration: 1.8s; 
-}
-
-/* Light condition specific background styles */
-.framebackground.light-dark-bg {
-  background-size: cover;
-  background-color: var(--warm-beige);
-  background-position: center;
-  background-repeat: repeat;
-  background-image:url(sprites/backgrounds/Background_light.gif);
-
-}
-
-.framebackground.light-dim-bg {
-  background-size: cover;
-  background-color: var(--warm-beige);
-  background-position: center;
-  background-repeat: repeat;
-  background-image:url(sprites/backgrounds/Background_light.gif);
-}
-
-.framebackground.light-bright-bg {
-  background-size: cover;
-  background-color: var(--warm-beige);
-  background-position: center;
-  background-repeat: repeat;
-  background-image:url(sprites/backgrounds/Background_light.gif);
-}
-
-.framebackground.light-very-bright-bg {
-  background-size: cover;
-  background-color: var(--warm-beige);
-  background-position: center;
-  background-repeat: repeat;
-  background-image:url(sprites/backgrounds/Background_light.gif);
-}
-
-.framebackground.light-extremely-bright-bg {
-  background-size: cover;
-  background-color: var(--warm-beige);
-  background-position: center;
-  background-repeat: repeat;
-  background-image:url(sprites/backgrounds/Background_light.gif);
-}
-
-/* LightSoil condition specific background styles */ 
-.framebackground.lightsoil-active-bg {
-  background-color: var(--blue-green); /* Your existing base color */
-}
-
-/* ==========================================================================
-   LIGHTSOIL CREATURE - SPECIFIC STYLES & ANIMATIONS
-   ========================================================================== */
-
 .lightsoil-creature.active {
   animation: lightSoilCreaturePulse 5s ease-in-out infinite alternate; 
 }
 
-@keyframes lightSoilCreaturePulse {
-  0% {
-    transform: translate(-50%, -50%) scale(0.98) rotate(-2deg) translateZ(0);
-    filter: brightness(0.95) saturate(0.9);
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1.02) rotate(2deg) translateZ(0);
-    filter: brightness(1.05) saturate(1.1);
-  }
+/* --- Common Active State for Creatures --- */
+.idle-creature.active,
+.soil-creature.active, 
+.light-creature.active,
+.temp-creature.active,
+.lightsoil-creature.active { 
+  display: block; /* Make visible */
+  opacity: 1;     /* Fade in */
 }
 
 /* ==========================================================================
-   AUDIO ENABLE BUTTON
+   ANIMATIONS (Keyframes)
    ========================================================================== */
 
+@keyframes lightCreaturePulse { /* Co-locate if not already with .light-creature.active */
+  /* Define keyframes if this is a generic pulse, or remove if specific to conditions */
+  0%, 100% { transform: translate(-50%, -50%) scale(1.0) translateZ(0); }
+  50% { transform: translate(-50%, -50%) scale(1.03) translateZ(0); }
+}
+
+@keyframes tempCreatureShiverPulse { 
+  0%   { transform: translate(-50%, -50%) scale(1.0)  rotate(0deg)  translateZ(0); opacity: 0.9; }
+  25%  { transform: translate(-50.5%, -50.5%) scale(1.01) rotate(-1deg) translateZ(0); }
+  50%  { transform: translate(-50%, -50%) scale(1.0)  rotate(0deg)  translateZ(0); opacity: 1.0; }
+  75%  { transform: translate(-49.5%, -49.5%) scale(0.99) rotate(1deg)  translateZ(0); }
+  100% { transform: translate(-50%, -50%) scale(1.0)  rotate(0deg)  translateZ(0); opacity: 0.9; }
+}
+
+@keyframes lightSoilCreaturePulse {
+  0%   { transform: translate(-50%, -50%) scale(0.98) rotate(-2deg) translateZ(0); filter: brightness(0.95) saturate(0.9); }
+  100% { transform: translate(-50%, -50%) scale(1.02) rotate(2deg)  translateZ(0); filter: brightness(1.05) saturate(1.1); }
+}
+
+/* ==========================================================================
+   UI ELEMENTS
+   ========================================================================== */
+
+/* --- Audio Enable Button --- */
 #audio-enable-button {
   position: fixed;
   top: 20px; 
@@ -427,10 +395,12 @@ body {
   z-index: 10000; 
   transition: opacity 0.5s ease-in-out, background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
   box-shadow: 3px 3px 0px var(--dark-slate); 
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #audio-enable-button:hover {
-  background-color: #f8c96a; 
+  background-color: #f8c96a; /* Slightly lighter yellow */
   transform: translateY(-2px) translateX(-1px); 
   box-shadow: 5px 5px 0px var(--dark-slate); 
 }
@@ -451,21 +421,20 @@ body {
   transform: translateY(-20px); 
 }
 
-/* ==========================================================================
-   UI
-   ========================================================================== */
-
+/* --- Notes Display --- */
 #notes-display {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: 50%; /* Adjust if it overlaps too much with creatures */
   transform: translate(-50%, -50%);
-  z-index: 1;
+  z-index: 100; /* Above creatures if needed, or below if creatures are main focus */
   font-size: 45px;
   color: var(--coral-red);
   text-align: center;
+  pointer-events: none; /* So it doesn't interfere with clicks on background/creatures */
 }
 
+/* --- Stop Record Mode Button --- */
 #stoprecordmode {
   position: absolute;
   top: 30px; 
@@ -475,77 +444,65 @@ body {
   padding: 0; 
   font-family: 'VT323', monospace;
   font-size: 28px; 
-  line-height: 40px; 
+  line-height: 40px; /* Vertically center text */
   text-align: center; 
   color: var(--coral-red);
   background-color: var(--warm-beige); 
+  border: 2px solid var(--dark-slate); /* Added border for consistency */
   border-radius: 50%; 
   cursor: pointer;
-  z-index: 1000; 
+  z-index: 10000; /* Same as audio button */
   display: none; /* Initially hidden, controlled by JS */
   box-shadow: 2px 2px 0px var(--dark-slate); 
   user-select: none;
   -webkit-user-select: none;
+  transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 #stoprecordmode:hover {
-  background-color: var(--light-gray); /* Or a slightly different shade */
+  background-color: var(--light-gray);
   transform: translateY(-1px) translateX(-1px);
   box-shadow: 3px 3px 0px var(--dark-slate);
 }
 
-/* RE-ADD Record Mode Pulsing Feedback */
-.framebackground.record-mode-pulsing {
-  animation: recordPulseEffect 1.2s ease-in-out infinite alternate;
-  /* Ensure this doesn't remove the specific background image if it's desired */
-  /* The box-shadow should overlay the existing background */
-}
-
-@keyframes recordPulseEffect {
-  0% {
-    box-shadow: 0 0 5px 2px rgba(230, 105, 90, 0.25);
-    /* transform: scale(1.00); // Keep if desired */
-  }
-  100% {
-    box-shadow: 0 0 15px 5px rgba(230, 105, 90, 0.55);
-    /* transform: scale(1.005); // Keep if desired */
-  }
-}
-
 /* ==========================================================================
-   RESPONSIVE ADJUSTMENTS - CREATURE SIZE
+   RESPONSIVE ADJUSTMENTS
    ========================================================================== */
 
+/* --- General Creature Size Adjustments --- */
 @media (max-width: 768px) { 
-  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature { /* ADD .temp-creature */
+  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature {
     width: min(35vw, 30vh);
     height: min(35vw, 30vh);
   }
+  #notes-display { font-size: 35px; }
 }
 
 @media (max-height: 500px) { 
-  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature { /* ADD .temp-creature */
+  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature {
     width: min(30vw, 25vh);
     height: min(30vw, 25vh);
   }
+  body { padding: 15px 40px 15px 30px; } /* Reduce padding on very short screens */
+  #notes-display { font-size: 30px; }
 }
 
 @media (min-width: 1200px) { 
-  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature { /* ADD .temp-creature */
+  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature {
     width: min(35vw, 40vh); 
     height: min(35vw, 40vh);
   }
+  #notes-display { font-size: 50px; }
 }
 
-/* ==========================================================================
-   FULLSCREEN HORIZONTAL FOR PHONES
-   ========================================================================== */
+/* --- Landscape Mobile Adjustments --- */
 @media (orientation: landscape) and (hover: none) and (pointer: coarse) {
   body {
-    overflow: hidden; 
+    overflow: hidden; /* Prevent scrolling in landscape mobile */
+    padding: 10px;    /* Adjust padding for smaller landscape view */
   }
   
-  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature { /* ADD .temp-creature */
+  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature {
     width: min(50vw, 40vh); 
     height: min(50vw, 40vh); 
   }
@@ -556,90 +513,13 @@ body {
     top: 10px; 
     right: 10px; 
   }
-}
-
-/* ADD TEMP CREATURE SPECIFIC STYLES & ANIMATIONS */
-/* ==========================================================================
-   TEMP CREATURE - SPECIFIC STYLES & ANIMATIONS
-   ========================================================================== */
-
-.temp-creature.active {
-  animation: tempCreatureShiverPulse 3s ease-in-out infinite alternate; /* Example animation */
-}
-
-/* Temperature condition specific visual styles for the creature itself */
-.temp-creature.temp-very-cold {
-  filter: brightness(0.8) saturate(0.7) hue-rotate(180deg); /* Bluish, darker */
-  animation-duration: 4s; 
-}
-.temp-creature.temp-cold {
-  filter: brightness(0.9) saturate(0.8) hue-rotate(160deg); /* Slightly bluish */
-  animation-duration: 3.5s;
-}
-.temp-creature.temp-cool {
-  filter: brightness(1.0) saturate(0.9);
-  animation-duration: 3s;
-}
-.temp-creature.temp-mild {
-  filter: brightness(1.05) saturate(1.0); /* Normal or slightly vibrant */
-  animation-duration: 2.5s;
-}
-.temp-creature.temp-warm {
-  filter: brightness(1.1) saturate(1.1) hue-rotate(-15deg); /* Slightly reddish/orangeish */
-  animation-duration: 2s;
-}
-.temp-creature.temp-hot {
-  filter: brightness(1.2) saturate(1.2) hue-rotate(-30deg) drop-shadow(0 0 5px var(--coral-red)); /* Reddish, brighter, glow */
-  animation-duration: 1.5s;
-}
-
-@keyframes tempCreatureShiverPulse { /* Example animation */
-  0% {
-    transform: translate(-50%, -50%) scale(1.0) rotate(0deg) translateZ(0);
-    opacity: 0.9;
+  #stoprecordmode {
+    top: 10px;
+    left: 10px;
+    width: 35px;
+    height: 35px;
+    font-size: 24px;
+    line-height: 35px;
   }
-  25% {
-    transform: translate(-50.5%, -50.5%) scale(1.01) rotate(-1deg) translateZ(0);
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.0) rotate(0deg) translateZ(0);
-    opacity: 1.0;
-  }
-  75% {
-    transform: translate(-49.5%, -49.5%) scale(0.99) rotate(1deg) translateZ(0);
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1.0) rotate(0deg) translateZ(0);
-    opacity: 0.9;
-  }
-}
-
-/* Temperature condition specific background styles */
-.framebackground.temp-active-bg { /* Generic active, if no specific condition matches */
-  background-image: url(sprites/backgrounds/Background_temp.gif); /* Default temp BG */
-  background-color: var(--sage-green); /* Fallback color */
-}
-.framebackground.temp-very-cold-bg {
-  background-image: url(sprites/backgrounds/Background_temp.gif);
-  filter: hue-rotate(180deg) brightness(0.7) saturate(1.2);
-}
-.framebackground.temp-cold-bg {
-  background-image: url(sprites/backgrounds/Background_temp.gif);
-  filter: hue-rotate(160deg) brightness(0.85) saturate(1.1);
-}
-.framebackground.temp-cool-bg {
-  background-image: url(sprites/backgrounds/Background_temp.gif);
-  filter: brightness(0.95) saturate(1.0);
-}
-.framebackground.temp-mild-bg {
-  background-image: url(sprites/backgrounds/Background_temp.gif);
-  filter: brightness(1.0) saturate(1.0); /* Normal */
-}
-.framebackground.temp-warm-bg {
-  background-image: url(sprites/backgrounds/Background_temp.gif);
-  filter: hue-rotate(-15deg) brightness(1.05) saturate(1.1);
-}
-.framebackground.temp-hot-bg {
-  background-image: url(sprites/backgrounds/Background_temp.gif);
-  filter: hue-rotate(-30deg) brightness(1.1) saturate(1.2) contrast(1.1);
+  #notes-display { font-size: 28px; }
 }
