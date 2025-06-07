@@ -108,30 +108,41 @@ class LightHandler {
     }
 
     initTone() {
-        if (this.toneInitialized) return;
-        if (!window.Tone || !this.audioEnabled) {
-            if (this.debugMode) console.warn(`💡 LightHandler: Cannot initTone. Tone loaded: ${!!window.Tone}, AudioEnabled: ${this.audioEnabled}`);
+        if (this.debugMode) console.log(`%c💡 LightHandler.initTone: CALLED. Current state: toneInitialized: ${this.toneInitialized}, audioEnabled: ${this.audioEnabled}, Tone loaded: ${!!window.Tone}, Tone.context.state: ${window.Tone ? Tone.context.state : 'N/A'}`, 'color: blue; font-weight: bold;');
+
+        if (this.toneInitialized) {
+            if (this.debugMode) console.log("💡 LightHandler.initTone: Already initialized. Returning.");
             return;
         }
+        if (!window.Tone || !this.audioEnabled) {
+            if (this.debugMode) console.warn(`💡 LightHandler.initTone: PRE-CONDITION FAIL. Tone loaded: ${!!window.Tone}, AudioEnabled: ${this.audioEnabled}. Returning.`);
+            return;
+        }
+        // It's crucial that Tone.context.state is 'running' here.
+        // This is usually set after a user gesture (e.g., clicking "Start Audio" button which calls Tone.start()).
         if (Tone.context.state !== 'running') {
-            if (this.debugMode) console.warn('💡 LightHandler: AudioContext not running. Deferring Tone component initialization.');
+            if (this.debugMode) console.warn(`💡 LightHandler.initTone: AudioContext not running (state: ${Tone.context.state}). Deferring Tone component initialization. Returning.`);
             return;
         }
 
-        if (this.debugMode) console.log('💡 LightHandler: Initializing Tone.js components...');
+        if (this.debugMode) console.log('💡 LightHandler.initTone: All pre-conditions met. Proceeding with Tone.js component initialization...');
         try {
             if (Tone.Transport.state !== "started") {
+                if (this.debugMode) console.log('💡 LightHandler.initTone: Starting Tone.Transport.');
                 Tone.Transport.start();
             }
 
             const reverb = new Tone.Reverb(0.3).toDestination();
+            if (this.debugMode) console.log('💡 LightHandler.initTone: Reverb created.');
             const delay = new Tone.FeedbackDelay("2n", 0.1).connect(reverb);
+            if (this.debugMode) console.log('💡 LightHandler.initTone: Delay created.');
 
             this.ambientSynth = new Tone.PolySynth(Tone.Synth, {
                 oscillator: { type: "sawtooth", count: 3, spread: 30 },
                 envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.2 },
                 volume: -Infinity
             }).connect(reverb);
+            if (this.debugMode) console.log(`💡 LightHandler.initTone: ambientSynth ${this.ambientSynth ? 'created' : 'FAILED TO CREATE'}.`);
 
             this.sparkleSynth = new Tone.MetalSynth({
                 frequency: 240,
@@ -142,16 +153,23 @@ class LightHandler {
                 octaves: 1.5,
                 volume: -Infinity
             }).connect(delay);
+            if (this.debugMode) console.log(`💡 LightHandler.initTone: sparkleSynth ${this.sparkleSynth ? 'created' : 'FAILED TO CREATE'}.`);
             
-            this.createMainLoop();
-            this.createSparkleLoop();
+            this.createMainLoop(); // This itself logs if synth is missing
+            this.createSparkleLoop(); // This itself logs if synth is missing
 
-            this.toneInitialized = true;
-            if (this.debugMode) console.log('💡 LightHandler: Tone.js components initialized successfully.');
-            this.manageAudioAndVisuals();
+            if (this.ambientSynth && this.sparkleSynth && this.mainLoop && this.sparkleLoop) {
+                this.toneInitialized = true;
+                if (this.debugMode) console.log('%c💡 LightHandler: Tone.js components initialized successfully. toneInitialized = true.', 'color: green; font-weight: bold;');
+            } else {
+                this.toneInitialized = false;
+                console.error('❌ LightHandler.initTone: FAILED to initialize all synths/loops. toneInitialized = false.');
+            }
+            // This call is important to reflect the new toneInitialized state
+            this.manageAudioAndVisuals(); 
 
         } catch (error) {
-            console.error('❌ LightHandler: Error during Tone.js component initialization:', error);
+            console.error('❌ LightHandler.initTone: Error during Tone.js component initialization:', error);
             this.toneInitialized = false;
             if (this.ambientSynth) { this.ambientSynth.dispose(); this.ambientSynth = null; }
             if (this.sparkleSynth) { this.sparkleSynth.dispose(); this.sparkleSynth = null; }
@@ -394,6 +412,7 @@ class LightHandler {
             const wasCreatureActive = this.lightCreatureVisual.classList.contains('active');
             this.lightCreatureVisual.classList.toggle('active', showActiveSystem);
 
+            // Creature condition class (can remain for visual variants of the creature)
             this.lightCreatureVisual.classList.remove('light-dark', 'light-dim', 'light-bright', 'light-very-bright', 'light-extremely-bright');
             if (showActiveSystem) { // Apply condition class if creature is to be shown
                 this.lightCreatureVisual.classList.add(`light-${this.currentLightCondition.replace('_', '-')}`);
@@ -722,7 +741,7 @@ class LightHandler {
                 console.error("❌ startAudio (generative) Light: Critical: Re-init failed. Cannot start.");
                 return;
              }
-             if this.isPlaying return; 
+            // if (this.isPlaying) return; // This was the duplicated line, removed. The check is already done above.
         }
 
         if (this.debugMode) console.log('💡 startAudio (generative): Starting...');
