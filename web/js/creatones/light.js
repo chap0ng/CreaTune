@@ -424,7 +424,7 @@ class LightHandler {
                 this.frameBackground.classList.add('light-active-bg');
             } else if (!window.soilHandlerInstance || !window.soilHandlerInstance.isRecordMode) {
                 this.frameBackground.classList.remove('record-mode-pulsing');
-                this.frameBackground.classList.add('light-active-bg');
+                this.frameBackground.classList.remove('light-active-bg');
             }
         }
 
@@ -740,7 +740,7 @@ class LightHandler {
 
         if (this.debugMode) console.log(`💡 stopAudio (generative): Stopping. Forced: ${force}, WasPlaying: ${this.isPlaying}, WasFading: ${this.isFadingOut}`);
         
-        const wasPlaying = this.isPlaying;
+        const wasPlaying = this.isPlaying; // User's variable name
         this.isPlaying = false; 
         
         if (!force && wasPlaying) { 
@@ -762,7 +762,7 @@ class LightHandler {
 
         if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
         
-        const completeStop = () => {
+        const completeStop = () => { // User's function name
             if (this.mainLoop && this.mainLoop.state === "started") this.mainLoop.stop(0);
             if (this.sparkleLoop && this.sparkleLoop.state === "started") this.sparkleLoop.stop(0);
             
@@ -770,7 +770,9 @@ class LightHandler {
                 this.ambientSynth.releaseAll(); 
                 if (this.ambientSynth.volume) this.ambientSynth.volume.value = -Infinity;
             }
-            if (this.sparkleSynth && this.sparkleSynth.volume) this.sparkleSynth.volume.value = -Infinity; 
+            if (this.sparkleSynth && this.sparkleSynth.volume && !this.isRecordMode) { // Ensure not in record mode when silencing sparkle for generative
+                 this.sparkleSynth.volume.value = -Infinity; 
+            }
             
             this.isFadingOut = false; 
             if (this.debugMode) console.log('💡 stopAudio (generative): Fully stopped and loops cleared.');
@@ -786,24 +788,30 @@ class LightHandler {
             this.stopTimeoutId = setTimeout(completeStop, (this.fadeDuration * 1000 + 150)); 
         }
         
-        if (!force || !wasPlaying) { 
-             this.updateUI();
-        }
+        // Removed redundant block:
+        // if (!force || !wasPlaying) { 
+        //      this.updateUI();
+        // }
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     const initLightHandler = () => {
-        if (window.creatune && window.Tone) {
-            if (!window.lightHandlerInstance) {
+        // Wait for Tone, Creatune, and other essential handlers
+        if (window.creatune && window.Tone &&
+            typeof window.soilHandlerInstance !== 'undefined' &&
+            typeof window.lightSoilHandlerInstance !== 'undefined') {
+            if (!window.lightHandlerInstance) { // Ensure singleton
                 window.lightHandlerInstance = new LightHandler();
-                if (window.lightHandlerInstance.debugMode) console.log('💡 Light Handler instance created.');
+                if (window.lightHandlerInstance.debugMode) console.log('💡 Light Handler instance created and assigned to window.lightHandlerInstance.');
             }
         } else {
-            const tempDebugMode = (window.lightHandlerInstance && typeof window.lightHandlerInstance.debugMode !== 'undefined') 
-                                  ? window.lightHandlerInstance.debugMode : true; 
-            if (tempDebugMode) console.log('💡 Waiting for LightHandler dependencies (DOMContentLoaded)...');
-            setTimeout(initLightHandler, 100);
+            // Use a simple flag for debug logging during this early stage
+            const tempDebugMode = true; 
+            if (tempDebugMode) {
+                console.log(`💡 Waiting for LightHandler dependencies (DOMContentLoaded)... Creatune: ${!!window.creatune}, Tone: ${!!window.Tone}, SoilH: ${typeof window.soilHandlerInstance !== 'undefined'}, LightSoilH: ${typeof window.lightSoilHandlerInstance !== 'undefined'}`);
+            }
+            setTimeout(initLightHandler, 200); // Retry after a short delay
         }
     };
     initLightHandler();
