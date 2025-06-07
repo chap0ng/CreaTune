@@ -502,37 +502,39 @@ class LightSoilHandler {
     }
 
     updateUI() {
-        const showCreature = this.isCombinedActive && !this.isRecordMode && !this.isExternallyMuted;
-        const showLightSoilBg = this.showLightSoilVisualContext && !this.isRecordMode && !this.isExternallyMuted;
+        // Creature active when both sensors connected & active, not in LS record mode
+        const showCreature = this.isCombinedActive && !this.isRecordMode;
 
         if (this.lightSoilCreatureVisual) {
             this.lightSoilCreatureVisual.classList.toggle('active', showCreature);
         }
 
         if (this.frameBackground) {
-            this.frameBackground.classList.toggle('lightsoil-active-bg', showBackground);
-            if (showBackground) { // If LightSoil BG is active, remove individual ones
-                this.frameBackground.classList.remove(
-                    'light-active-bg', 'soil-active-bg',
-                    'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg',
-                    'soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg'
-                );
-            }
+            const lightSoilBgClass = 'lightsoil-active-bg';
+            // Backgrounds from individual handlers that LightSoil might override
+            const individualHandlersBgClasses = [
+                'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg',
+                'soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg', 'soil-connected-bg', // Added soil-connected-bg
+                'idle-bg'
+            ];
 
-            if (this.isRecordMode) { // LightSoil's own record mode
+            if (this.isRecordMode) { // 1. LightSoilHandler is in its own record mode
                 this.frameBackground.classList.add('record-mode-pulsing');
-                this.frameBackground.classList.remove('lightsoil-active-bg'); // Record pulsing takes precedence over normal active BG
-            } else if (showBackground) { // If not in LS record mode, but LS BG should show
+                this.frameBackground.classList.add(lightSoilBgClass); // Show its own BG with pulsing
+                // When LightSoil is in record mode, it's dominant. Clear other BGs.
+                individualHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
+            } else { // Not in LightSoilHandler's own record mode
                 this.frameBackground.classList.remove('record-mode-pulsing');
-                this.frameBackground.classList.add('lightsoil-active-bg');
-            } else { // Neither LS record mode nor LS BG
-                this.frameBackground.classList.remove('record-mode-pulsing');
-                this.frameBackground.classList.remove('lightsoil-active-bg');
-                if (!lightSoilRec) { // If LS is not the one in record mode, remove its BG
-                     otherHandlerSpecificBgs.forEach(cls => this.frameBackground.classList.remove(cls));
+
+                if (this.showLightSoilVisualContext) { // 2. LightSoil visual context is active (both sensors connected)
+                    this.frameBackground.classList.add(lightSoilBgClass);
+                    // LightSoil context is active, it's dominant. Clear other BGs.
+                    individualHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
+                } else { // 3. LightSoil visual context is NOT active
+                    this.frameBackground.classList.remove(lightSoilBgClass);
+                    // Do not clear individualHandlersBgClasses here, as one of them might be active
+                    // if its respective sensor is connected.
                 }
-                // If LS bg is not shown, other handlers' updateUI should manage their BGs.
-                // No need for LS to actively set other BGs here.
             }
         }
 
@@ -546,7 +548,8 @@ class LightSoilHandler {
             }
             // If light or soil is in record mode, their own handlers will show the button.
         }
-        if (this.debugMode && Math.random() < 0.02) console.log(`🌿💡 UI Update (LS): CreatureVis=${showCreature}, LightSoilBGVis=${showLightSoilBg}, RecModeLS=${this.isRecordMode}, ExtMuteLS=${this.isExternallyMuted}, FrameBG Classes: ${this.frameBackground?.classList}`);
+        // Corrected debug log to use classList.toString()
+        if (this.debugMode && Math.random() < 0.02) console.log(`🌿💡 UI Update (LS): CreatureVis=${showCreature}, ShowLSVisualContext=${this.showLightSoilVisualContext}, RecModeLS=${this.isRecordMode}, FrameBG Classes: ${this.frameBackground?.classList.toString()}`);
     }
 
     startAudio() {

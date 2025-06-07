@@ -191,7 +191,7 @@ body {
 
 .framebackground {
   grid-area: framebackground;
-  background-color: var(--warm-beige);
+  background-color: var(--warm-beige); /* Default idle background */
   border: none;
   position: relative;
   overflow: hidden;
@@ -205,37 +205,52 @@ body {
   z-index: 10;
 }
 
-.framebackground.soil-connected-bg {
-  /* background-image: url('../sprites/backgrounds/soilbackground.png'); /* Path to your soil connected background */
+/* Soil Active Background */
+.framebackground.soil-active-bg { /* Renamed from soil-connected-bg or new class */
   background-size: cover;
-  background-color: var(--warm-beige);
+  background-color: var(--warm-beige); /* Fallback color */
   background-position: center;
   background-repeat: repeat;
   background-image: url(sprites/backgrounds/Background_soil.gif);
 }
 
-.framebackground.temp-active-bg { 
-  background-color: var(--coral-red); 
+/* Light Active Background */
+.framebackground.light-active-bg {
+  background-size: cover;
+  background-color: var(--warm-beige); /* Fallback color */
+  background-position: center;
+  background-repeat: repeat;
+  background-image: url(sprites/backgrounds/Background_light.gif);
 }
 
-.framebackground.soil-pattern-bg { 
-  background-color: var(--sage-green);
-  background-image: 
-    radial-gradient(circle at 25% 25%, rgba(142,164,125,0.3) 2px, transparent 2px),
-    radial-gradient(circle at 75% 75%, rgba(142,164,125,0.2) 1px, transparent 1px);
-  background-size: 30px 30px, 15px 15px;
-  background-position: 0 0, 15px 15px;
-}
-
-/* LightSoil condition specific background styles */ 
+/* LightSoil Active Background (already defined, ensure it's as desired) */
 .framebackground.lightsoil-active-bg {
-  background-color: var(--blue-green); /* Your existing base color */
-  /* ADD a distinct pattern or image below */
+  background-color: var(--blue-green); /* Your existing base color or var(--warm-beige) if using a full GIF */
+  /* If using a GIF for lightsoil, add it here:
+  background-image: url(sprites/backgrounds/Background_lightsoil.gif);
+  background-size: cover;
+  background-position: center;
+  background-repeat: repeat;
+  */
+  /* Or keep your pattern if preferred over a GIF for this state */
   background-image: 
     linear-gradient(135deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.08) 75%, transparent 75%, transparent),
     linear-gradient(45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.05) 50%, rgba(0, 0, 0, 0.05) 75%, transparent 75%, transparent);
-  background-size: 50px 50px; /* Adjust size as needed */
+  background-size: 50px 50px;
 }
+
+/* Remove or comment out old specific condition backgrounds */
+/*
+.framebackground.soil-dry-bg { ... }
+.framebackground.soil-humid-bg { ... }
+.framebackground.soil-wet-bg { ... }
+.framebackground.light-dark-bg { ... }
+.framebackground.light-dim-bg { ... }
+.framebackground.light-bright-bg { ... }
+.framebackground.light-very-bright-bg { ... }
+.framebackground.light-extremely-bright-bg { ... }
+.framebackground.soil-pattern-bg { ... }
+*/
 
 /* ==========================================================================
    CREATURES
@@ -381,7 +396,7 @@ body {
 
 /* LightSoil condition specific background styles */ 
 .framebackground.lightsoil-active-bg {
-  background-color: var(--warm-beige);
+  background-color: var(--blue-green); /* Your existing base color */
 }
 
 /* ==========================================================================
@@ -491,17 +506,19 @@ body {
 
 /* RE-ADD Record Mode Pulsing Feedback */
 .framebackground.record-mode-pulsing {
-  animation: recordPulseEffect 1.2s ease-in-out infinite alternate; /* Adjusted duration for a common pulse feel */
+  animation: recordPulseEffect 1.2s ease-in-out infinite alternate;
+  /* Ensure this doesn't remove the specific background image if it's desired */
+  /* The box-shadow should overlay the existing background */
 }
 
 @keyframes recordPulseEffect {
   0% {
-    box-shadow: 0 0 5px 2px rgba(230, 105, 90, 0.25); /* Subtle coral-red glow */
-    transform: scale(1.00); /* Optional: very slight scale pulse */
+    box-shadow: 0 0 5px 2px rgba(230, 105, 90, 0.25);
+    /* transform: scale(1.00); // Keep if desired */
   }
   100% {
-    box-shadow: 0 0 15px 5px rgba(230, 105, 90, 0.55); /* Stronger glow */
-    transform: scale(1.005); /* Optional: very slight scale pulse */
+    box-shadow: 0 0 15px 5px rgba(230, 105, 90, 0.55);
+    /* transform: scale(1.005); // Keep if desired */
   }
 }
 

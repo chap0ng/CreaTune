@@ -405,40 +405,68 @@ class SoilHandler {
     }
 
     updateUI() {
-        const showCreature = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted; 
+        // Condition for creature visibility
+        const showCreature = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted && !this.isRecordMode;
         
         if (this.soilCreatureVisual) {
             const wasCreatureActive = this.soilCreatureVisual.classList.contains('active');
             this.soilCreatureVisual.classList.toggle('active', showCreature);
-            if (wasCreatureActive && !showCreature) { 
-                this.soilCreatureCurrentFrame = 0; 
-                this.soilCreatureVisual.style.backgroundPositionX = '0%';
-            }
+            
+            // Creature condition class (can remain if you want visual variants for the creature itself)
             this.soilCreatureVisual.classList.remove('soil-dry', 'soil-humid', 'soil-wet');
             if (showCreature) { 
                 this.soilCreatureVisual.classList.add(`soil-${this.currentSoilCondition.replace('_', '-')}`);
+            } else if (wasCreatureActive && !this.soilCreatureVisual.classList.contains('active')) {
+                this.soilCreatureCurrentFrame = 0; 
+                this.soilCreatureVisual.style.backgroundPositionX = '0%';
             }
         }
 
         if (this.frameBackground) {
-            this.frameBackground.classList.toggle('soil-connected-bg', this.deviceStates.soil.connected);
-            if (this.isRecordMode) {
+            const isConnected = this.deviceStates.soil.connected;
+            const soilActiveBgClass = 'soil-active-bg'; // Simplified to one class
+
+            // Background classes from other potentially conflicting handlers
+            const otherHandlersBgClasses = [
+                'light-active-bg', // Updated
+                'lightsoil-active-bg',
+                'idle-bg'
+            ];
+
+            if (this.isRecordMode) { // 1. SoilHandler is in its own record mode
                 this.frameBackground.classList.add('record-mode-pulsing');
-            } else if (!window.lightHandlerInstance || !window.lightHandlerInstance.isRecordMode) {
+                this.frameBackground.classList.add(soilActiveBgClass); // Show its active BG with pulsing
+                // In its own record mode, SoilHandler does not clear other handlers' BGs.
+            } else { // Not in SoilHandler's own record mode
                 this.frameBackground.classList.remove('record-mode-pulsing');
+
+                if (isConnected) { // 2. Soil sensor is connected
+                    this.frameBackground.classList.add(soilActiveBgClass);
+
+                    if (!this.isExternallyMuted) {
+                        // Not externally muted: SoilHandler asserts visual dominance by clearing other BGs
+                        otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
+                    }
+                    // If externally muted, it shows its own BG type, but does NOT clear otherHandlersBgClasses.
+                } else { // 3. Soil sensor is NOT connected
+                    this.frameBackground.classList.remove(soilActiveBgClass);
+                }
             }
         }
 
+        // Stop Record Mode Button Visibility
         if (this.stopRecordModeButton) {
-            const lightInRecMode = window.lightHandlerInstance && window.lightHandlerInstance.isRecordMode;
+            const lightInRecMode = window.lightHandlerInstance?.isRecordMode;
+            const lightSoilInRecMode = window.lightSoilHandlerInstance?.isRecordMode;
+
             if (this.isRecordMode) {
                 this.stopRecordModeButton.style.display = 'block';
-            } else if (!lightInRecMode) { 
+            } else if (!lightInRecMode && !lightSoilInRecMode) {
                 this.stopRecordModeButton.style.display = 'none';
             }
         }
+        if (this.debugMode && Math.random() < 0.05) console.log(`💧 UI Update (Soil): CreatureActive=${showCreature}, DeviceConnected=${this.deviceStates.soil.connected}, RecModeSoil=${this.isRecordMode}, ExtMuteSoil=${this.isExternallyMuted}, FrameBG Classes: ${this.frameBackground?.classList.toString()}`);
     }
-
     async enterRecordMode() {
         if (this.isRecordMode || !this.audioEnabled || !this.toneInitialized) {
             if(this.debugMode) console.warn(`💧 enterRecordMode: Blocked. isRecordMode=${this.isRecordMode}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}`);
