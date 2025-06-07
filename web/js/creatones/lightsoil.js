@@ -392,7 +392,7 @@ class LightSoilHandler {
             this.padReverb = new Tone.Reverb({ decay: 3, wet: 0.5 }).toDestination();
             this.padChorus = new Tone.Chorus({ frequency: 0.7, delayTime: 2.5, depth: 0.6, wet: 0.4 }).connect(this.padReverb);
 
-            this.mainSynth = new Tone.PluckSynth({
+            this.mainSynth = new Tone.PluckSynth({ // Already correctly uses mainSynth for initialization
                 attackNoise: 0.8,
                 dampening: 3000,
                 resonance: 0.85,
@@ -405,29 +405,30 @@ class LightSoilHandler {
             const generativeNotes = ["C3", "E3", "G3", "A3", "C4", "D4", "E4", "G4"];
             let generativeNoteIndex = 0;
             this.generativeLoop = new Tone.Loop(time => {
-                if (!this.isPlaying || this.isRecordMode || !this.lightSoilSynth || !this.isCombinedActive || this.isExternallyMuted) return;
+                // Corrected: Use this.mainSynth and remove this.isExternallyMuted check for LightSoilHandler itself
+                if (!this.isPlaying || this.isRecordMode || !this.mainSynth || !this.isCombinedActive) return;
 
                 const note = generativeNotes[Math.floor(Math.random() * generativeNotes.length)];
                 const combinedAppValue = (this.currentLightAppValue + this.currentSoilAppValue) / 2;
-                const velocity = combinedAppValue * 0.5 + 0.2; // Modest velocity
+                const velocity = combinedAppValue * 0.5 + 0.2; 
 
                 if (this.debugMode && Math.random() < 0.1) console.log(`🌿💡 GenLoop: Note=${note}, Vel=${velocity.toFixed(2)}, CombinedApp=${combinedAppValue.toFixed(2)}`);
                 this.mainSynth.triggerAttackRelease(note, "2n", time, Math.min(0.9, Math.max(0.1,velocity)));
                 this._displayNote(note);
                 this.triggerCreatureAnimation();
                 generativeNoteIndex++;
-            }, "2n"); // Slower, more ambient
+            }, "2n"); 
             this.generativeLoop.humanize = "8n";
             if (this.generativeLoop.state === "started") this.generativeLoop.stop(0);
 
             this.toneInitialized = true;
             if (this.debugMode) console.log('🌿💡 LightSoilHandler.initTone: Tone.js components initialized.');
-            this.manageAudioAndVisuals(); // Re-evaluate audio state now that Tone is ready
+            this.manageAudioAndVisuals(); 
 
         } catch (error) {
             console.error('❌ LightSoilHandler.initTone: Error:', error);
             this.toneInitialized = false;
-            if (this.lightSoilSynth) { this.lightSoilSynth.dispose(); this.lightSoilSynth = null; }
+            if (this.mainSynth) { this.mainSynth.dispose(); this.mainSynth = null; } // Corrected
             if (this.padChorus) { this.padChorus.dispose(); this.padChorus = null; }
             if (this.padReverb) { this.padReverb.dispose(); this.padReverb = null; }
             if (this.generativeLoop) { this.generativeLoop.dispose(); this.generativeLoop = null; }
@@ -435,11 +436,11 @@ class LightSoilHandler {
     }
 
     updateSoundParameters() {
-        if (!this.toneInitialized || !this.audioEnabled || !this.isCombinedActive || this.isRecordMode || !this.isPlaying || !this.lightSoilSynth || this.isExternallyMuted) return;
+        // Corrected: Use this.mainSynth and remove this.isExternallyMuted check
+        if (!this.toneInitialized || !this.audioEnabled || !this.isCombinedActive || this.isRecordMode || !this.isPlaying || !this.mainSynth) return;
 
         const combinedAppValue = (this.currentLightAppValue + this.currentSoilAppValue) / 2;
-        // PluckSynth volume is sensitive; often 0dB is loud. Start low.
-        const dynamicVolume = this.baseVolume - 15 + (combinedAppValue * 20); // e.g., -15dB to +5dB
+        const dynamicVolume = this.baseVolume - 15 + (combinedAppValue * 20); 
         this.mainSynth.volume.linearRampTo(this.isPlaying ? Math.min(0, dynamicVolume) : -Infinity, 0.8);
 
         if (this.generativeLoop) {
@@ -451,16 +452,16 @@ class LightSoilHandler {
     }
 
     manageAudioAndVisuals() {
-        if (this.debugMode) console.log(`%c🌿💡 LS MAV: isCombinedActive=${this.isCombinedActive}, audioEnabled=${this.audioEnabled}, toneInit=${this.toneInitialized}, isPlaying=${this.isPlaying}, isRecordMode=${this.isRecordMode}, isExtMuted=${this.isExternallyMuted}`, 'color: #2ecc71');
+        if (this.debugMode) console.log(`%c🌿💡 LS MAV: isCombinedActive=${this.isCombinedActive}, audioEnabled=${this.audioEnabled}, toneInit=${this.toneInitialized}, isPlaying=${this.isPlaying}, isRecordMode=${this.isRecordMode}`, 'color: #2ecc71'); // Removed isExternallyMuted from log as it's not a property here
 
         if (Tone.context.state !== 'running') this.audioEnabled = false;
-        else this.audioEnabled = true; // Keep audioEnabled in sync
+        else this.audioEnabled = true; 
 
-        // Highest priority: external mute or audio disabled
-        if (this.isExternallyMuted || !this.audioEnabled) {
-            if (this.debugMode) console.log(`🌿💡 LS MAV: Externally muted (${this.isExternallyMuted}) or audio not enabled (${!this.audioEnabled}). Stopping all audio for LightSoil.`);
-            if (this.isRecordMode) this.exitRecordMode(true); // Exit its own record mode
-            else if (this.isPlaying || this.isFadingOut) this.stopAudio(true); // Stop its generative audio
+        // Highest priority: audio disabled (LightSoil doesn't have its own external mute state)
+        if (!this.audioEnabled) {
+            if (this.debugMode) console.log(`🌿💡 LS MAV: Audio not enabled (${!this.audioEnabled}). Stopping all audio for LightSoil.`);
+            if (this.isRecordMode) this.exitRecordMode(true); 
+            else if (this.isPlaying || this.isFadingOut) this.stopAudio(true); 
             this.updateUI();
             return;
         }
@@ -553,9 +554,10 @@ class LightSoilHandler {
     }
 
     startAudio() {
-        if (this.debugMode) console.log(`%c🌿💡 LS startAudio: isPlaying=${this.isPlaying}, isFadingOut=${this.isFadingOut}, audioEnabled=${this.audioEnabled}, toneInit=${this.toneInitialized}, isCombinedActive=${this.isCombinedActive}, isRecordMode=${this.isRecordMode}, isExtMuted=${this.isExternallyMuted}`, 'color: #9b59b6; font-weight: bold;');
+        if (this.debugMode) console.log(`%c🌿💡 LS startAudio: isPlaying=${this.isPlaying}, isFadingOut=${this.isFadingOut}, audioEnabled=${this.audioEnabled}, toneInit=${this.toneInitialized}, isCombinedActive=${this.isCombinedActive}, isRecordMode=${this.isRecordMode}`, 'color: #9b59b6; font-weight: bold;'); // Removed isExternallyMuted
 
-        if (!this.audioEnabled || !this.toneInitialized || !this.isCombinedActive || this.isRecordMode || !this.lightSoilSynth || !this.generativeLoop || this.isExternallyMuted) {
+        // Corrected: Use this.mainSynth and remove this.isExternallyMuted check
+        if (!this.audioEnabled || !this.toneInitialized || !this.isCombinedActive || this.isRecordMode || !this.mainSynth || !this.generativeLoop) {
             if (this.debugMode) console.warn("🌿💡 LS startAudio: Conditions not met. Returning.");
             this.updateUI(); return;
         }
@@ -584,7 +586,8 @@ class LightSoilHandler {
     stopAudio(force = false) {
         if (this.debugMode) console.log(`%c🌿💡 LS stopAudio: force=${force}, isPlaying=${this.isPlaying}, isFadingOut=${this.isFadingOut}, audioEnabled=${this.audioEnabled}, toneInit=${this.toneInitialized}`, 'color: #c0392b; font-weight: bold;');
 
-        if (!this.audioEnabled || !this.toneInitialized || !this.lightSoilSynth) {
+        // Corrected: Use this.mainSynth
+        if (!this.audioEnabled || !this.toneInitialized || !this.mainSynth) {
             this.isPlaying = false; this.isFadingOut = false;
             if (this.debugMode && !force) console.warn("🌿💡 LS stopAudio: Audio system not ready or synth not initialized.");
             this.updateUI(); return;
@@ -609,10 +612,9 @@ class LightSoilHandler {
         if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
         this.stopTimeoutId = setTimeout(() => {
             if (this.generativeLoop && this.generativeLoop.state === "started") this.generativeLoop.stop(0);
-            // Volume is already ramped to -Infinity, ensure it stays there if synth still exists
-            if (this.lightSoilSynth) this.lightSoilSynth.volume.value = -Infinity;
+            if (this.mainSynth) this.mainSynth.volume.value = -Infinity; // Corrected
 
-            this.isFadingOut = false; // Reset after fade
+            this.isFadingOut = false; 
             if (this.debugMode) console.log('🌿💡 LS stopAudio: Generative audio fully stopped.');
             this.updateUI(); // Update UI after audio is fully stopped
         }, force ? 10 : (this.fadeDuration * 1000 + 100)); // Ensure timeout is longer than fade
@@ -621,8 +623,9 @@ class LightSoilHandler {
     }
 
     async enterRecordMode() {
-        if (this.isRecordMode || !this.audioEnabled || !this.toneInitialized || !this.isCombinedActive || this.isExternallyMuted) {
-            if (this.debugMode) console.warn(`🌿💡 LS enterRecordMode: Blocked. isRec=${this.isRecordMode}, audioEn=${this.audioEnabled}, toneInit=${this.toneInitialized}, combinedAct=${this.isCombinedActive}, extMuted=${this.isExternallyMuted}`);
+        // Removed this.isExternallyMuted check
+        if (this.isRecordMode || !this.audioEnabled || !this.toneInitialized || !this.isCombinedActive) {
+            if (this.debugMode) console.warn(`🌿💡 LS enterRecordMode: Blocked. isRec=${this.isRecordMode}, audioEn=${this.audioEnabled}, toneInit=${this.toneInitialized}, combinedAct=${this.isCombinedActive}`);
             return;
         }
         if ((window.lightHandlerInstance?.isRecordMode) || (window.soilHandlerInstance?.isRecordMode)) {
@@ -720,8 +723,9 @@ class LightSoilHandler {
     }
 
     _setupRhythmicPlayback(audioBlob) {
-        if (!this.isRecordMode || !this.toneInitialized || !this.lightSoilSynth || this.isExternallyMuted) {
-            if (this.debugMode) console.warn(`🌿💡 LS _setupRhythmicPlayback: Blocked. isRec=${this.isRecordMode}, toneInit=${this.toneInitialized}, synth=${!!this.lightSoilSynth}, extMuted=${this.isExternallyMuted}. Forcing exit.`);
+        // Corrected: Use this.mainSynth and remove this.isExternallyMuted check
+        if (!this.isRecordMode || !this.toneInitialized || !this.mainSynth) {
+            if (this.debugMode) console.warn(`🌿💡 LS _setupRhythmicPlayback: Blocked. isRec=${this.isRecordMode}, toneInit=${this.toneInitialized}, synth=${!!this.mainSynth}. Forcing exit.`);
             this.exitRecordMode(true);
             return;
         }
@@ -743,13 +747,15 @@ class LightSoilHandler {
             url: this.recordedAudioBlobUrl,
             loop: true,
             onload: () => {
-                if (!this.isRecordMode || !this.recordedBufferPlayer || this.isExternallyMuted) { // Check external mute here too
-                    if (this.debugMode) console.log('🌿💡 LS _setupRhythmicPlayback (onload): Record mode exited, player became null, or externally muted. Aborting playback setup.');
+                // Removed this.isExternallyMuted check
+                if (!this.isRecordMode || !this.recordedBufferPlayer) { 
+                    if (this.debugMode) console.log('🌿💡 LS _setupRhythmicPlayback (onload): Record mode exited or player became null. Aborting playback setup.');
                     if (this.recordedBufferPlayer) { this.recordedBufferPlayer.dispose(); this.recordedBufferPlayer = null; }
                     if (this.rhythmFollower) { this.rhythmFollower.dispose(); this.rhythmFollower = null; }
                     if (this.rhythmicLoop) { this.rhythmicLoop.dispose(); this.rhythmicLoop = null; }
-                    if (this.lightSoilSynth?.volume?.value === this.rhythmicPlaybackVolume) {
-                        this.lightSoilSynth.volume.value = -Infinity;
+                    // Corrected: Check mainSynth's volume
+                    if (this.mainSynth?.volume?.value === this.rhythmicPlaybackVolume) {
+                        this.mainSynth.volume.value = -Infinity;
                     }
                     return;
                 }
@@ -761,7 +767,8 @@ class LightSoilHandler {
                 if (this.debugMode) console.log('🌿💡 LS _setupRhythmicPlayback (onload): Recorded audio Player started.');
 
                 this.rhythmicLoop = new Tone.Loop(time => {
-                    if (!this.isRecordMode || !this.rhythmFollower || !this.lightSoilSynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started' || this.isExternallyMuted) {
+                    // Corrected: Use this.mainSynth and remove this.isExternallyMuted check
+                    if (!this.isRecordMode || !this.rhythmFollower || !this.mainSynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
                         return;
                     }
                     const level = this.rhythmFollower.getValue();
@@ -781,7 +788,7 @@ class LightSoilHandler {
                         this.lastRhythmNoteTime = currentTime;
                     }
                 }, "16n").start(0);
-                if (this.debugMode) console.log('🌿💡 LS _setupRhythmicPlayback (onload): Rhythmic loop (for lightSoilSynth) initiated.');
+                if (this.debugMode) console.log('🌿💡 LS _setupRhythmicPlayback (onload): Rhythmic loop (for mainSynth) initiated.');
             },
             onerror: (err) => {
                 console.error('❌ LS _setupRhythmicPlayback: Error loading recorded audio player:', err);

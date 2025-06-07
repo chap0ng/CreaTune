@@ -476,6 +476,10 @@ class SoilHandler {
             if(this.debugMode) console.warn(`💧 enterRecordMode: Blocked. Light creature is already in record mode.`);
             return;
         }
+        if (window.lightSoilHandlerInstance && window.lightSoilHandlerInstance.isRecordMode) { // Added this check
+            if(this.debugMode) console.warn(`💧 enterRecordMode: Blocked. LightSoil creature is already in record mode.`);
+            return;
+        }
         if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
             console.error('❌ enterRecordMode: getUserMedia API not available. Ensure HTTPS or localhost.');
             alert('Microphone access not available. Please ensure the page is served over HTTPS or on localhost.');
