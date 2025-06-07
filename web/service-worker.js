@@ -1,4 +1,4 @@
-const CACHE_NAME = 'CreaTune-cache-v10'; // <<< INCREMENTED cache version
+const CACHE_NAME = 'CreaTune-cache-v11'; // <<< INCREMENTED cache version
 const urlsToCache = [
   './',
   './index.html',
@@ -9,20 +9,26 @@ const urlsToCache = [
   './js/client/websocket-client.js',
   './js/creatones/soil.js',
   './js/creatones/light.js',
-  './js/creatones/lightsoil.js', // <<< ADDED LIGHTSOIL.JS
+  './js/creatones/temp.js', // <<< ADDED TEMP.JS
+  './js/creatones/lightsoil.js',
   './js/other/frame-slider.js',
   './js/other/Tone.js',
-  './js/other/audio-enabler.js',
+  // './js/other/audio-enabler.js', // This was commented out, ensure it's correct
 
 
   // Images & Sprites
-  './images/creature.png', // Assuming this is the idle creature
-  './images/soil-background.jpg',
+  './images/creature.png', 
+  './images/soil-background.jpg', // This seems like an old direct background, ensure it's still used or remove
   './sprites/creatures/soil-creature.png',
   './sprites/creatures/light-creature.png',
-  './sprites/creatures/lightsoil-creature.png', // <<< ADDED LIGHTSOIL-CREATURE.PNG
-  // './images/lightsoil-background.jpg', // <<< ADD IF YOU USE A SPECIFIC BACKGROUND IMAGE FOR LIGHTSOIL
-  './sprites/backgrounds/soil-background.png',
+  './sprites/creatures/temp-creature.png', // <<< ADDED TEMP-CREATURE.PNG
+  './sprites/creatures/lightsoil-creature.png',
+  
+  './sprites/backgrounds/Background_soil.gif', // <<< Using GIF now
+  './sprites/backgrounds/Background_light.gif',// <<< Using GIF now
+  './sprites/backgrounds/Background_temp.gif', // <<< ADDED TEMP BACKGROUND GIF
+  // './sprites/backgrounds/Background_lightsoil.gif', // <<< ADD IF YOU HAVE ONE
+
   './sprites/frame/frameropeh.png',
   './sprites/frame/frameropel.png',
   './sprites/frame/knotbotleft.png',
