@@ -393,11 +393,11 @@ class LightHandler {
             const wasCreatureActive = this.lightCreatureVisual.classList.contains('active');
             this.lightCreatureVisual.classList.toggle('active', showActiveSystem);
 
-            // Always remove old condition classes
+            // Always remove old condition classes for the creature sprite
             this.lightCreatureVisual.classList.remove('light-dark', 'light-dim', 'light-bright', 'light-very-bright', 'light-extremely-bright');
 
             if (showActiveSystem) {
-                // Add current condition class if system is active
+                // Add current condition class to creature sprite if system is active
                 this.lightCreatureVisual.classList.add(`light-${this.currentLightCondition.replace('_', '-')}`);
             } else if (wasCreatureActive && !this.lightCreatureVisual.classList.contains('active')) {
                 // If creature was active and now is not, reset its animation frame
@@ -407,46 +407,52 @@ class LightHandler {
         }
 
         if (this.frameBackground) {
-            // Condition for showing any light-related background (connected and not muted)
-            const showLightConnectedBackground = this.deviceStates.light.connected && !this.isExternallyMuted;
-
-            const allMyLightBgClasses = [ // All background classes this handler is responsible for
+            const isConnected = this.deviceStates.light.connected;
+            const targetLightBgClass = `light-${this.currentLightCondition.replace('_', '-')}-bg`;
+            const allMyLightBgClasses = [
                 'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg'
-                // 'light-active-bg' // Not using a generic 'light-active-bg' as specific condition BGs cover it
             ];
-            const otherHandlersBgClasses = [ // Background classes from other potentially conflicting handlers
+            const otherHandlersBgClasses = [
                 'soil-active-bg', 'soil-connected-bg', 'soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg', 'soil-pattern-bg',
                 'lightsoil-active-bg',
-                'idle-bg' // Assuming you might have an idle background
+                'idle-bg'
             ];
 
             if (this.isRecordMode) { // 1. LightHandler is in its own record mode
                 this.frameBackground.classList.add('record-mode-pulsing');
-                // Remove all other BGs (its own and others) to ensure pulsing is the main visual
-                allMyLightBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
-                otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
-            } else if (showLightConnectedBackground) { // 2. Light sensor connected, not in own record mode, not externally muted
-                this.frameBackground.classList.remove('record-mode-pulsing'); // Ensure not pulsing
-                otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls)); // Remove BGs from other handlers
-
-                // Set the specific light condition background
-                const targetLightBgClass = `light-${this.currentLightCondition.replace('_', '-')}-bg`;
-                allMyLightBgClasses.forEach(cls => { // Clean up any other of its own light BGs
-                    if (cls !== targetLightBgClass) {
+                // Ensure its specific background is shown
+                allMyLightBgClasses.forEach(cls => {
+                    if (cls === targetLightBgClass) {
+                        this.frameBackground.classList.add(cls);
+                    } else {
                         this.frameBackground.classList.remove(cls);
                     }
                 });
-                this.frameBackground.classList.add(targetLightBgClass);
-            } else { // 3. LightHandler should not display its background (not connected, or externally muted)
-                     // OR another handler might be dominant (e.g. LightSoilHandler in record mode).
-                // Only remove LightHandler's own classes.
-                allMyLightBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
-                // If LightHandler was responsible for pulsing, but no longer is (not in record mode), remove it.
-                // This needs to be careful if another handler is also using 'record-mode-pulsing'.
-                // For now, if LightHandler is not in record mode, it won't add it.
-                // If another handler (like Soil or LightSoil) is in record mode, their updateUI should manage the pulsing class.
-                if (!this.isRecordMode) { // Explicitly remove pulsing if LightHandler is not the one recording.
-                    this.frameBackground.classList.remove('record-mode-pulsing');
+                // In its own record mode, LightHandler does not clear other handlers' BGs,
+                // its pulsing + specific BG is the primary visual.
+            } else { // Not in LightHandler's own record mode
+                this.frameBackground.classList.remove('record-mode-pulsing'); // Ensure pulsing is off if LightHandler isn't causing it
+
+                if (isConnected) { // 2. Light sensor is connected
+                    // Set the specific light condition background
+                    allMyLightBgClasses.forEach(cls => {
+                        if (cls === targetLightBgClass) {
+                            this.frameBackground.classList.add(cls);
+                        } else {
+                            this.frameBackground.classList.remove(cls);
+                        }
+                    });
+
+                    if (!this.isExternallyMuted) {
+                        // Not externally muted: LightHandler asserts visual dominance by clearing other BGs
+                        otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
+                    }
+                    // If externally muted, it shows its own BG type, but does NOT clear otherHandlersBgClasses.
+                    // This allows another active handler (e.g., LightSoilHandler) to potentially show its background.
+                } else { // 3. Light sensor is NOT connected
+                    // Remove all of LightHandler's specific BGs
+                    allMyLightBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
+                    // Creature and sound are handled by showActiveSystem and manageAudioAndVisuals
                 }
             }
         }
@@ -456,15 +462,14 @@ class LightHandler {
             const soilInRecMode = window.soilHandlerInstance?.isRecordMode;
             const lightSoilInRecMode = window.lightSoilHandlerInstance?.isRecordMode;
 
-            if (this.isRecordMode) { // If LightHandler is recording, it shows the button
+            if (this.isRecordMode) {
                 this.stopRecordModeButton.style.display = 'block';
-            } else if (!soilInRecMode && !lightSoilInRecMode) { // If NO handler is recording, hide it
+            } else if (!soilInRecMode && !lightSoilInRecMode) {
                 this.stopRecordModeButton.style.display = 'none';
             }
-            // If SoilHandler or LightSoilHandler is in record mode, their updateUI should manage the button's visibility.
         }
 
-        if (this.debugMode && Math.random() < 0.05) console.log(`💡 UI Update (Light): CreatureActive=${showActiveSystem}, ShowLightConnectedBG=${this.deviceStates.light.connected && !this.isExternallyMuted}, RecModeLight=${this.isRecordMode}, ExtMuteLight=${this.isExternallyMuted}, FrameBG Classes: ${this.frameBackground?.classList?.toString()}`);
+        if (this.debugMode && Math.random() < 0.05) console.log(`💡 UI Update (Light): CreatureActive=${showActiveSystem}, DeviceConnected=${this.deviceStates.light.connected}, RecModeLight=${this.isRecordMode}, ExtMuteLight=${this.isExternallyMuted}, FrameBG Classes: ${this.frameBackground?.classList?.toString()}`);
     }
 
 
