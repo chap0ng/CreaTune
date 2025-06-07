@@ -223,14 +223,13 @@ body {
   background-image: url(sprites/backgrounds/Background_light.gif);
 }
 
+/* LightSoil Active Background (already defined, ensure it's as desired) */
 .framebackground.lightsoil-active-bg {
   background-size: cover;
   background-color: var(--warm-beige); /* Fallback color */
   background-position: center;
   background-repeat: repeat;
-  background-image: url(sprites/backgrounds/Background_light.gif);
-  background-image: url(sprites/backgrounds/Background_soil.gif);
-
+  /*background-image: url(sprites/backgrounds/Background_lightsoil.gif); */
 }
 
 
