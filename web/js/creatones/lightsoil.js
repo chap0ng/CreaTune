@@ -533,12 +533,16 @@ class LightSoilHandler {
             if (lightSoilRec) { // LightSoil is IN RECORD MODE
                 this.frameBackground.classList.add('record-mode-pulsing');
                 this.frameBackground.classList.remove('lightsoil-active-bg');
-            } else if (showBackground) {
+            } else if (showLightSoilBg) { // Use showLightSoilBg which considers external mute and record mode
                 this.frameBackground.classList.remove('record-mode-pulsing');
                 this.frameBackground.classList.add('lightsoil-active-bg');
+                 // When LightSoil BG is active, remove others
+                otherContextBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
             } else {
                 this.frameBackground.classList.remove('record-mode-pulsing');
                 this.frameBackground.classList.remove('lightsoil-active-bg');
+                // If LightSoil BG is not shown, other handlers' updateUI will determine the BG.
+                // Or, if no handler is dominant, an idle-bg might be set.
             }
         }
 
