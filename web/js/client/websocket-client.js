@@ -10,7 +10,8 @@ class CreaTuneClient {
 
         this.deviceStates = {
             soil: { connected: false, active: false, lastRawData: null, lastStateChange: 0, stateHistory: [] },
-            light: { connected: false, active: false, lastRawData: null, lastStateChange: 0, stateHistory: [] }
+            light: { connected: false, active: false, lastRawData: null, lastStateChange: 0, stateHistory: [] },
+            temperature: { connected: false, active: false, lastRawData: null, lastStateChange: 0, stateHistory: [] } // Add this line
         };
 
         this.stabilityRequiredReadings = 3;
@@ -269,9 +270,9 @@ class CreaTuneClient {
     }
 
     shouldBeActive(deviceType, data) {
-        // ... (existing shouldBeActive method) ...
         switch (deviceType) {
             case 'soil':
+                // ... existing soil logic ...
                 if (data.soil_condition) {
                     return data.soil_condition === 'humid' || data.soil_condition === 'wet';
                 }
@@ -281,6 +282,7 @@ class CreaTuneClient {
                 if (this.debug) console.warn(`💧 Soil: No recognizable activity fields in data:`, data);
                 return false;
             case 'light':
+                // ... existing light logic ...
                 if (data.light_condition) {
                     return data.light_condition === 'dim' ||
                            data.light_condition === 'bright' ||
@@ -289,6 +291,24 @@ class CreaTuneClient {
                 }
                 if (data.light_app_value !== undefined) return data.light_app_value > 0.2;
                 if (this.debug) console.warn(`💡 Light: No recognizable activity fields in data:`, data);
+                return false;
+            case 'temperature':
+                if (data.temp_condition) {
+                    const isActiveCondition = data.temp_condition === 'cold' ||
+                                              data.temp_condition === 'cool' ||
+                                              data.temp_condition === 'mild';
+                    if (this.debug && Math.random() < 0.1) console.log(`🌡️ Temperature: Active check. Condition: ${data.temp_condition}, IsActive: ${isActiveCondition}`);
+                    return isActiveCondition;
+                }
+                // Fallback if temp_condition is not present, but temperature_c is
+                if (data.temperature_c !== undefined) {
+                    // You might want to replicate the ESP32's getTempCondition logic here
+                    // or define a simpler range if temp_condition is missing.
+                    // For now, let's assume if temp_condition is missing, it's not active by this logic.
+                    if (this.debug) console.warn(`🌡️ Temperature: temp_condition missing, relying on other fields or defaulting to inactive. Data:`, data);
+                    return false; // Or implement range check on data.temperature_c
+                }
+                if (this.debug) console.warn(`🌡️ Temperature: No recognizable activity fields for temperature in data:`, data);
                 return false;
             default:
                 return false;
@@ -306,7 +326,6 @@ class CreaTuneClient {
     }
 
     identifyDeviceType(data) {
-        // ... (existing identifyDeviceType method) ...
         if (data.device_type && this.deviceStates[data.device_type.toLowerCase()]) {
             return data.device_type.toLowerCase();
         }
@@ -314,6 +333,7 @@ class CreaTuneClient {
             const sensorLower = data.sensor.toLowerCase();
             if (sensorLower.includes('soil') || sensorLower.includes('moisture')) return 'soil';
             if (sensorLower.includes('light')) return 'light';
+            if (sensorLower.includes('temp') || sensorLower.includes('dht')) return 'temperature'; // Add this
         }
         if (data.soil_condition !== undefined || data.moisture_app_value !== undefined) {
             return 'soil';
@@ -321,15 +341,18 @@ class CreaTuneClient {
         if (data.light_condition !== undefined || data.light_app_value !== undefined) {
             return 'light';
         }
+        if (data.temp_condition !== undefined || data.temperature_c !== undefined) { // Add this
+            return 'temperature';
+        }
         return null;
     }
 
     identifyDeviceTypeByName(name) {
-        // ... (existing identifyDeviceTypeByName method) ...
         if (!name) return null;
         const nameLower = name.toLowerCase();
         if (nameLower.includes('soil') || nameLower.includes('moisture')) return 'soil';
         if (nameLower.includes('light')) return 'light';
+        if (nameLower.includes('temp') || nameLower.includes('dht')) return 'temperature'; // Add this
         return null;
     }
 

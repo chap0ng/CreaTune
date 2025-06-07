@@ -2,8 +2,8 @@
 #define CONFIG_H
 
 // WiFi configuration
-#define WIFI_SSID "CreaTone"        // Your WiFi network SSID
-#define WIFI_PASSWORD "CreaToToToTone" // Your WiFi network password
+#define WIFI_SSID "CreaTone"
+#define WIFI_PASSWORD "03511572"
 
 // WebSocket configuration
 #define WEBSOCKET_HOST "192.168.0.100" // !!! IMPORTANT: Your WebSocket server's IP address !!!
@@ -12,7 +12,7 @@
 
 // Sensor configuration
 #define SENSOR_NAME "LightSensor"       // Unique name for this sensor
-#define READING_INTERVAL 1500           // Send data every 1500ms (1.5 seconds)
+#define READING_INTERVAL 1000           // Send data every 1500ms (1.5 seconds)
 
 // I2C Pins for DFRobot B-LUX-V30B
 #define I2C_SDA_PIN 19  // Your SDA wiring
