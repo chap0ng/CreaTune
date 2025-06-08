@@ -457,7 +457,7 @@ class TemperatureHandler {
             const targetVolume = isSensorActive ? (this.baseLiquidVolume - 3 + dynamicVolumePart) : -Infinity;
             this.liquidSynthWrapper.volume.linearRampTo(targetVolume, 0.7); // Control volume via wrapper
 
-            // Modulate FM synth (this.liquidSynth) parameters based on temperature for timbral variation
+            // Modulate MetalSynth (this.liquidSynth) parameters based on temperature for timbral variation
             if (this.liquidSynth) { // Check if liquidSynth itself exists
                 let harmonicityTarget = 2.1; // Base from MetalSynth
                 let modIndexTarget = 12;     // Base from MetalSynth
@@ -470,9 +470,13 @@ class TemperatureHandler {
                 else if (this.currentTempCondition === "warm") { harmonicityTarget = 2.3; modIndexTarget = 14; resonanceTarget = 600; }
                 else if (this.currentTempCondition === "hot") { harmonicityTarget = 2.4; modIndexTarget = 15; resonanceTarget = 650; }
 
-                if (this.liquidSynth.harmonicity) this.liquidSynth.harmonicity.linearRampTo(harmonicityTarget, 0.8);
-                if (this.liquidSynth.modulationIndex) this.liquidSynth.modulationIndex.linearRampTo(modIndexTarget, 0.8);
-                if (this.liquidSynth.resonance) this.liquidSynth.resonance.linearRampTo(resonanceTarget, 0.8);
+                // For MetalSynth, these are direct properties, not Tone.Param objects.
+                // Set them directly. For smooth transitions, you might need to implement
+                // your own ramping logic using Tone.Transport.scheduleRepeat or similar if desired,
+                // or accept abrupt changes. For now, direct assignment:
+                if (this.liquidSynth.harmonicity !== undefined) this.liquidSynth.harmonicity = harmonicityTarget;
+                if (this.liquidSynth.modulationIndex !== undefined) this.liquidSynth.modulationIndex = modIndexTarget;
+                if (this.liquidSynth.resonance !== undefined) this.liquidSynth.resonance = resonanceTarget;
             }
         }
 
