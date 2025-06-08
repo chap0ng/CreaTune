@@ -287,36 +287,43 @@ class TemperatureHandler {
     }
 
     createMainTempLoop() {
-        if (!this.liquidSynthWrapper) return; // Changed from this.liquidSynth to this.liquidSynthWrapper
-        // Expanded and varied notes for a richer Gamelan feel (Slendro/Pelog inspired)
+        if (!this.liquidSynthWrapper) return; 
+        // Expanded and varied notes for a richer Gamelan feel, more randomness
         const tempNotes = [
-            "C2", "D2", "F2", "G2", "A#2", 
-            "C3", "D3", "F3", "G3", "A#3", 
-            "C4", "D4" 
+            "C2", "D2", "E2", "F2", "G2", "A2", "A#2",
+            "C3", "D3", "E3", "F3", "G3", "A3", "A#3", 
+            "C4", "D4", "E4", "F4", "G4"
         ]; 
         this.mainTempLoop = new Tone.Pattern((time, note) => {
             if (!this.isPlaying || !this.liquidSynthWrapper || this.liquidSynthWrapper.volume.value === -Infinity) return;
             const velocity = Math.max(0.25, this.currentTempAppValue * 0.5 + 0.2); 
-            this.liquidSynthWrapper.triggerAttackRelease(note, "0:2", time, velocity); 
+            // Occasionally transpose a note by an octave for more surprise
+            let finalNote = note;
+            if (Math.random() < 0.15) { // 15% chance to shift octave
+                const octaveShift = Math.random() < 0.5 ? 12 : -12;
+                try {
+                    finalNote = Tone.Frequency(note).transpose(octaveShift).toNote();
+                } catch (e) { /* In case transposition goes out of range, use original */ }
+            }
+            this.liquidSynthWrapper.triggerAttackRelease(finalNote, "0:2", time, velocity); 
             this.triggerCreatureAnimation();
-            this._displayNote(note);
-        }, tempNotes, "randomWalk"); // "randomWalk" can provide nice melodic movement
+            this._displayNote(finalNote);
+        }, tempNotes, "random"); // Changed from "randomWalk" to "random" for less melodic, more unpredictable selection
         this.mainTempLoop.interval = "0:3"; 
         this.mainTempLoop.humanize = "8n";
     }
 
     createAccentLoop() {
         if (!this.punchySynth) return;
-        // Varied low notes for punchy Gamelan accents
-        const accentNotes = ["F1", "G1", "A#1", "C2"];
-        let accentNoteIndex = 0;
+        // Expanded varied low notes for punchy Gamelan accents
+        const accentNotes = ["F1", "G1", "A1", "A#1", "C2", "D2", "D#1"];
+        // Removed accentNoteIndex for random selection
 
         this.accentLoop = new Tone.Loop(time => {
             if (!this.isPlaying || !this.punchySynth || this.punchySynth.volume.value === -Infinity) return;
             const velocity = Math.max(0.35, (1 - this.currentTempAppValue) * 0.45 + 0.25); 
             
-            const noteToPlay = accentNotes[accentNoteIndex % accentNotes.length];
-            accentNoteIndex++;
+            const noteToPlay = accentNotes[Math.floor(Math.random() * accentNotes.length)]; // Random selection
 
             this.punchySynth.triggerAttackRelease(noteToPlay, "8n", time, velocity); 
             // this._displayNote(noteToPlay); // Optionally display accent notes
@@ -328,24 +335,42 @@ class TemperatureHandler {
     createCyclicLoop() {
         if (!this.liquidSynthWrapper) return;
         
-        // Expanded and varied cyclical pattern
+        // Expanded and more varied cyclical pattern, making the sequence longer and less predictable
         const cyclicNotes = [
-            "C2", "F2", "G2", "A#2", 
-            "C3", "D3", "F3", "G3", 
-            "A#2", "G2", "F2", "C2" 
+            "C2", "F2", "G2", "A#2", "D3", "C3", 
+            "F3", "G3", "A#3", "C4", "G3", "F3",
+            "A#2", "G2", "F2", "D2", "C2", "A#1"
         ]; 
         this.cyclicLoop = new Tone.Sequence((time, note) => {
             if (!this.isPlaying || !this.liquidSynthWrapper || this.liquidSynthWrapper.volume.value === -Infinity) return;
             
             const velocity = Math.max(0.2, this.currentTempAppValue * 0.4 + 0.15);
-            const duration = note.includes("2") || note.includes("1") ? "0:2.5" : "0:1.5"; // Longer for lower notes
+            const duration = note.includes("2") || note.includes("1") ? "0:2.5" : "0:1.5"; 
             
-            this.liquidSynthWrapper.triggerAttackRelease(note, duration, time, velocity);
+            // Add a small chance to play a slightly detuned note or a neighboring tone for variation
+            let finalNote = note;
+            if (Math.random() < 0.1) { // 10% chance for variation
+                const variationType = Math.random();
+                try {
+                    if (variationType < 0.5) { // Transpose slightly
+                        const semitones = Math.random() < 0.5 ? 1 : -1;
+                        finalNote = Tone.Frequency(note).transpose(semitones).toNote();
+                    } else { // Slight detune (if synth supports it directly, else skip or use a different approach)
+                        // MetalSynth doesn't have a per-note detune. We could use a very short pitch bend,
+                        // but for simplicity, we'll stick to transposition for now or just play the original note.
+                        // For synths with Tone.Param for detune, you could do:
+                        // this.liquidSynth.detune.setValueAtTime( (Math.random() - 0.5) * 50, time); // Detune by +/- 50 cents
+                        // this.liquidSynth.detune.setValueAtTime(0, time + 0.05); // Reset detune quickly
+                    }
+                } catch(e) { /* Use original note if variation fails */ }
+            }
+
+            this.liquidSynthWrapper.triggerAttackRelease(finalNote, duration, time, velocity);
             if (Math.random() < 0.3) {
                 this.triggerCreatureAnimation();
             }
-            this._displayNote(note); // Removed emoji prefix
-        }, cyclicNotes, "4n"); // Interval for each note in the sequence
+            this._displayNote(finalNote); 
+        }, cyclicNotes, "4n"); 
         
         this.cyclicLoop.probability = 0.8;
         this.cyclicLoop.humanize = true;

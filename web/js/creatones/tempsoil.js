@@ -7,12 +7,12 @@ class TempSoilHandler {
         this.tempConnected = false;
         this.tempActive = false;
         this.currentTempAppValue = 0.5;
-        this.currentTempCondition = "mild";
+        this.currentTempCondition = "mild"; // e.g., very_cold, cold, cool, mild, warm, hot
 
         this.soilConnected = false;
         this.soilActive = false;
         this.currentSoilAppValue = 0.0;
-        this.currentSoilCondition = "dry";
+        this.currentSoilCondition = "dry"; // e.g., dry, humid, wet
         // --- End State for individual sensors ---
 
         // --- Combined State ---
@@ -26,15 +26,18 @@ class TempSoilHandler {
         this.isFadingOut = false;
         this.stopTimeoutId = null;
 
-        // --- Tone.js components for Bubbly Synth ---
+        // --- Tone.js components ---
         this.bubblySynth = null;
         this.phaserEffect = null;
         this.autoPanner = null;
+        this.harmonicaSynth = null;
+        this.harmonicaReverb = null;
         this.mainVolume = null;
         this.generativeLoop = null;
-        this.fadeDuration = 2.2;
-        this.baseVolume = 6; // Adjusted for potentially complex sound
-        this.rhythmicPlaybackVolume = 6;
+        this.harmonicaLoop = null; // Loop for harmonica
+        this.fadeDuration = 2.5; // Slightly longer for more complex sound
+        this.baseVolume = 8; // Adjusted base volume for main output
+        this.rhythmicPlaybackVolume = 9; // Volume during record playback
 
         // --- Record Mode Properties ---
         this.isRecordMode = false;
@@ -246,7 +249,7 @@ class TempSoilHandler {
             this.frameBackground.addEventListener('click', () => {
                 const tempRec = window.temperatureHandlerInstance?.isRecordMode;
                 const soilRec = window.soilHandlerInstance?.isRecordMode;
-                const lightRec = window.lightHandlerInstance?.isRecordMode; // Check light too
+                const lightRec = window.lightHandlerInstance?.isRecordMode;
                 const lightSoilRec = window.lightSoilHandlerInstance?.isRecordMode; // Check lightsoil
 
                 if (this.isCombinedActive &&
@@ -332,13 +335,13 @@ class TempSoilHandler {
         const noteDisplayElement = document.querySelector('#notes-display p');
         if (noteDisplayElement) {
             if (this.noteDisplayTimeoutId) clearTimeout(this.noteDisplayTimeoutId);
-            noteDisplayElement.textContent = note;
+            noteDisplayElement.textContent = note; // Emoji removed
             this.lastDisplayedNote = note;
             this.noteDisplayTimeoutId = setTimeout(() => {
                 if (noteDisplayElement.textContent === this.lastDisplayedNote) {
                     noteDisplayElement.textContent = '-';
                 }
-            }, 750);
+            }, 900); // Slightly longer display for slower pace
         }
     }
 
@@ -346,6 +349,7 @@ class TempSoilHandler {
         if (this.isCurrentlyRecording) return;
         if (this.tempSoilCreatureVisual && this.tempSoilCreatureVisual.classList.contains('active')) {
             this.tempSoilCreatureCurrentFrame = (this.tempSoilCreatureCurrentFrame + 1) % this.tempSoilCreatureTotalFrames;
+            // Consistent with other handlers if they use totalFrames
             this.tempSoilCreatureVisual.style.backgroundPositionX = (this.tempSoilCreatureCurrentFrame * (100 / this.tempSoilCreatureTotalFrames)) + '%';
         }
     }
@@ -355,49 +359,86 @@ class TempSoilHandler {
         if (!window.Tone || !this.audioEnabled) return;
         if (Tone.context.state !== 'running') return;
 
-        if (this.debugMode) console.log('🌡️💧 TempSoilHandler.initTone: Initializing Bubbly Synth...');
+        if (this.debugMode) console.log('🌡️💧 TempSoilHandler.initTone: Initializing Bubbly & Harmonica Synths...');
         try {
             this.mainVolume = new Tone.Volume(this.baseVolume).toDestination();
-            this.autoPanner = new Tone.AutoPanner({ frequency: "8n", depth: 0.8, wet: 0.7 }).connect(this.mainVolume);
+            
+            // Effects for Bubbly Synth
+            this.autoPanner = new Tone.AutoPanner({ frequency: "16n", depth: 0.7, wet: 0.6 }).connect(this.mainVolume);
             this.phaserEffect = new Tone.Phaser({
-                frequency: 0.6,
-                octaves: 2,
-                stages: 8,
-                Q: 5,
-                baseFrequency: 400,
-                wet: 0.6
+                frequency: 0.5,
+                octaves: 2.5,
+                stages: 7,
+                Q: 4,
+                baseFrequency: 350,
+                wet: 0.5
             }).connect(this.autoPanner);
 
             this.bubblySynth = new Tone.FMSynth({
-                harmonicity: 1.5,
-                modulationIndex: 8,
+                harmonicity: 1.2,
+                modulationIndex: 7,
                 oscillator: { type: "sine" },
-                envelope: { attack: 0.005, decay: 0.1, sustain: 0.01, release: 0.2 },
-                modulation: { type: "square" },
-                modulationEnvelope: { attack: 0.005, decay: 0.05, sustain: 0, release: 0.1 },
-                volume: -6 // Initial synth volume, overall controlled by this.mainVolume
+                envelope: { attack: 0.008, decay: 0.15, sustain: 0.02, release: 0.25 },
+                modulation: { type: "triangle" },
+                modulationEnvelope: { attack: 0.008, decay: 0.08, sustain: 0, release: 0.15 },
+                volume: -9 // Initial synth volume, overall controlled by this.mainVolume
             }).connect(this.phaserEffect);
 
+            // Harmonica Synth and its Reverb
+            this.harmonicaReverb = new Tone.Reverb({
+                decay: 3.5, // Longer decay for harmonica
+                wet: 0.6
+            }).connect(this.mainVolume); // Connect reverb to main volume
+
+            this.harmonicaSynth = new Tone.Synth({ // Simple synth for harmonica-like tone
+                oscillator: { type: "sawtooth6" }, // A slightly brighter waveform
+                envelope: {
+                    attack: 0.05, // Slower attack
+                    decay: 0.4,
+                    sustain: 0.2,
+                    release: 0.3
+                },
+                volume: -10 // Quieter than bubbly synth
+            }).connect(this.harmonicaReverb);
+
+
+            const bubblyNotes = ["C3", "D#3", "F3", "G3", "A#3", "C4", "D#4", "F4", "G4"];
             this.generativeLoop = new Tone.Loop(time => {
                 if (!this.isPlaying || this.isRecordMode || !this.bubblySynth || !this.isCombinedActive) return;
 
-                const freq = Tone.Midi(Math.floor(Math.random() * 24) + 48).toFrequency(); // Random notes C3-B4
-                this.bubblySynth.triggerAttackRelease(freq, "32n", time);
-                this._displayNote(`💧 ${Tone.Frequency(freq).toNote()}`);
-                if (Math.random() < 0.5) this.triggerCreatureAnimation();
-            }, "16n"); // Bubble rate
-            this.generativeLoop.humanize = "64n";
+                const note = bubblyNotes[Math.floor(Math.random() * bubblyNotes.length)];
+                this.bubblySynth.triggerAttackRelease(note, "8n", time); // Slower notes
+                this._displayNote(note); // No emoji
+                if (Math.random() < 0.4) this.triggerCreatureAnimation();
+            }, "4n"); // Slower bubble rate
+            this.generativeLoop.humanize = "16n";
+
+            const harmonicaPitches = ["G4", "A#4", "C5", "D5", "D#5", "F5"];
+            this.harmonicaLoop = new Tone.Loop(time => {
+                if (!this.isPlaying || this.isRecordMode || !this.harmonicaSynth || !this.isCombinedActive) return;
+                
+                const note = harmonicaPitches[Math.floor(Math.random() * harmonicaPitches.length)];
+                this.harmonicaSynth.triggerAttackRelease(note, "2n", time); // Longer, sustained note
+                this._displayNote(note); // No emoji
+                // Optionally trigger a different animation or effect for harmonica
+            }, "2m"); // Plays infrequently (every 2 measures)
+            this.harmonicaLoop.probability = 0.35; // Not every time the loop comes around
+            this.harmonicaLoop.humanize = "4n";
+
 
             this.toneInitialized = true;
-            if (this.debugMode) console.log('🌡️💧 TempSoilHandler.initTone: Bubbly Synth initialized.');
+            if (this.debugMode) console.log('🌡️💧 TempSoilHandler.initTone: Synths initialized.');
             this.manageAudioAndVisuals();
 
         } catch (error) {
             console.error('❌ TempSoilHandler.initTone: Error:', error);
             this.toneInitialized = false;
             // Dispose components
-            this.bubblySynth?.dispose(); this.phaserEffect?.dispose(); this.autoPanner?.dispose(); this.mainVolume?.dispose(); this.generativeLoop?.dispose();
+            this.bubblySynth?.dispose(); this.phaserEffect?.dispose(); this.autoPanner?.dispose();
+            this.harmonicaSynth?.dispose(); this.harmonicaReverb?.dispose();
+            this.mainVolume?.dispose(); this.generativeLoop?.dispose(); this.harmonicaLoop?.dispose();
             this.bubblySynth = this.phaserEffect = this.autoPanner = this.mainVolume = this.generativeLoop = null;
+            this.harmonicaSynth = this.harmonicaReverb = this.harmonicaLoop = null;
         }
     }
 
@@ -407,31 +448,48 @@ class TempSoilHandler {
         const combinedTempSoilValue = (this.currentTempAppValue + this.currentSoilAppValue) / 2; // 0 to 1
 
         // Volume
-        const dynamicVolume = this.baseVolume - 10 + (combinedTempSoilValue * 15);
-        this.mainVolume.volume.linearRampTo(this.isPlaying ? Math.min(0, dynamicVolume) : -Infinity, 0.8);
+        const dynamicVolume = this.baseVolume - 8 + (combinedTempSoilValue * 12); // Adjusted range
+        this.mainVolume.volume.linearRampTo(this.isPlaying ? Math.min(-2, dynamicVolume) : -Infinity, 0.9);
 
-        // Bubble Rate (Loop interval)
+        // Bubbly Synth Loop interval
         if (this.generativeLoop) {
-            if (combinedTempSoilValue > 0.75) this.generativeLoop.interval = "32n"; // Faster
-            else if (combinedTempSoilValue > 0.4) this.generativeLoop.interval = "16n";
-            else this.generativeLoop.interval = "8n"; // Slower
+            if (combinedTempSoilValue > 0.8) this.generativeLoop.interval = "8n"; 
+            else if (combinedTempSoilValue > 0.5) this.generativeLoop.interval = "4n";
+            else this.generativeLoop.interval = "2n"; // Slower for lower combined values
         }
 
-        // Phaser Frequency
+        // Phaser Frequency (influenced by Temperature)
         if (this.phaserEffect) {
-            this.phaserEffect.frequency.value = 0.2 + (this.currentTempAppValue * 1.5); // Temp influences phaser speed
+            this.phaserEffect.frequency.value = 0.15 + (this.currentTempAppValue * 1.2); 
         }
-        // Panner Speed
+        // Panner Speed (influenced by Soil)
         if (this.autoPanner) {
-            this.autoPanner.frequency.value = 0.1 + (this.currentSoilAppValue * 0.8); // Soil influences panner speed
+            this.autoPanner.frequency.value = "16n" + (this.currentSoilAppValue * 0.6); // Slower base, more noticeable change
         }
          if (this.bubblySynth) {
-            this.bubblySynth.harmonicity.value = 1.0 + combinedTempSoilValue * 2.0; // More complex timbre with higher values
-            this.bubblySynth.modulationIndex.value = 5 + combinedTempSoilValue * 10;
+            this.bubblySynth.harmonicity.value = 1.0 + combinedTempSoilValue * 1.5; 
+            this.bubblySynth.modulationIndex.value = 4 + combinedTempSoilValue * 8;
+        }
+        
+        // Harmonica Loop Probability (more likely in certain conditions)
+        if (this.harmonicaLoop) {
+            // Example: More harmonica if temp is mild/warm and soil is humid
+            if ((this.currentTempCondition === "mild" || this.currentTempCondition === "warm") && this.currentSoilCondition === "humid") {
+                this.harmonicaLoop.probability = 0.5;
+            } else if (this.currentTempCondition === "hot" || this.currentSoilCondition === "wet") {
+                this.harmonicaLoop.probability = 0.25;
+            } else {
+                this.harmonicaLoop.probability = 0.15;
+            }
+        }
+        if (this.harmonicaSynth && this.harmonicaSynth.volume) {
+             // Make harmonica slightly louder if temp is high
+            const harmonicaVolOffset = (this.currentTempAppValue > 0.7) ? 3 : 0; // dB offset
+            this.harmonicaSynth.volume.linearRampTo(this.baseVolume -12 + harmonicaVolOffset, 0.5);
         }
 
 
-        if (this.debugMode && Math.random() < 0.05) console.log(`🌡️💧 USParams: Vol=${dynamicVolume.toFixed(1)}, LoopInterval=${this.generativeLoop?.interval}, PhaserFreq=${this.phaserEffect?.frequency.value.toFixed(2)}, PannerFreq=${this.autoPanner?.frequency.value.toFixed(2)}`);
+        if (this.debugMode && Math.random() < 0.05) console.log(`🌡️💧 USParams: Vol=${dynamicVolume.toFixed(1)}, LoopInterval=${this.generativeLoop?.interval}, HarmonicaProb=${this.harmonicaLoop?.probability.toFixed(2)}`);
     }
 
     manageAudioAndVisuals() {
@@ -473,11 +531,25 @@ class TempSoilHandler {
 
     updateUI() {
         const oldShowCreature = this.tempSoilCreatureVisual ? this.tempSoilCreatureVisual.classList.contains('active') : false;
-        const showCreature = this.isCombinedActive;
+        const showCreature = this.isCombinedActive; // Creature visible if TempSoil is the active combined state
 
         if (this.tempSoilCreatureVisual) {
             this.tempSoilCreatureVisual.classList.toggle('active', showCreature);
-            if (!showCreature && oldShowCreature) {
+
+            // Remove previous condition-specific classes
+            const classPrefix = 'tempsoil-';
+            this.tempSoilCreatureVisual.className = Array.from(this.tempSoilCreatureVisual.classList).filter(
+                c => !c.startsWith(classPrefix) || c === 'tempsoil-creature'
+            ).join(' ');
+            if (showCreature) this.tempSoilCreatureVisual.classList.add('active'); // re-add active if it was filtered out
+
+            if (showCreature) {
+                // Add current condition-specific class, like soil.js
+                const tempConditionClass = this.currentTempCondition.replace('_', '-');
+                const soilConditionClass = this.currentSoilCondition.replace('_', '-');
+                this.tempSoilCreatureVisual.classList.add(`${classPrefix}${tempConditionClass}-${soilConditionClass}`);
+            } else if (oldShowCreature && !this.tempSoilCreatureVisual.classList.contains('active')) {
+                // Reset animation frame if creature becomes inactive
                 this.tempSoilCreatureCurrentFrame = 0;
                 this.tempSoilCreatureVisual.style.backgroundPositionX = '0%';
             }
@@ -518,7 +590,7 @@ class TempSoilHandler {
                 this.stopRecordModeButton.style.display = 'none';
             }
         }
-        if (this.debugMode && Math.random() < 0.02) console.log(`🌡️💧 UI Update (TS): CreatureVis=${showCreature}, ShowTSVisualContext=${this.showTempSoilVisualContext}, RecModeTS=${this.isRecordMode}, FrameBG Classes: ${this.frameBackground?.classList.toString()}`);
+        if (this.debugMode && Math.random() < 0.02) console.log(`🌡️💧 UI Update (TS): CreatureVis=${showCreature}, ShowTSVisualContext=${this.showTempSoilVisualContext}, RecModeTS=${this.isRecordMode}, CreatureClasses: ${this.tempSoilCreatureVisual?.classList.toString()}, FrameBG Classes: ${this.frameBackground?.classList.toString()}`);
     }
 
     startAudio() {
@@ -541,9 +613,10 @@ class TempSoilHandler {
         this.updateSoundParameters();
 
         if (Tone.Transport.state !== "started") Tone.Transport.start();
-        if (this.generativeLoop.state !== "started") this.generativeLoop.start(0);
+        if (this.generativeLoop?.state !== "started") this.generativeLoop.start(0);
+        if (this.harmonicaLoop?.state !== "started") this.harmonicaLoop.start(0); // Start harmonica loop
 
-        if (this.debugMode) console.log('🌡️💧 TS startAudio: Bubbly audio started.');
+        if (this.debugMode) console.log('🌡️💧 TS startAudio: Bubbly & Harmonica audio started.');
         this.updateUI();
     }
 
@@ -567,6 +640,7 @@ class TempSoilHandler {
         if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
         this.stopTimeoutId = setTimeout(() => {
             if (this.generativeLoop?.state === "started") this.generativeLoop.stop(0);
+            if (this.harmonicaLoop?.state === "started") this.harmonicaLoop.stop(0); // Stop harmonica loop
             if (this.mainVolume) this.mainVolume.volume.value = -Infinity;
             this.isFadingOut = false;
             if (this.debugMode) console.log('🌡️💧 TS stopAudio: Bubbly audio fully stopped.');
@@ -602,6 +676,7 @@ class TempSoilHandler {
         if (this.isPlaying || this.isFadingOut) this.stopAudio(true);
         if (this.mainVolume) this.mainVolume.volume.value = -Infinity;
         if (this.generativeLoop?.state === "started") this.generativeLoop.stop(0);
+        if (this.harmonicaLoop?.state === "started") this.harmonicaLoop.stop(0); // Ensure harmonica loop is stopped
         this.isPlaying = false; this.isFadingOut = false;
 
         this.updateUI();
@@ -646,12 +721,12 @@ class TempSoilHandler {
     }
 
     _setupRhythmicPlayback(audioBlob) {
-        if (!this.isRecordMode || !this.toneInitialized || !this.bubblySynth || !this.mainVolume) {
+        if (!this.isRecordMode || !this.toneInitialized || !this.bubblySynth || !this.mainVolume) { // Check bubblySynth for rhythmic response
             this.exitRecordMode(true); return;
         }
-        if (this.debugMode) console.log('🌡️💧 TS _setupRhythmicPlayback: Starting with BubblySynth...');
+        if (this.debugMode) console.log('🌡️💧 TS _setupRhythmicPlayback: Starting with BubblySynth for rhythm...');
 
-        this.mainVolume.volume.value = this.rhythmicPlaybackVolume;
+        this.mainVolume.volume.value = this.rhythmicPlaybackVolume; // Use mainVolume for overall control
 
         if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl);
         this.recordedAudioBlobUrl = URL.createObjectURL(audioBlob);
@@ -673,14 +748,14 @@ class TempSoilHandler {
                 this.recordedBufferPlayer.start();
 
                 this.rhythmicLoop = new Tone.Loop(time => {
-                    if (!this.isRecordMode || !this.rhythmFollower || !this.bubblySynth || this.recordedBufferPlayer?.state !== 'started') return;
+                    if (!this.isRecordMode || !this.rhythmFollower || !this.bubblySynth || this.recordedBufferPlayer?.state !== 'started') return; // Use bubblySynth
                     const level = this.rhythmFollower.getValue();
                     const currentTime = Tone.now() * 1000;
                     if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
-                        const freq = Tone.Midi(Math.floor(Math.random() * 12) + 60).toFrequency(); // C4-B4 for rhythmic response
-                        this.bubblySynth.triggerAttackRelease(freq, "32n", time);
+                        const freq = Tone.Midi(Math.floor(Math.random() * 12) + 55).toFrequency(); // Adjusted range for rhythmic response G3-F#4
+                        this.bubblySynth.triggerAttackRelease(freq, "16n", time); // Bubbly synth responds
                         this.triggerCreatureAnimation();
-                        this._displayNote(`💧 ${Tone.Frequency(freq).toNote()}`);
+                        this._displayNote(Tone.Frequency(freq).toNote()); // No emoji
                         this.lastRhythmNoteTime = currentTime;
                     }
                 }, "16n").start(0);
@@ -704,6 +779,7 @@ class TempSoilHandler {
 
         if (this.mainVolume?.volume.value === this.rhythmicPlaybackVolume) this.mainVolume.volume.value = -Infinity;
         if (this.generativeLoop?.state === "started") this.generativeLoop.stop(0);
+        if (this.harmonicaLoop?.state === "started") this.harmonicaLoop.stop(0); // Ensure harmonica loop is stopped
         this.isPlaying = false;
 
         if (this.noteDisplayTimeoutId) clearTimeout(this.noteDisplayTimeoutId);
