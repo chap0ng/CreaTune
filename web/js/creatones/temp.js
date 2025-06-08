@@ -49,8 +49,9 @@ class TemperatureHandler {
         this.rhythmFollower = null;
         this.rhythmicLoop = null;
         this.recordingDuration = 5000;
-        this.rhythmThreshold = -28; 
-        this.rhythmNoteCooldown = 180; 
+        // Adjusted to match light.js for sensitivity
+        this.rhythmThreshold = -30; // Was -28, made more sensitive like light.js
+        this.rhythmNoteCooldown = 150; // Was 180, matched light.js
         this.lastRhythmNoteTime = 0; // Used by _setupRhythmicPlayback
         this.recordedAudioBlobUrl = null;
 
@@ -1010,11 +1011,22 @@ class TemperatureHandler {
                         const level = this.rhythmFollower.getValue();
                         const currentTime = Tone.now() * 1000;
 
+                        // ADDED: More detailed logging of the level BEFORE the check
+                        if (this.debugMode && Math.random() < 0.1) { // Log occasionally to avoid flooding
+                            console.log(`🌡️ Temp Rhythmic Loop: Level=${typeof level === 'number' ? level.toFixed(2) : level} dB, Threshold=${this.rhythmThreshold} dB, CooldownMet=${(currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)}`);
+                        }
+
                         if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
                             const noteToPlay = rhythmicNotes[Math.floor(Math.random() * rhythmicNotes.length)];
-                            const velocity = Math.min(1.0, Math.max(0.15, (level - this.rhythmThreshold) * 0.05 + 0.2));
+                            // Using a velocity calculation similar to light.js for consistency in response feel
+                            const levelAboveThreshold = Math.max(0, level - this.rhythmThreshold); // Ensures positive value
+                            let velocity = 0.25 + (levelAboveThreshold * 0.045); // Adjusted base and scaling factor
+                            velocity = Math.min(1.0, Math.max(0.1, velocity)); // Clamp velocity between 0.1 and 1.0
 
-                            if (this.debugMode && Math.random() < 0.25) console.log(`🌡️ Rhythmic trigger (Temp PunchySynth)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}`);
+
+                            if (this.debugMode && Math.random() < 0.35) { // Increased log probability for triggers
+                                console.log(`%c🌡️ Rhythmic trigger (Temp PunchySynth)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}`, "color: orange");
+                            }
                             
                             this.punchySynth.triggerAttackRelease(noteToPlay, "16n", time, velocity);
                             this.triggerCreatureAnimation();
