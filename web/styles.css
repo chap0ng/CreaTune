@@ -199,7 +199,7 @@ body {
   justify-content: center;
   align-items: center;
   transition: background-color 0.8s ease-in-out, background-image 0.8s ease-in-out, filter 0.8s ease-in-out, box-shadow 0.5s ease-in-out;
-  z-index: 2; /* Above frame components if needed, below creatures */
+  z-index: 5; /* Above notes-display, below creatures. Serves as the canvas for dynamic backgrounds. */
 }
 
 /* --- Soil Background States --- */
@@ -207,8 +207,8 @@ body {
   background-image: url(sprites/backgrounds/Background_soil.gif);
   background-size: cover;
   background-position: center;
+  background-color: var(--warm-beige); /* Fallback if needed */
   background-repeat: repeat; /* Or no-repeat if GIF is designed for it */
-  /* background-color: var(--warm-beige); /* Fallback if needed */
 }
 /* Add .soil-dry-bg, .soil-humid-bg, .soil-wet-bg if they differ from soil-active-bg */
 
@@ -223,6 +223,7 @@ body {
   background-size: cover;
   background-position: center;
   background-repeat: repeat;
+  background-color: var(--warm-beige); /* Fallback if needed */
   /* Specific filters for light conditions can be added here if desired,
      e.g., .framebackground.light-dark-bg { filter: brightness(0.8); } */
 }
@@ -230,7 +231,7 @@ body {
 /* --- Temperature Background States --- */
 .framebackground.temp-active-bg { /* Generic active, if no specific condition matches */
   background-image: url(sprites/backgrounds/Background_temp.gif);
-  background-color: var(--blue-green); /* Fallback color */
+  background-color: var(--warm-beige); /* Fallback if needed */
   background-size: cover;
   background-position: center;
 }
@@ -238,7 +239,7 @@ body {
 /* --- LightSoil Background State --- */
 .framebackground.lightsoil-active-bg {
   /* background-image: url(sprites/backgrounds/Background_lightsoil.gif); /* Uncomment if you have this */
-  background-color: var(--blue-green); /* Your existing base color */
+  background-color: var(--warm-beige); /* Your existing base color */
   background-size: cover;
   background-position: center;
 }
@@ -427,7 +428,7 @@ body {
   left: 50%;
   top: 50%; /* Adjust if it overlaps too much with creatures */
   transform: translate(-50%, -50%);
-  z-index: 100; /* Above creatures if needed, or below if creatures are main focus */
+  z-index: 4; /* Below the framebackground and creatures */
   font-size: 45px;
   color: var(--coral-red);
   text-align: center;
