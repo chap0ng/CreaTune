@@ -409,7 +409,7 @@ class TempSoilHandler {
                 const note = bubblyNotes[Math.floor(Math.random() * bubblyNotes.length)];
                 this.bubblySynth.triggerAttackRelease(note, "8n", time); // Slower notes
                 this._displayNote(note); // No emoji
-                if (Math.random() < 0.4) this.triggerCreatureAnimation();
+                this.triggerCreatureAnimation(); // Ensure animation triggers for every bubbly note
             }, "4n"); // Slower bubble rate
             this.generativeLoop.humanize = "16n";
 
@@ -420,7 +420,7 @@ class TempSoilHandler {
                 const note = harmonicaPitches[Math.floor(Math.random() * harmonicaPitches.length)];
                 this.harmonicaSynth.triggerAttackRelease(note, "2n", time); // Longer, sustained note
                 this._displayNote(note); // No emoji
-                // Optionally trigger a different animation or effect for harmonica
+                this.triggerCreatureAnimation(); // Ensure animation triggers for every harmonica note
             }, "2m"); // Plays infrequently (every 2 measures)
             this.harmonicaLoop.probability = 0.35; // Not every time the loop comes around
             this.harmonicaLoop.humanize = "4n";

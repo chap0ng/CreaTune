@@ -958,48 +958,85 @@ class TemperatureHandler {
     async _setupRhythmicPlayback(audioBlob) {
         if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback: Starting with blob size:', audioBlob.size);
 
-        // Ensure we have a valid audio context and the necessary components
-        if (!this.isRecordMode || !this.toneInitialized || !this.punchySynth) { // Ensure punchySynth is used here
-            if (this.debugMode) console.warn("🌡️ _setupRhythmicPlayback: Conditions not met or punchySynth missing.");
+        if (!this.isRecordMode || !this.toneInitialized || !this.punchySynth) {
+            if (this.debugMode) console.warn(`🌡️ _setupRhythmicPlayback: Conditions not met. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, punchySynth=${!!this.punchySynth}. Forcing exit.`);
             this.exitRecordMode(true);
             return;
         }
 
         try {
-            // Create a new buffer source for the recorded audio
-            const audioBuffer = await new Tone.AudioBuffer(audioBlob);
-            const source = new Tone.Buffersource(audioBuffer, {
-                // Playback rate and other settings can be adjusted here if needed
-                playbackRate: 1.0,
-                loop: false // Don't loop the recorded audio by default
+            if (this.punchySynth && this.punchySynth.volume) {
+                this.punchySynth.volume.value = this.rhythmicPlaybackVolume;
+                if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to ${this.rhythmicPlaybackVolume} dB for rhythmic notes.`);
+            }
+
+            if (this.recordedAudioBlobUrl) {
+                URL.revokeObjectURL(this.recordedAudioBlobUrl);
+            }
+            this.recordedAudioBlobUrl = URL.createObjectURL(audioBlob);
+
+            this.rhythmFollower = new Tone.Meter({ smoothing: 0.2 });
+            this.lastRhythmNoteTime = 0;
+
+            // Notes for rhythmic playback with punchySynth
+            const rhythmicNotes = ["F1", "G1", "A1", "A#1", "C2", "D2", "D#1"];
+
+            this.recordedBufferPlayer = new Tone.Player({
+                url: this.recordedAudioBlobUrl,
+                loop: true, // The recorded sample will loop
+                onload: () => {
+                    if (!this.isRecordMode || !this.recordedBufferPlayer) {
+                        if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Record mode exited or player disposed. Aborting.');
+                        this.recordedBufferPlayer?.dispose(); this.recordedBufferPlayer = null;
+                        this.rhythmFollower?.dispose(); this.rhythmFollower = null;
+                        this.rhythmicLoop?.dispose(); this.rhythmicLoop = null;
+                        if (this.punchySynth?.volume.value === this.rhythmicPlaybackVolume) {
+                            this.punchySynth.volume.value = -Infinity;
+                        }
+                        return;
+                    }
+
+                    if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Recorded buffer player loaded.');
+                    this.recordedBufferPlayer.connect(this.rhythmFollower);
+                    this.recordedBufferPlayer.toDestination(); // Play back the recorded audio
+                    this.recordedBufferPlayer.start();
+                    if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Recorded buffer player started.');
+
+                    this.rhythmicLoop = new Tone.Loop(time => {
+                        if (!this.isRecordMode || !this.rhythmFollower || !this.punchySynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
+                            return;
+                        }
+
+                        const level = this.rhythmFollower.getValue();
+                        const currentTime = Tone.now() * 1000;
+
+                        if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
+                            const noteToPlay = rhythmicNotes[Math.floor(Math.random() * rhythmicNotes.length)];
+                            const velocity = Math.min(1.0, Math.max(0.15, (level - this.rhythmThreshold) * 0.05 + 0.2));
+
+                            if (this.debugMode && Math.random() < 0.25) console.log(`🌡️ Rhythmic trigger (Temp PunchySynth)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}`);
+                            
+                            this.punchySynth.triggerAttackRelease(noteToPlay, "16n", time, velocity);
+                            this.triggerCreatureAnimation();
+                            this._displayNote(noteToPlay);
+                            this.lastRhythmNoteTime = currentTime;
+                        }
+                    }, "16n").start(0); // Start the loop immediately relative to transport
+                    if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Rhythmic loop initiated.');
+                },
+                onerror: (err) => {
+                    console.error('❌ _setupRhythmicPlayback: Error loading recorded buffer player for Temperature:', err);
+                    this.exitRecordMode(true);
+                }
             });
 
-            // Create a new rhythm follower instance for this recording
-            const rhythmFollower = new Tone.Follower((beat) => {
-                // This callback will be called with the detected beat time
-                if (this.debugMode) console.log(`🌡️ Rhythm detected at: ${beat}`);
-                // Here you can trigger events or actions based on the detected rhythm
-            }, {
-                // Options for the rhythm follower
-                // These can be tweaked for sensitivity, smoothing, etc.
-                smoothing: 0.3,
-                threshold: 0.5
-            });
+            if (Tone.Transport.state !== "started") {
+                Tone.Transport.start();
+            }
+            if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback: Setup initiated, player loading asynchronously.');
 
-            // Connect the audio source to the rhythm follower and then to the destination
-            source.connect(rhythmFollower);
-            rhythmFollower.connect(Tone.Destination);
-
-            // Start the audio source
-            source.start(0);
-
-            // Optionally, you can schedule events or actions based on the detected rhythm
-            // For example, triggering a synth or effect in time with the beat
-            // this.punchySynth.triggerAttackRelease("C2", "8n", 0.1);
-
-            if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback: Playback and rhythm follower set up successfully.');
         } catch (error) {
-            console.error('❌ _setupRhythmicPlayback: Error setting up playback:', error);
+            console.error('❌ _setupRhythmicPlayback: Error setting up playback in TemperatureHandler:', error);
             this.exitRecordMode(true);
         }
     }
