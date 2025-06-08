@@ -738,7 +738,7 @@ class TemperatureHandler {
             this.recorder.start();
             if (this.debugMode) console.log(`🌡️ enterRecordMode: Recording started for ${this.recordingDuration / 1000} seconds...`);
 
-            setTimeout(async () => {
+            setTimeout(async () => { // Ensure this is an arrow function
                 // REMOVED Live rhythmic response teardown.
 
                 this.isCurrentlyRecording = false;
@@ -758,8 +758,14 @@ class TemperatureHandler {
                     if (this.debugMode) console.log('🌡️ enterRecordMode (timeout): Exited during recording. Not setting up playback.');
                     return;
                 }
-                this._setupRhythmicPlayback(audioBlob); // 'this' will now correctly refer to the TemperatureHandler instance
-                // ... existing code inside the timeout ...
+                // This is the call around line 761
+                if (typeof this._setupRhythmicPlayback === 'function') {
+                    this._setupRhythmicPlayback(audioBlob); 
+                } else {
+                    console.error('❌ FATAL: this._setupRhythmicPlayback is NOT a function in setTimeout callback!', this);
+                    alert('Error: Playback setup failed. Check console.');
+                    this.exitRecordMode(true);
+                }
             }, this.recordingDuration);
 
         } catch (err) {
@@ -858,10 +864,10 @@ class TemperatureHandler {
             if (this.debugMode) console.log(`🌡️ startAudio (generative): Conditions not met (DeviceConnected:${this.deviceStates.temperature.connected}, SensorActive:${this.isActive}).`);
             this.updateUI(); return;
         }
-        if (!this.liquidSynth || !this.punchySynth || !this.mainTempLoop || !this.accentLoop) {
+        if (!this.liquidSynth || !this.punchySynth || !this.mainTempLoop || !this.accentLoop || !this.cyclicLoop) { // Added cyclicLoop check
             console.error("❌ startAudio (generative) Temp: Critical: Synths/Loops not available. Attempting re-init.");
             this.initTone();
-            if (!this.liquidSynth || !this.punchySynth || !this.mainTempLoop || !this.accentLoop) {
+            if (!this.liquidSynth || !this.punchySynth || !this.mainTempLoop || !this.accentLoop || !this.cyclicLoop) { // Added cyclicLoop check
                 console.error("❌ startAudio (generative) Temp: Critical: Re-init failed. Cannot start.");
                 return;
             }
@@ -879,9 +885,10 @@ class TemperatureHandler {
 
         this.updateSoundParameters(); // Set initial volumes and params
 
-        if (this.mainTempLoop && this.mainTempLoop.state !== "started") this.mainTempLoop.start(0);
-        if (this.accentLoop && this.accentLoop.state !== "started") this.accentLoop.start(0);
-        if (this.cyclicLoop && this.cyclicLoop.state !== "started") this.cyclicLoop.start(0); // Add this line where you start the other loops
+        // Start loops at the current time on the transport
+        if (this.mainTempLoop && this.mainTempLoop.state !== "started") this.mainTempLoop.start(); // Changed from start(0)
+        if (this.accentLoop && this.accentLoop.state !== "started") this.accentLoop.start(); // Changed from start(0)
+        if (this.cyclicLoop && this.cyclicLoop.state !== "started") this.cyclicLoop.start(); // Changed from start(0)
 
         if (this.debugMode) console.log('🌡️ startAudio (generative): Loops started. isPlaying is true.');
         this.updateUI();
@@ -945,6 +952,55 @@ class TemperatureHandler {
 
         if (!force || !wasPlaying) { // Update UI immediately if not forced full stop or wasn't playing
              this.updateUI();
+        }
+    }
+
+    async _setupRhythmicPlayback(audioBlob) {
+        if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback: Starting with blob size:', audioBlob.size);
+
+        // Ensure we have a valid audio context and the necessary components
+        if (!this.isRecordMode || !this.toneInitialized || !this.punchySynth) { // Ensure punchySynth is used here
+            if (this.debugMode) console.warn("🌡️ _setupRhythmicPlayback: Conditions not met or punchySynth missing.");
+            this.exitRecordMode(true);
+            return;
+        }
+
+        try {
+            // Create a new buffer source for the recorded audio
+            const audioBuffer = await new Tone.AudioBuffer(audioBlob);
+            const source = new Tone.Buffersource(audioBuffer, {
+                // Playback rate and other settings can be adjusted here if needed
+                playbackRate: 1.0,
+                loop: false // Don't loop the recorded audio by default
+            });
+
+            // Create a new rhythm follower instance for this recording
+            const rhythmFollower = new Tone.Follower((beat) => {
+                // This callback will be called with the detected beat time
+                if (this.debugMode) console.log(`🌡️ Rhythm detected at: ${beat}`);
+                // Here you can trigger events or actions based on the detected rhythm
+            }, {
+                // Options for the rhythm follower
+                // These can be tweaked for sensitivity, smoothing, etc.
+                smoothing: 0.3,
+                threshold: 0.5
+            });
+
+            // Connect the audio source to the rhythm follower and then to the destination
+            source.connect(rhythmFollower);
+            rhythmFollower.connect(Tone.Destination);
+
+            // Start the audio source
+            source.start(0);
+
+            // Optionally, you can schedule events or actions based on the detected rhythm
+            // For example, triggering a synth or effect in time with the beat
+            // this.punchySynth.triggerAttackRelease("C2", "8n", 0.1);
+
+            if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback: Playback and rhythm follower set up successfully.');
+        } catch (error) {
+            console.error('❌ _setupRhythmicPlayback: Error setting up playback:', error);
+            this.exitRecordMode(true);
         }
     }
 }
