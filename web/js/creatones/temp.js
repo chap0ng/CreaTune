@@ -1,20 +1,22 @@
 class TemperatureHandler {
     constructor() {
         // Synths and Loops - Temperature Style
-        this.liquidSynth = null;    // For sustained, evolving sounds
-        this.punchySynth = null;   // For percussive accents
-        this.mainTempLoop = null;  // For generative audio with liquidSynth
-        this.accentLoop = null;    // For punchySynth accents
+        this.liquidSynth = null;
+        this.punchySynth = null;
+        this.mainTempLoop = null;
+        this.accentLoop = null;
+        this.cyclicLoop = null; // Added for Gamelan patterns
+        this.liquidSynthWrapper = null; 
 
         // Audio Params - Temperature Style
         this.fadeDuration = 1.8;
-        this.baseLiquidVolume = 6; // Quieter base for more dynamic range
+        this.baseLiquidVolume = 6; 
         this.basePunchyVolume = 9;
-        this.rhythmicPlaybackVolume = 6; // For recorded audio playback
+        this.rhythmicPlaybackVolume = 6; 
 
         // State
         this.isActive = false;
-        this.isPlaying = false; // True when GENERATIVE audio is playing
+        this.isPlaying = false; 
         this.isFadingOut = false;
         this.audioEnabled = false;
         this.toneInitialized = false;
@@ -22,23 +24,23 @@ class TemperatureHandler {
         this.stopTimeoutId = null;
         this.isExternallyMuted = false;
 
-        this.currentTempCondition = "mild"; // Default
-        this.currentTempAppValue = 0.5;     // Default (0.0 to 1.0)
-        this.currentHumidity = 50;          // Default
+        this.currentTempCondition = "mild"; 
+        this.currentTempAppValue = 0.5;     
+        this.currentHumidity = 50;          
         this.deviceStates = {
-            temperature: { connected: false } // Changed from soil
+            temperature: { connected: false } 
         };
 
         // Sprite Animation State
         this.tempCreatureCurrentFrame = 0;
-        this.tempCreatureTotalFrames = 6; // Assuming 6 frames for temp-creature.png
+        this.tempCreatureTotalFrames = 6; 
 
         // DOM Elements
-        this.tempCreatureVisual = document.querySelector('.temp-creature'); // Changed
+        this.tempCreatureVisual = document.querySelector('.temp-creature'); 
         this.frameBackground = document.querySelector('.framebackground');
         this.stopRecordModeButton = document.getElementById('stoprecordmode');
 
-        // Record Mode Properties (can remain similar, but synth used might change)
+        // Record Mode Properties
         this.isRecordMode = false;
         this.isCurrentlyRecording = false;
         this.mic = null;
@@ -47,14 +49,19 @@ class TemperatureHandler {
         this.rhythmFollower = null;
         this.rhythmicLoop = null;
         this.recordingDuration = 5000;
-        this.rhythmThreshold = -28; // Adjusted slightly
-        this.rhythmNoteCooldown = 180; // Adjusted slightly
-        this.lastRhythmNoteTime = 0;
+        this.rhythmThreshold = -28; 
+        this.rhythmNoteCooldown = 180; 
+        this.lastRhythmNoteTime = 0; // Used by _setupRhythmicPlayback
         this.recordedAudioBlobUrl = null;
 
         // Note Display
         this.noteDisplayTimeoutId = null;
         this.lastDisplayedNote = null;
+
+        // REMOVED live rhythm properties:
+        // this.liveRhythmFollower = null;
+        // this.liveRhythmicLoop = null;
+        // this.lastRhythmNoteTimeLive = 0; 
 
         if (!this.tempCreatureVisual && this.debugMode) console.warn('🌡️ .temp-creature element not found.');
         if (!this.frameBackground && this.debugMode) console.warn('🌡️ .framebackground element not found for TemperatureHandler.');
@@ -327,7 +334,6 @@ class TemperatureHandler {
             "C3", "D3", "F3", "G3", 
             "A#2", "G2", "F2", "C2" 
         ]; 
-        
         this.cyclicLoop = new Tone.Sequence((time, note) => {
             if (!this.isPlaying || !this.liquidSynthWrapper || this.liquidSynthWrapper.volume.value === -Infinity) return;
             
@@ -673,11 +679,10 @@ class TemperatureHandler {
         if (window.soilHandlerInstance?.setExternallyMuted) window.soilHandlerInstance.setExternallyMuted(true);
         if (window.lightSoilHandlerInstance?.setExternallyMuted) window.lightSoilHandlerInstance.setExternallyMuted(true);
 
-
         this.updateUI();
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 200)); // Short delay
 
-        if (!this.isRecordMode) {
+        if (!this.isRecordMode) { 
             if (this.debugMode) console.log('🌡️ enterRecordMode: Exited during pre-recording wait. Restoring other handlers.');
             if (window.lightHandlerInstance?.setExternallyMuted) window.lightHandlerInstance.setExternallyMuted(false);
             if (window.soilHandlerInstance?.setExternallyMuted) window.soilHandlerInstance.setExternallyMuted(false);
@@ -689,7 +694,7 @@ class TemperatureHandler {
             this.mic = new Tone.UserMedia();
             await this.mic.open();
 
-            if (!this.isRecordMode) {
+            if (!this.isRecordMode) { 
                 if (this.debugMode) console.log('🌡️ enterRecordMode: Exited after mic permission prompt.');
                 if (this.mic.state === "started") this.mic.close(); this.mic = null;
                 if (window.lightHandlerInstance?.setExternallyMuted) window.lightHandlerInstance.setExternallyMuted(false);
@@ -699,32 +704,36 @@ class TemperatureHandler {
             }
 
             if (this.debugMode) console.log('🌡️ enterRecordMode: Mic opened.');
+            
+            // REMOVED Live rhythmic response setup. Recording will be silent.
+
             this.isCurrentlyRecording = true;
             this.recorder = new Tone.Recorder();
-            this.mic.connect(this.recorder);
+            this.mic.connect(this.recorder); 
             this.recorder.start();
             if (this.debugMode) console.log(`🌡️ enterRecordMode: Recording started for ${this.recordingDuration / 1000} seconds...`);
 
             setTimeout(async () => {
+                // REMOVED Live rhythmic response teardown.
+
                 this.isCurrentlyRecording = false;
                 if (!this.recorder || !this.isRecordMode) {
                     if (this.debugMode) console.log('🌡️ enterRecordMode (timeout): No longer in active recording state or record mode.');
                     if (this.mic?.state === "started") this.mic.close(); this.mic = null;
                     if (this.recorder?.state === "started") { try { await this.recorder.stop(); } catch (e) { /*ignore*/ } }
-                    if (this.isRecordMode) this.exitRecordMode(true); // Force exit
+                    if (this.isRecordMode) this.exitRecordMode(true); 
                     return;
                 }
 
                 const audioBlob = await this.recorder.stop();
-                if (this.mic?.state === "started") this.mic.close(); this.mic = null;
+                if (this.mic?.state === "started") this.mic.close(); this.mic = null; 
                 if (this.debugMode) console.log('🌡️ enterRecordMode (timeout): Recording stopped. Blob size:', audioBlob.size);
 
                 if (!this.isRecordMode) {
                     if (this.debugMode) console.log('🌡️ enterRecordMode (timeout): Exited during recording. Not setting up playback.');
-                    // Unmute handled by exitRecordMode if it was called
                     return;
                 }
-                this._setupRhythmicPlayback(audioBlob);
+                this._setupRhythmicPlayback(audioBlob); // This will use punchySynth
 
             }, this.recordingDuration);
 
@@ -732,82 +741,9 @@ class TemperatureHandler {
             console.error(`❌ enterRecordMode: Error during mic setup: ${err.message}`, err);
             alert(`Could not start recording for Temperature: ${err.message}. Check console and browser permissions.`);
             this.isCurrentlyRecording = false;
-            this.exitRecordMode(true); // This will also handle unmuting others
+            // REMOVED Cleanup of live components as they are no longer used.
+            this.exitRecordMode(true); 
         }
-    }
-
-    _setupRhythmicPlayback(audioBlob) {
-        // Use punchySynth for rhythmic playback, ensure it sounds Gamelan-like
-        if (!this.isRecordMode || !this.toneInitialized || !this.punchySynth) {
-            if (this.debugMode) console.warn(`🌡️ _setupRhythmicPlayback: Blocked. isRecMode=${this.isRecordMode}, toneInit=${this.toneInitialized}, punchySynth=${!!this.punchySynth}. Forcing exit.`);
-            this.exitRecordMode(true);
-            return;
-        }
-        if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback: Starting with punchySynth (Gamelan-style)...');
-
-        if (this.punchySynth && this.punchySynth.volume) {
-            // Use a slightly different volume for playback to distinguish from generative accents
-            this.punchySynth.volume.value = this.rhythmicPlaybackVolume - 2; 
-            if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to ${this.punchySynth.volume.value} dB for recording playback.`);
-        }
-
-        if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl);
-        this.recordedAudioBlobUrl = URL.createObjectURL(audioBlob);
-
-        this.rhythmFollower = new Tone.Meter({ smoothing: 0.2 });
-        this.lastRhythmNoteTime = 0;
-
-        this.recordedBufferPlayer = new Tone.Player({
-            url: this.recordedAudioBlobUrl,
-            loop: true,
-            onload: () => {
-                if (!this.isRecordMode) {
-                    if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Record mode exited while buffer loading. Aborting.');
-                    if (this.recordedBufferPlayer) { this.recordedBufferPlayer.dispose(); this.recordedBufferPlayer = null; }
-                    if (this.rhythmFollower) { this.rhythmFollower.dispose(); this.rhythmFollower = null; }
-                    if (this.rhythmicLoop) { this.rhythmicLoop.dispose(); this.rhythmicLoop = null; }
-                    // Reset punchySynth volume if it was set for playback
-                    if (this.punchySynth && this.punchySynth.volume.value === (this.rhythmicPlaybackVolume -2)) {
-                         this.punchySynth.volume.value = -Infinity; // Or to its generative base if applicable
-                    }
-                    return;
-                }
-                if (!this.recordedBufferPlayer) { /* Safety check */ return; }
-
-                if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Recorded buffer player loaded.');
-                this.recordedBufferPlayer.connect(this.rhythmFollower);
-                this.recordedBufferPlayer.toDestination(); 
-                this.recordedBufferPlayer.start();
-                if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Recorded buffer player started.');
-
-                this.rhythmicLoop = new Tone.Loop(time => {
-                    if (!this.isRecordMode || !this.rhythmFollower || !this.punchySynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
-                        return;
-                    }
-                    const level = this.rhythmFollower.getValue();
-                    const currentTime = Tone.now() * 1000;
-
-                    if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
-                        // Expanded notes for rhythmic response
-                        const notes = ["C1", "D1", "F1", "G1", "A#1", "C2"]; 
-                        const noteToPlay = notes[Math.floor(Math.random() * notes.length)];
-                        const velocity = 0.4 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.035);
-
-                        if (this.debugMode && Math.random() < 0.25) console.log(`🌡️ Rhythmic trigger (Gamelan)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Vel: ${velocity.toFixed(2)}`);
-                        this.punchySynth.triggerAttackRelease(noteToPlay, "16n", time, Math.min(1.0, Math.max(0.15, velocity))); 
-                        this.triggerCreatureAnimation();
-                        this._displayNote(noteToPlay); // Removed emoji prefix
-                        this.lastRhythmNoteTime = currentTime;
-                    }
-                }, "16n").start(0);
-                if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Rhythmic loop initiated (Gamelan-style).');
-            },
-            onerror: (err) => {
-                console.error('❌ _setupRhythmicPlayback: Error loading recorded buffer player:', err);
-                this.exitRecordMode(true);
-            }
-        });
-        if (Tone.Transport.state !== "started") Tone.Transport.start();
     }
 
     exitRecordMode(force = false) {
@@ -816,16 +752,22 @@ class TemperatureHandler {
         }
         if (this.debugMode) console.log(`🌡️ exitRecordMode: Starting. Forced: ${force}. Was inRecordMode: ${this.isRecordMode}`);
 
-        const wasRecordMode = this.isRecordMode;
+        const wasRecordMode = this.isRecordMode; 
         this.isRecordMode = false;
         this.isCurrentlyRecording = false;
+
+        // REMOVED Cleanup for LIVE rhythmic response components
+        // if (this.liveRhythmicLoop) { ... }
+        // if (this.liveRhythmFollower) { ... }
+        // this.lastRhythmNoteTimeLive = 0;
 
         if (this.mic?.state === "started") this.mic.close(); this.mic = null;
         if (this.recorder) {
             if (this.recorder.state === "started") try { this.recorder.stop(); } catch (e) { /* ignore */ }
             this.recorder.dispose(); this.recorder = null;
         }
-        if (this.rhythmicLoop) {
+        
+        if (this.rhythmicLoop) { // This is for the recorded blob playback
             if (this.rhythmicLoop.state === "started") this.rhythmicLoop.stop(0);
             this.rhythmicLoop.dispose(); this.rhythmicLoop = null;
         }
@@ -834,13 +776,16 @@ class TemperatureHandler {
             this.recordedBufferPlayer.dispose(); this.recordedBufferPlayer = null;
             if (this.recordedAudioBlobUrl) { URL.revokeObjectURL(this.recordedAudioBlobUrl); this.recordedAudioBlobUrl = null; }
         }
-        if (this.rhythmFollower) { this.rhythmFollower.dispose(); this.rhythmFollower = null; }
+        if (this.rhythmFollower) { // This is for the recorded blob playback
+            this.rhythmFollower.dispose(); this.rhythmFollower = null;
+        }
 
-        // Ensure generative synths are silenced
-        if (this.liquidSynth?.volume) this.liquidSynth.volume.value = -Infinity;
-        if (this.punchySynth?.volume) this.punchySynth.volume.value = -Infinity; // Also silence punchy synth used for recording
+        if (this.liquidSynthWrapper?.volume) this.liquidSynthWrapper.volume.value = -Infinity; 
+        else if (this.liquidSynth?.volume) this.liquidSynth.volume.value = -Infinity; 
+        
+        if (this.punchySynth?.volume) this.punchySynth.volume.value = -Infinity;
 
-        this.isPlaying = false;
+        this.isPlaying = false; 
         this.isFadingOut = false;
         if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
 
