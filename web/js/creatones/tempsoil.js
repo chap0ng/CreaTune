@@ -707,7 +707,7 @@ class TempSoilHandler {
                 this.isCurrentlyRecording = false;
                 if (!this.recorder || !this.isRecordMode) {
                     if (this.mic?.state === "started") this.mic.close(); this.mic = null;
-                    if (this.recorder?.state === "started") { try { await this.recorder.stop(); } catch (e) {} }
+                    this.recorder?.stop();
                     if (this.isRecordMode) this.exitRecordMode(true);
                     return;
                 }
@@ -725,12 +725,15 @@ class TempSoilHandler {
     }
 
     _setupRhythmicPlayback(audioBlob) {
-        if (!this.isRecordMode || !this.toneInitialized || !this.bubblySynth || !this.mainVolume) { // Check bubblySynth for rhythmic response
-            this.exitRecordMode(true); return;
+        // Ensure both synths intended for rhythmic response are available
+        if (!this.isRecordMode || !this.toneInitialized || !this.bubblySynth || !this.harmonicaSynth || !this.mainVolume) {
+            if(this.debugMode) console.warn(`🌡️💧 TS _setupRhythmicPlayback: Blocked. Missing synth or not in correct state. isRecMode=${this.isRecordMode}, toneInit=${this.toneInitialized}, bubbly=${!!this.bubblySynth}, harmonica=${!!this.harmonicaSynth}, mainVol=${!!this.mainVolume}`);
+            this.exitRecordMode(true); 
+            return;
         }
-        if (this.debugMode) console.log('🌡️💧 TS _setupRhythmicPlayback: Starting with BubblySynth for rhythm...');
+        if (this.debugMode) console.log('🌡️💧 TS _setupRhythmicPlayback: Starting with TempSoil synths (Bubbly/Harmonica) for rhythm...');
 
-        this.mainVolume.volume.value = this.rhythmicPlaybackVolume; // Use mainVolume for overall control
+        this.mainVolume.volume.value = this.rhythmicPlaybackVolume; // Set volume for playback
 
         if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl);
         this.recordedAudioBlobUrl = URL.createObjectURL(audioBlob);
@@ -742,29 +745,55 @@ class TempSoilHandler {
             url: this.recordedAudioBlobUrl,
             loop: true,
             onload: () => {
-                if (!this.isRecordMode || !this.recordedBufferPlayer) {
-                    this.recordedBufferPlayer?.dispose(); this.rhythmFollower?.dispose(); this.rhythmicLoop?.dispose();
-                    if (this.mainVolume?.volume.value === this.rhythmicPlaybackVolume) this.mainVolume.volume.value = -Infinity;
+                if (!this.isRecordMode || !this.recordedBufferPlayer || !this.bubblySynth || !this.harmonicaSynth) { 
+                    if(this.debugMode) console.warn(`🌡️💧 TS _setupRhythmicPlayback (onload): Player/Synth not available or exited record mode.`);
+                    this.recordedBufferPlayer?.dispose(); 
+                    this.rhythmFollower?.dispose(); 
+                    this.rhythmicLoop?.dispose();
+                    if (this.mainVolume?.volume.value === this.rhythmicPlaybackVolume) {
+                         this.mainVolume.volume.value = -Infinity;
+                    }
                     return;
                 }
                 this.recordedBufferPlayer.connect(this.rhythmFollower);
-                this.recordedBufferPlayer.toDestination();
+                this.recordedBufferPlayer.toDestination(); // Play back the recorded audio so user can hear it
                 this.recordedBufferPlayer.start();
 
                 this.rhythmicLoop = new Tone.Loop(time => {
-                    if (!this.isRecordMode || !this.rhythmFollower || !this.bubblySynth || this.recordedBufferPlayer?.state !== 'started') return; // Use bubblySynth
+                    if (!this.isRecordMode || !this.rhythmFollower || 
+                        !this.bubblySynth || !this.harmonicaSynth || // Ensure synths are still available
+                        this.recordedBufferPlayer?.state !== 'started') {
+                        return;
+                    }
+                    
                     const level = this.rhythmFollower.getValue();
                     const currentTime = Tone.now() * 1000;
+
                     if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
-                        const freq = Tone.Midi(Math.floor(Math.random() * 12) + 55).toFrequency(); // Adjusted range for rhythmic response G3-F#4
-                        this.bubblySynth.triggerAttackRelease(freq, "16n", time); // Bubbly synth responds
+                        const freq = Tone.Midi(Math.floor(Math.random() * 18) + 50).toFrequency(); // e.g., D3 to A#4
+                        
+                        // Randomly choose between bubblySynth and harmonicaSynth for the response
+                        if (Math.random() < 0.65) { // 65% chance for bubbly synth
+                            if (this.bubblySynth) {
+                                this.bubblySynth.triggerAttackRelease(freq, "16n", time);
+                            }
+                        } else { // 35% chance for harmonica synth
+                            if (this.harmonicaSynth) {
+                                // Harmonica might sound better with a slightly different note duration or velocity characteristic
+                                this.harmonicaSynth.triggerAttackRelease(freq, "8n", time); 
+                            }
+                        }
+                        
                         this.triggerCreatureAnimation();
-                        this._displayNote(Tone.Frequency(freq).toNote()); // No emoji
+                        this._displayNote(Tone.Frequency(freq).toNote());
                         this.lastRhythmNoteTime = currentTime;
                     }
                 }, "16n").start(0);
             },
-            onerror: (err) => { console.error('❌ TS _setupRhythmicPlayback: Error loading player:', err); this.exitRecordMode(true); }
+            onerror: (err) => { 
+                console.error('❌ TS _setupRhythmicPlayback: Error loading player:', err); 
+                this.exitRecordMode(true); 
+            }
         });
         if (Tone.Transport.state !== "started") Tone.Transport.start();
     }
