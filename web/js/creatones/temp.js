@@ -758,8 +758,8 @@ class TemperatureHandler {
                     if (this.debugMode) console.log('🌡️ enterRecordMode (timeout): Exited during recording. Not setting up playback.');
                     return;
                 }
-                this._setupRhythmicPlayback(audioBlob); // This will use punchySynth
-
+                this._setupRhythmicPlayback(audioBlob); // 'this' will now correctly refer to the TemperatureHandler instance
+                // ... existing code inside the timeout ...
             }, this.recordingDuration);
 
         } catch (err) {

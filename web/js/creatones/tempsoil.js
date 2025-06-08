@@ -36,8 +36,8 @@ class TempSoilHandler {
         this.generativeLoop = null;
         this.harmonicaLoop = null; // Loop for harmonica
         this.fadeDuration = 2.5; // Slightly longer for more complex sound
-        this.baseVolume = 8; // Adjusted base volume for main output
-        this.rhythmicPlaybackVolume = 9; // Volume during record playback
+        this.baseVolume = 6; // Adjusted base volume for main output
+        this.rhythmicPlaybackVolume = 6; // Volume during record playback
 
         // --- Record Mode Properties ---
         this.isRecordMode = false;
@@ -349,8 +349,8 @@ class TempSoilHandler {
         if (this.isCurrentlyRecording) return;
         if (this.tempSoilCreatureVisual && this.tempSoilCreatureVisual.classList.contains('active')) {
             this.tempSoilCreatureCurrentFrame = (this.tempSoilCreatureCurrentFrame + 1) % this.tempSoilCreatureTotalFrames;
-            // Consistent with other handlers if they use totalFrames
-            this.tempSoilCreatureVisual.style.backgroundPositionX = (this.tempSoilCreatureCurrentFrame * (100 / this.tempSoilCreatureTotalFrames)) + '%';
+            // Changed to use the fixed * 20 logic, similar to the soil.js snippet provided
+            this.tempSoilCreatureVisual.style.backgroundPositionX = (this.tempSoilCreatureCurrentFrame * 20) + '%';
         }
     }
 
@@ -537,14 +537,18 @@ class TempSoilHandler {
             this.tempSoilCreatureVisual.classList.toggle('active', showCreature);
 
             // Remove previous condition-specific classes
+            // This ensures only the current combined state class is present, plus base classes.
             const classPrefix = 'tempsoil-';
-            this.tempSoilCreatureVisual.className = Array.from(this.tempSoilCreatureVisual.classList).filter(
-                c => !c.startsWith(classPrefix) || c === 'tempsoil-creature'
-            ).join(' ');
-            if (showCreature) this.tempSoilCreatureVisual.classList.add('active'); // re-add active if it was filtered out
+            const classesToRemove = [];
+            for (const cls of this.tempSoilCreatureVisual.classList) {
+                if (cls.startsWith(classPrefix) && cls !== 'tempsoil-creature') { // Keep the base 'tempsoil-creature' class
+                    classesToRemove.push(cls);
+                }
+            }
+            classesToRemove.forEach(cls => this.tempSoilCreatureVisual.classList.remove(cls));
 
             if (showCreature) {
-                // Add current condition-specific class, like soil.js
+                // Add current condition-specific class
                 const tempConditionClass = this.currentTempCondition.replace('_', '-');
                 const soilConditionClass = this.currentSoilCondition.replace('_', '-');
                 this.tempSoilCreatureVisual.classList.add(`${classPrefix}${tempConditionClass}-${soilConditionClass}`);
