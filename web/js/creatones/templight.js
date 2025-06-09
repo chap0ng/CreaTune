@@ -341,7 +341,7 @@ class TempLightHandler {
         const noteDisplayElement = document.querySelector('#notes-display p');
         if (noteDisplayElement) {
             if (this.noteDisplayTimeoutId) clearTimeout(this.noteDisplayTimeoutId);
-            noteDisplayElement.textContent = String(note); // Ensure it's a string, no emoji
+            noteDisplayElement.textContent = String(note); // Ensure it's a string
             this.lastDisplayedNote = String(note);
             this.noteDisplayTimeoutId = setTimeout(() => {
                 if (noteDisplayElement.textContent === this.lastDisplayedNote) {
@@ -395,7 +395,7 @@ class TempLightHandler {
                 if (!this.isPlaying || this.isRecordMode || !this.mainSynth || !this.isCombinedActive) return;
                 const note = bellNotes[Math.floor(Math.random() * bellNotes.length)];
                 this.mainSynth.triggerAttack(note, time, Math.random() * 0.4 + 0.6);
-                this._displayNote("Bell: " + note); 
+                this._displayNote(note); 
                 this.triggerCreatureAnimation();
             }, "0:1:2").set({ humanize: "16n" });
 
@@ -404,7 +404,7 @@ class TempLightHandler {
                 if (!this.isPlaying || this.isRecordMode || !this.secondarySynth || !this.isCombinedActive) return;
                 const note = fmMelodyNotes[Math.floor(Math.random() * fmMelodyNotes.length)];
                 this.secondarySynth.triggerAttackRelease(note, "2n", time, Math.random() * 0.3 + 0.2);
-                this._displayNote("FM: " + note);
+                this._displayNote(note);
             }, "1m").set({ probability: 0.35, humanize: "8n" });
 
             this.toneInitialized = true;
@@ -425,14 +425,39 @@ class TempLightHandler {
         if (!this.toneInitialized || !this.audioEnabled || !this.isCombinedActive || this.isRecordMode || !this.isPlaying || !this.mainVolume) return;
 
         const combinedTempLightValue = (this.currentTempAppValue + this.currentLightAppValue) / 2;
-        const dynamicVolume = this.baseVolume - 4 + (combinedTempLightValue * 6);
+        const dynamicVolume = this.baseVolume - 4 + (combinedTempLightValue * 6); // Note: user's code has this.baseVolume = 6
         this.mainVolume.volume.linearRampTo(this.isPlaying ? Math.min(this.baseVolume + 2, dynamicVolume) : -Infinity, 0.9);
 
         if (this.mainSynth) { // Bell
             this.mainSynth.envelope.decay = 0.4 + (this.currentTempAppValue * 0.8);
             this.mainSynth.envelope.release = this.mainSynth.envelope.decay * 0.4;
-            this.mainSynth.harmonicity.value = 5.0 + (this.currentLightAppValue * 3.0);
-            this.mainSynth.resonance.value = 3000 + (this.currentLightAppValue * 2000);
+            
+            // Safely update harmonicity and resonance using rampTo
+            const newHarmonicity = 5.0 + (this.currentLightAppValue * 3.0);
+            if (this.mainSynth.harmonicity && typeof this.mainSynth.harmonicity.rampTo === 'function') {
+                this.mainSynth.harmonicity.rampTo(newHarmonicity, 0.05); // Short ramp time for near-immediate effect
+            } else if (this.debugMode) {
+                // Log if it's not a Param object as expected
+                console.warn(`🌡️💡 TempLight: this.mainSynth.harmonicity is not a standard Param object. Type: ${typeof this.mainSynth.harmonicity}, Value: ${this.mainSynth.harmonicity}. Attempting direct .value assignment.`);
+                // Fallback to direct .value assignment if rampTo is not available, though this is what caused the original error
+                try {
+                  if (this.mainSynth.harmonicity) this.mainSynth.harmonicity.value = newHarmonicity;
+                } catch (e) {
+                  console.error(`🌡️💡 TempLight: Failed to set harmonicity.value directly after rampTo check failed. Error: ${e}`);
+                }
+            }
+
+            const newResonance = 3000 + (this.currentLightAppValue * 2000);
+            if (this.mainSynth.resonance && typeof this.mainSynth.resonance.rampTo === 'function') {
+                this.mainSynth.resonance.rampTo(newResonance, 0.05); // Short ramp time
+            } else if (this.debugMode) {
+                console.warn(`🌡️💡 TempLight: this.mainSynth.resonance is not a standard Param object. Type: ${typeof this.mainSynth.resonance}, Value: ${this.mainSynth.resonance}. Attempting direct .value assignment.`);
+                try {
+                  if (this.mainSynth.resonance) this.mainSynth.resonance.value = newResonance;
+                } catch (e) {
+                  console.error(`🌡️💡 TempLight: Failed to set resonance.value directly after rampTo check failed. Error: ${e}`);
+                }
+            }
         }
         if (this.secondarySynth) { // FM
             this.secondarySynth.modulationIndex.linearRampTo(5 + (this.currentLightAppValue * 10), 0.5);
@@ -696,7 +721,7 @@ class TempLightHandler {
                         const note = rhythmicBellNotes[Math.floor(Math.random() * rhythmicBellNotes.length)];
                         const velocity = 0.4 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.03);
                         this.mainSynth.triggerAttack(note, time, Math.min(0.9, velocity)); // Trigger bell
-                        this._displayNote("Rhythm Bell: " + note);
+                        this._displayNote(note);
                         this.triggerCreatureAnimation();
                         this.lastRhythmNoteTime = currentTime;
                     }
