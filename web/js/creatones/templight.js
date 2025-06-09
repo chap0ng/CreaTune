@@ -15,6 +15,8 @@ class TempLightHandler {
         this.currentLightCondition = "dark"; // e.g., dark, dim, bright, very_bright, extremely_bright
         // --- End State for individual sensors ---
 
+        this.dependencyCheckCounter = 0; // ADDED for rate-limiting "waiting" log
+
         // --- Combined State ---
         this.isCombinedActive = false; 
         this.showTempLightVisualContext = false; 
@@ -73,6 +75,7 @@ class TempLightHandler {
     }
 
     initializeWhenReady() {
+        this.dependencyCheckCounter = 0; // Reset counter each time initializeWhenReady is called
         const checkDependencies = () => {
             if (window.Tone && window.creatune && window.temperatureHandlerInstance && window.lightHandlerInstance) {
                 this.setupListeners();
@@ -91,7 +94,10 @@ class TempLightHandler {
                     this.handleAudioContextRunning();
                 }
             } else {
-                if (this.debugMode) console.log('🌡️💡 TempLightHandler: Waiting for dependencies (Tone, creatune, tempHandler, lightHandler)...');
+                this.dependencyCheckCounter++;
+                if (this.debugMode && (this.dependencyCheckCounter === 1 || this.dependencyCheckCounter % 25 === 0)) { // Log 1st time, then every 5s (25 * 200ms)
+                    console.log(`🌡️💡 TempLightHandler: Waiting for dependencies (Tone, creatune, tempHandler, lightHandler)... Attempt: ${this.dependencyCheckCounter}`);
+                }
                 setTimeout(checkDependencies, 200);
             }
         };
@@ -882,16 +888,20 @@ class TempLightHandler {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    let domContentLoadedDependencyCheckCounter = 0; // Counter for this specific listener
     const initTempLightHandler = () => {
         if (window.creatune && window.Tone && window.temperatureHandlerInstance && window.lightHandlerInstance) {
-            if (!window.tempLightHandlerInstance) { // Changed from tempSoilHandlerInstance
-                window.tempLightHandlerInstance = new TempLightHandler(); // Changed from TempSoilHandler
+            if (!window.tempLightHandlerInstance) { 
+                window.tempLightHandlerInstance = new TempLightHandler(); 
+                // Access debugMode from the new instance to decide if this initial log is shown
                 if (window.tempLightHandlerInstance.debugMode) console.log('🌡️💡 TempLight Handler instance created.');
             }
         } else {
-            // Check if instance exists for debugMode access, or if it doesn't exist at all
-            if (window.tempLightHandlerInstance?.debugMode || !window.tempLightHandlerInstance) {
-                 console.log('🌡️💡 Waiting for TempLightHandler dependencies (DOMContentLoaded)...');
+            domContentLoadedDependencyCheckCounter++;
+            // Log 1st time, then every 5s (20 * 250ms). 
+            // Assuming debugMode would be true for the TempLightHandler if it were created.
+            if (domContentLoadedDependencyCheckCounter === 1 || domContentLoadedDependencyCheckCounter % 20 === 0) {
+                 console.log(`🌡️💡 Waiting for TempLightHandler dependencies (DOMContentLoaded)... Attempt: ${domContentLoadedDependencyCheckCounter}`);
             }
             setTimeout(initTempLightHandler, 250); 
         }
