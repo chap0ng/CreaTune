@@ -13,7 +13,7 @@ class TemperatureHandler {
         this.baseLiquidVolume = 6; 
         this.basePunchyVolume = 9;
         // Let's try a moderate volume for rhythmic playback, considering the compressor
-        this.rhythmicPlaybackVolume = 0; // MODIFIED: Try 0dB or -3dB
+        this.rhythmicPlaybackVolume = 18; // MODIFIED: Drastically increased to +18dB for testing
 
         // State
         this.isActive = false;
@@ -226,12 +226,12 @@ class TemperatureHandler {
                 },
                 envelope: {
                     attack: 0.002,
-                    decay: 0.25, // MODIFIED: Shortened decay slightly for punch
-                    sustain: 0.0, // Keep sustain at 0 for percussive
-                    release: 0.1  // MODIFIED: Slightly longer release for a bit of tail
+                    decay: 0.25, 
+                    sustain: 0.0, 
+                    release: 0.1  
                 },
                 modulation: {
-                    type: "square" // Sharp attack modulation
+                    type: "square" 
                 },
                 modulationEnvelope: {
                     attack: 0.001,
@@ -239,7 +239,7 @@ class TemperatureHandler {
                     sustain: 0.0,
                     release: 0.05
                 },
-                volume: -Infinity
+                volume: 0 // MODIFIED: Explicitly set synth's internal base volume to 0dB
             }).connect(pingPong);
 
             this.createMainTempLoop();
@@ -877,7 +877,7 @@ class TemperatureHandler {
                 console.error("❌ startAudio (generative) Temp: Critical: Re-init failed. Cannot start.");
                 return;
             }
-                if (this.isPlaying) return; // Re-check after init
+                if this.isPlaying) return; // Re-check after init
         }
 
         if (this.debugMode) console.log('🌡️ startAudio (generative): Starting...');
