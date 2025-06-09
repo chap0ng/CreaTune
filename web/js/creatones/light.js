@@ -320,11 +320,15 @@ class LightHandler {
                     this.isActive &&                    
                     this.audioEnabled &&                
                     this.toneInitialized &&
-                    (!window.soilHandlerInstance || !window.soilHandlerInstance.isRecordMode)
+                    (!window.soilHandlerInstance || !window.soilHandlerInstance.isRecordMode) &&
+                    (!window.temperatureHandlerInstance || !window.temperatureHandlerInstance.isRecordMode) &&
+                    (!window.lightSoilHandlerInstance || !window.lightSoilHandlerInstance.isRecordMode) &&
+                    (!window.tempSoilHandlerInstance || !window.tempSoilHandlerInstance.isRecordMode) &&
+                    (!window.tempLightHandlerInstance || !window.tempLightHandlerInstance.isRecordMode) // ADDED CHECK
                     ) {             
                     this.enterRecordMode();
                 } else if (this.debugMode && !this.isRecordMode) {
-                    console.log(`💡 Record mode NOT entered for Light. Conditions: light.connected=${this.deviceStates.light.connected}, isRecordMode=${this.isRecordMode}, isActive=${this.isActive}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}, soilRecordMode=${window.soilHandlerInstance?.isRecordMode}`);
+                    console.log(`💡 Record mode NOT entered for Light. Conditions: light.connected=${this.deviceStates.light.connected}, isRecordMode=${this.isRecordMode}, isActive=${this.isActive}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}, soilRec=${window.soilHandlerInstance?.isRecordMode}, tempRec=${window.temperatureHandlerInstance?.isRecordMode}, lsRec=${window.lightSoilHandlerInstance?.isRecordMode}, tsRec=${window.tempSoilHandlerInstance?.isRecordMode}, tlRec=${window.tempLightHandlerInstance?.isRecordMode}`); // ADDED tlRec
                 }
             });
         }
@@ -467,7 +471,10 @@ class LightHandler {
 
             const otherHandlersBgClasses = [
                 'soil-active-bg',
+                'temp-active-bg',
                 'lightsoil-active-bg',
+                'tempsoil-active-bg',
+                'templight-active-bg', // ADDED templight
                 'idle-bg'
             ];
 
@@ -495,14 +502,17 @@ class LightHandler {
         // Stop Record Mode Button Visibility
         if (this.stopRecordModeButton) {
             const soilInRecMode = window.soilHandlerInstance?.isRecordMode;
+            const tempInRecMode = window.temperatureHandlerInstance?.isRecordMode;
             const lightSoilInRecMode = window.lightSoilHandlerInstance?.isRecordMode;
+            const tempSoilInRecMode = window.tempSoilHandlerInstance?.isRecordMode;
+            const tempLightInRecMode = window.tempLightHandlerInstance?.isRecordMode; // ADDED
 
             if (this.isRecordMode) { // If LightHandler is recording, it shows the button
                 this.stopRecordModeButton.style.display = 'block';
-            } else if (!soilInRecMode && !lightSoilInRecMode) { // If NO handler is recording, hide it
+            } else if (!soilInRecMode && !tempInRecMode && !lightSoilInRecMode && !tempSoilInRecMode && !tempLightInRecMode) { // ADDED tempLightInRecMode
                 this.stopRecordModeButton.style.display = 'none';
             }
-            // If SoilHandler or LightSoilHandler is in record mode, their updateUI should manage the button's visibility.
+            // If other handlers are in record mode, their updateUI should manage the button's visibility.
         }
 
         if (this.debugMode && Math.random() < 0.05) console.log(`💡 UI Update (Light): CreatureActive=${showActiveSystem}, DeviceConnected=${this.deviceStates.light.connected}, RecModeLight=${this.isRecordMode}, ExtMuteLight=${this.isExternallyMuted}, FrameBG Classes: ${this.frameBackground?.classList?.toString()}`);
@@ -510,16 +520,17 @@ class LightHandler {
 
 
     async enterRecordMode() {
-        if (this.isRecordMode || !this.audioEnabled || !this.toneInitialized) {
-            if(this.debugMode) console.warn(`💡 enterRecordMode: Blocked. isRecordMode=${this.isRecordMode}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}`);
+        if (this.isRecordMode || !this.audioEnabled || !this.toneInitialized || !this.isActive) { // Added isActive
+            if(this.debugMode) console.warn(`💡 enterRecordMode: Blocked. isRecordMode=${this.isRecordMode}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}, isActive=${this.isActive}`);
             return;
         }
-        if (window.soilHandlerInstance && window.soilHandlerInstance.isRecordMode) {
-            if(this.debugMode) console.warn(`💡 enterRecordMode: Blocked. Soil creature is already in record mode.`);
-            return;
-        }
-        if (window.lightSoilHandlerInstance && window.lightSoilHandlerInstance.isRecordMode) { // Added this check
-            if(this.debugMode) console.warn(`💡 enterRecordMode: Blocked. LightSoil creature is already in record mode.`);
+        // Check if any other handler is in record mode
+        if (window.soilHandlerInstance?.isRecordMode || 
+            window.temperatureHandlerInstance?.isRecordMode || 
+            window.lightSoilHandlerInstance?.isRecordMode ||
+            window.tempSoilHandlerInstance?.isRecordMode ||
+            window.tempLightHandlerInstance?.isRecordMode) { // ADDED tempLightHandlerInstance CHECK
+            if(this.debugMode) console.warn(`💡 enterRecordMode: Blocked. Another creature is already in record mode.`);
             return;
         }
         if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {

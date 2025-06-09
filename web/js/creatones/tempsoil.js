@@ -175,7 +175,7 @@ class TempSoilHandler {
 
             if (deviceType === 'temperature') {
                 if (data.connected !== undefined && this.tempConnected !== data.connected) { this.tempConnected = data.connected; stateChanged = true; }
-                if (data.active !== undefined && this.tempActive !== data.active) { this.tempActive = data.active; stateChanged = true; }
+                if (data.active !== undefined && this.tempActive !== data.active) { this.tempActive = state.active; stateChanged = true; }
                 if (data.rawData) {
                     this.currentTempAppValue = data.rawData.temp_app_value !== undefined ? data.rawData.temp_app_value : this.currentTempAppValue;
                     this.currentTempCondition = data.rawData.temp_condition || this.currentTempCondition;
@@ -185,7 +185,7 @@ class TempSoilHandler {
                 }
             } else if (deviceType === 'soil') {
                 if (data.connected !== undefined && this.soilConnected !== data.connected) { this.soilConnected = data.connected; stateChanged = true; }
-                if (data.active !== undefined && this.soilActive !== data.active) { this.soilActive = data.active; stateChanged = true; }
+                if (data.active !== undefined && this.soilActive !== data.active) { this.soilActive = state.active; stateChanged = true; }
                 if (data.rawData) {
                     this.currentSoilAppValue = data.rawData.moisture_app_value !== undefined ? data.rawData.moisture_app_value : this.currentSoilAppValue;
                     this.currentSoilCondition = data.rawData.soil_condition || this.currentSoilCondition;
@@ -250,22 +250,23 @@ class TempSoilHandler {
                 const tempRec = window.temperatureHandlerInstance?.isRecordMode;
                 const soilRec = window.soilHandlerInstance?.isRecordMode;
                 const lightRec = window.lightHandlerInstance?.isRecordMode;
-                const lightSoilRec = window.lightSoilHandlerInstance?.isRecordMode; // Check lightsoil
+                const lightSoilRec = window.lightSoilHandlerInstance?.isRecordMode;
+                const tempLightRec = window.tempLightHandlerInstance?.isRecordMode; // ADDED CHECK
 
                 if (this.isCombinedActive &&
                     !this.isRecordMode &&
                     this.audioEnabled &&
                     this.toneInitialized &&
-                    !tempRec && !soilRec && !lightRec && !lightSoilRec && // No other handler is recording
+                    !tempRec && !soilRec && !lightRec && !lightSoilRec && !tempLightRec && // ADDED tempLightRec
                     this.frameBackground.classList.contains('tempsoil-active-bg')
                 ) {
                     if (this.debugMode) console.log(`🌡️💧 TempSoil frameBackground click: Conditions met. Entering record mode.`);
                     this.enterRecordMode();
-                } else if (!this.isRecordMode && !tempRec && !soilRec && !lightRec && !lightSoilRec) {
+                } else if (!this.isRecordMode && !tempRec && !soilRec && !lightRec && !lightSoilRec && !tempLightRec) { // ADDED tempLightRec
                     if (this.isCombinedActive && this.audioEnabled && this.toneInitialized && !this.frameBackground.classList.contains('tempsoil-active-bg')) {
                         if (this.debugMode) console.log(`🌡️💧 TempSoil frameBackground click: Could enter record, but TempSoil BG not active.`);
                     } else if (this.debugMode) {
-                        console.log(`🌡️💧 TempSoil frameBackground click: Record mode NOT entered. CombinedActive=${this.isCombinedActive}, isRec=${this.isRecordMode}, audioEn=${this.audioEnabled}, toneInit=${this.toneInitialized}, tempRec=${tempRec}, soilRec=${soilRec}, lightRec=${lightRec}, lightSoilRec=${lightSoilRec}, hasBGClass=${this.frameBackground?.classList.contains('tempsoil-active-bg')}`);
+                        console.log(`🌡️💧 TempSoil frameBackground click: Record mode NOT entered. CombinedActive=${this.isCombinedActive}, isRec=${this.isRecordMode}, audioEn=${this.audioEnabled}, toneInit=${this.toneInitialized}, tempRec=${tempRec}, soilRec=${soilRec}, lightRec=${lightRec}, lightSoilRec=${lightSoilRec}, tempLightRec=${tempLightRec}, hasBGClass=${this.frameBackground?.classList.contains('tempsoil-active-bg')}`); // ADDED tempLightRec
                     }
                 }
             });
@@ -561,23 +562,28 @@ class TempSoilHandler {
 
         if (this.frameBackground) {
             const tempSoilBgClass = 'tempsoil-active-bg';
-            const individualHandlersBgClasses = [
-                'temp-active-bg', 'soil-active-bg',
+            const otherHandlersBgClasses = [ // Combined list of individual and other combined handlers' BGs
+                'temp-active-bg', 'temp-very-cold-bg', 'temp-cold-bg', 'temp-cool-bg', 'temp-mild-bg', 'temp-warm-bg', 'temp-hot-bg',
+                'soil-active-bg', 'soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg',
                 'light-active-bg', 'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg',
-                'lightsoil-active-bg', 'idle-bg'
+                'lightsoil-active-bg',
+                'templight-active-bg', // ADDED templight
+                'idle-bg'
             ];
 
             if (this.isRecordMode) {
                 this.frameBackground.classList.add('record-mode-pulsing');
                 this.frameBackground.classList.add(tempSoilBgClass);
-                individualHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
+                otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
             } else {
                 this.frameBackground.classList.remove('record-mode-pulsing');
                 if (this.showTempSoilVisualContext) {
                     this.frameBackground.classList.add(tempSoilBgClass);
-                    individualHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
+                    otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
                 } else {
                     this.frameBackground.classList.remove(tempSoilBgClass);
+                    // Do not clear other backgrounds if TempSoil is not showing its context,
+                    // as another handler might be active.
                 }
             }
         }
@@ -587,10 +593,11 @@ class TempSoilHandler {
             const soilInRec = window.soilHandlerInstance?.isRecordMode;
             const lightInRec = window.lightHandlerInstance?.isRecordMode;
             const lightSoilInRec = window.lightSoilHandlerInstance?.isRecordMode;
+            const tempLightInRec = window.tempLightHandlerInstance?.isRecordMode; // ADDED
 
             if (this.isRecordMode) {
                 this.stopRecordModeButton.style.display = 'block';
-            } else if (!tempInRec && !soilInRec && !lightInRec && !lightSoilInRec) {
+            } else if (!tempInRec && !soilInRec && !lightInRec && !lightSoilInRec && !tempLightInRec) { // ADDED tempLightInRec
                 this.stopRecordModeButton.style.display = 'none';
             }
         }
@@ -659,7 +666,11 @@ class TempSoilHandler {
             if (this.debugMode) console.warn(`🌡️💧 TS enterRecordMode: Blocked. Conditions not met.`);
             return;
         }
-        if (window.temperatureHandlerInstance?.isRecordMode || window.soilHandlerInstance?.isRecordMode || window.lightHandlerInstance?.isRecordMode || window.lightSoilHandlerInstance?.isRecordMode) {
+        if (window.temperatureHandlerInstance?.isRecordMode || 
+            window.soilHandlerInstance?.isRecordMode || 
+            window.lightHandlerInstance?.isRecordMode || 
+            window.lightSoilHandlerInstance?.isRecordMode ||
+            window.tempLightHandlerInstance?.isRecordMode) { // ADDED tempLightHandlerInstance CHECK
             if (this.debugMode) console.warn(`🌡️💧 TS enterRecordMode: Blocked. Another creature is in record mode.`);
             return;
         }
@@ -675,7 +686,7 @@ class TempSoilHandler {
         if (window.soilHandlerInstance?.setExternallyMuted) window.soilHandlerInstance.setExternallyMuted(true);
         if (window.lightHandlerInstance?.setExternallyMuted) window.lightHandlerInstance.setExternallyMuted(true);
         if (window.lightSoilHandlerInstance?.setExternallyMuted) window.lightSoilHandlerInstance.setExternallyMuted(true);
-
+        if (window.tempLightHandlerInstance?.setExternallyMuted) window.tempLightHandlerInstance.setExternallyMuted(true); // ADDED
 
         if (this.isPlaying || this.isFadingOut) this.stopAudio(true);
         if (this.mainVolume) this.mainVolume.volume.value = -Infinity;
@@ -687,7 +698,13 @@ class TempSoilHandler {
         await new Promise(resolve => setTimeout(resolve, 150));
 
         if (!this.isRecordMode) {
-            this.updateCombinedState(); return;
+            if (this.debugMode) console.log('🌡️💧 TS enterRecordMode: Exited during pre-recording wait. Restoring other handlers via updateCombinedState.');
+            this.updateCombinedState(); // This will handle unmuting Temp and Soil if appropriate
+            // Also explicitly unmute others that were muted directly if TempSoil is no longer going into record mode
+            if (window.lightHandlerInstance?.setExternallyMuted) window.lightHandlerInstance.setExternallyMuted(false);
+            if (window.lightSoilHandlerInstance?.setExternallyMuted) window.lightSoilHandlerInstance.setExternallyMuted(false);
+            if (window.tempLightHandlerInstance?.setExternallyMuted) window.tempLightHandlerInstance.setExternallyMuted(false); // ADDED
+            return;
         }
 
         try {
@@ -799,7 +816,10 @@ class TempSoilHandler {
     }
 
     exitRecordMode(force = false) {
-        if (!this.isRecordMode && !force) return;
+        if (!this.isRecordMode && !force) {
+            if (this.debugMode) console.log(`🌡️💧 TS exitRecordMode: Called but not in record mode and not forced. Current isRecordMode: ${this.isRecordMode}`);
+            return;
+        }
         const wasRecordMode = this.isRecordMode;
         this.isRecordMode = false; this.isCurrentlyRecording = false;
 
@@ -819,8 +839,29 @@ class TempSoilHandler {
         const noteDisplayElement = document.querySelector('#notes-display p');
         if (noteDisplayElement) noteDisplayElement.textContent = '-';
 
-        if (wasRecordMode || force) this.updateCombinedState();
-        else this.updateUI();
+        if (wasRecordMode || force) {
+            // After exiting record mode, re-evaluate combined state which will handle unmuting Temp and Soil if appropriate
+            // Also, explicitly unmute other handlers that TempSoil might have muted if they are not part of its combined state.
+            this.updateCombinedState(); // This will call updateUI and manageAudioAndVisuals, and handle unmuting Temp/Soil
+
+            // Explicitly unmute other handlers that TempSoil might have muted
+            // Check their own isExternallyMuted state before unmuting to avoid conflicts if another combined handler wants them muted.
+            // However, TempSoil's updateCombinedState should correctly unmute Temp and Soil if TempSoil is no longer dominant.
+            // For Light, LightSoil, TempLight, they should manage their own muting based on their contexts.
+            // The primary responsibility here is that TempSoil stops telling them to be muted *if it was the one doing so*.
+            if (window.lightHandlerInstance?.isExternallyMuted && window.lightHandlerInstance.mutedBy === 'TempSoilHandler') {
+                 window.lightHandlerInstance.setExternallyMuted(false, null);
+            }
+            if (window.lightSoilHandlerInstance?.isExternallyMutedByOtherCombined && window.lightSoilHandlerInstance.mutedBy === 'TempSoilHandler') {
+                 window.lightSoilHandlerInstance.setExternallyMutedByOtherCombined(false, null);
+            }
+            if (window.tempLightHandlerInstance?.isExternallyMutedByOtherCombined && window.tempLightHandlerInstance.mutedBy === 'TempSoilHandler') { // ADDED
+                 window.tempLightHandlerInstance.setExternallyMutedByOtherCombined(false, null); // ADDED
+            }
+
+        } else {
+            this.updateUI(); // Still update UI if not forced but was in record mode
+        }
         if (this.debugMode) console.log(`🌡️💧 TS exitRecordMode: Finished. isRecordMode is now ${this.isRecordMode}.`);
     }
 }
