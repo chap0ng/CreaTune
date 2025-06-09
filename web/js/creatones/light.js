@@ -3,13 +3,16 @@ class LightHandler {
         // Synths and Loops - Generative
         this.ambientSynth = null;
         this.sparkleSynth = null;
+        this.woodenPluckSynth = null; // ADDED: For wooden sound
         this.mainLoop = null;
         this.sparkleLoop = null;
+        this.woodenPluckLoop = null; // ADDED: Loop for wooden sound
 
         // Audio Params
         this.fadeDuration = 1.0;
         this.baseAmbientVolume = 9; 
         this.baseSparkleVolume = 6; 
+        this.baseWoodenPluckVolume = 0; // ADDED: Base volume for wooden pluck, adjust as needed
         this.rhythmicPlaybackVolume = 9; // Volume for the synth used in record mode
 
         // State
@@ -132,40 +135,50 @@ class LightHandler {
                 Tone.Transport.start();
             }
 
-            const reverb = new Tone.Reverb(0.3).toDestination();
+            const reverb = new Tone.Reverb(0.4).toDestination(); // Slightly more reverb
             if (this.debugMode) console.log('💡 LightHandler.initTone: Reverb created.');
-            const delay = new Tone.FeedbackDelay("2n", 0.1).connect(reverb);
+            const delay = new Tone.FeedbackDelay("2n.", 0.2).connect(reverb); // Dotted half note delay, slightly more feedback
             if (this.debugMode) console.log('💡 LightHandler.initTone: Delay created.');
 
             this.ambientSynth = new Tone.PolySynth(Tone.Synth, {
-                oscillator: { type: "sawtooth", count: 3, spread: 30 },
-                envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.2 },
+                oscillator: { type: "triangle", count: 3, spread: 40 }, // Triangle for softer tone
+                envelope: { attack: 0.02, decay: 0.3, sustain: 0.2, release: 0.4 }, // Slower envelope
                 volume: -Infinity
             }).connect(reverb);
             if (this.debugMode) console.log(`💡 LightHandler.initTone: ambientSynth ${this.ambientSynth ? 'created' : 'FAILED TO CREATE'}.`);
 
             this.sparkleSynth = new Tone.MetalSynth({
-                frequency: 240,
-                envelope: { attack: 0.001, decay: 0.5, release: 0.05 },
-                harmonicity: 3.1,
-                modulationIndex: 16,
-                resonance: 2000, 
-                octaves: 1.5,
+                frequency: 300, // Slightly higher base frequency
+                envelope: { attack: 0.001, decay: 0.4, release: 0.1 }, // Longer decay for sparkles
+                harmonicity: 4.1, // More complex harmonics
+                modulationIndex: 20,
+                resonance: 2500, 
+                octaves: 1.8,
                 volume: -Infinity
             }).connect(delay);
             if (this.debugMode) console.log(`💡 LightHandler.initTone: sparkleSynth ${this.sparkleSynth ? 'created' : 'FAILED TO CREATE'}.`);
             
-            this.createMainLoop(); // This itself logs if synth is missing
-            this.createSparkleLoop(); // This itself logs if synth is missing
+            // ADDED: Wooden Pluck Synth
+            this.woodenPluckSynth = new Tone.PluckSynth({
+                attackNoise: 0.5, // Softer attack noise
+                dampening: 6000,  // Higher dampening for a more muted, woody tone
+                resonance: 0.6,   // Lower resonance
+                release: 0.8,     // Allow some release
+                volume: -Infinity
+            }).connect(reverb); // Connect to reverb for a sense of space
+            if (this.debugMode) console.log(`💡 LightHandler.initTone: woodenPluckSynth ${this.woodenPluckSynth ? 'created' : 'FAILED TO CREATE'}.`);
 
-            if (this.ambientSynth && this.sparkleSynth && this.mainLoop && this.sparkleLoop) {
+            this.createMainLoop(); 
+            this.createSparkleLoop(); 
+            this.createWoodenPluckLoop(); // ADDED: Create loop for wooden sound
+
+            if (this.ambientSynth && this.sparkleSynth && this.woodenPluckSynth && this.mainLoop && this.sparkleLoop && this.woodenPluckLoop) {
                 this.toneInitialized = true;
                 if (this.debugMode) console.log('%c💡 LightHandler: Tone.js components initialized successfully. toneInitialized = true.', 'color: green; font-weight: bold;');
             } else {
                 this.toneInitialized = false;
                 console.error('❌ LightHandler.initTone: FAILED to initialize all synths/loops. toneInitialized = false.');
             }
-            // This call is important to reflect the new toneInitialized state
             this.manageAudioAndVisuals(); 
 
         } catch (error) {
@@ -173,8 +186,10 @@ class LightHandler {
             this.toneInitialized = false;
             if (this.ambientSynth) { this.ambientSynth.dispose(); this.ambientSynth = null; }
             if (this.sparkleSynth) { this.sparkleSynth.dispose(); this.sparkleSynth = null; }
+            if (this.woodenPluckSynth) { this.woodenPluckSynth.dispose(); this.woodenPluckSynth = null; } // ADDED
             if (this.mainLoop) { this.mainLoop.dispose(); this.mainLoop = null; }
             if (this.sparkleLoop) { this.sparkleLoop.dispose(); this.sparkleLoop = null; }
+            if (this.woodenPluckLoop) { this.woodenPluckLoop.dispose(); this.woodenPluckLoop = null; } // ADDED
         }
     }
     
@@ -206,14 +221,14 @@ class LightHandler {
 
     createMainLoop() {
         if (!this.ambientSynth) return;
-        const notes = ["C3", "E3", "G3", "B3", "C4", "D4", "A3"]; 
+        const notes = ["C3", "E3", "G3", "B3", "C4", "D4", "A3", "F3"]; // Added more notes
         this.mainLoop = new Tone.Sequence((time, note) => {
             if (!this.isPlaying || !this.ambientSynth || this.ambientSynth.volume.value === -Infinity) return;
-            const velocity = this.currentLightAppValue * 0.5 + 0.1; 
-            this.ambientSynth.triggerAttackRelease(note, "2n", time, velocity);
+            const velocity = this.currentLightAppValue * 0.4 + 0.15; // Adjusted velocity scaling
+            this.ambientSynth.triggerAttackRelease(note, "1m", time, velocity); // Slower note duration
             this.triggerCreatureAnimation();
             this._displayNote(note);
-        }, notes, "2n"); 
+        }, notes, "1m"); // MODIFIED: Slower interval (1 measure)
         this.mainLoop.humanize = true;
     }
 
@@ -221,10 +236,25 @@ class LightHandler {
         if (!this.sparkleSynth) return;
         this.sparkleLoop = new Tone.Loop(time => {
             if (!this.isPlaying || !this.sparkleSynth || this.sparkleSynth.volume.value === -Infinity) return;
-            const freq = Math.random() * 1000 + 500; 
-            this.sparkleSynth.triggerAttackRelease(freq, "32n", time, Math.random() * 0.3 + 0.05);
-        }, "8t"); 
+            const freq = Math.random() * 800 + 400; // Slightly lower range for sparkles
+            this.sparkleSynth.triggerAttackRelease(freq, "16n", time, Math.random() * 0.25 + 0.05); // Shorter duration, softer
+        }, "1n"); // MODIFIED: Slower interval (whole note)
         this.sparkleLoop.probability = 0; 
+    }
+
+    // ADDED: Method to create the loop for the wooden pluck sound
+    createWoodenPluckLoop() {
+        if (!this.woodenPluckSynth) return;
+        const woodenNotes = ["C2", "D2", "E2", "F2", "G2", "A2"]; // Lower, resonant notes
+        this.woodenPluckLoop = new Tone.Sequence((time, note) => {
+            if (!this.isPlaying || !this.woodenPluckSynth || this.woodenPluckSynth.volume.value === -Infinity) return;
+            const velocity = this.currentLightAppValue * 0.3 + 0.2; // Modest velocity
+            this.woodenPluckSynth.triggerAttackRelease(note, "0:2", time, velocity); // Half note duration
+            if (Math.random() < 0.3) this.triggerCreatureAnimation(); // Less frequent animation
+            this._displayNote(`🪵 ${note}`);
+        }, woodenNotes, "0:3:0"); // MODIFIED: Slow interval (dotted half note, or 3 quarter notes)
+        this.woodenPluckLoop.humanize = "8n";
+        this.woodenPluckLoop.probability = 0.7; // Plays fairly often when active
     }
 
     setupListeners() {
@@ -325,28 +355,37 @@ class LightHandler {
             return;
         }
 
+        const sensorIsActiveAndConnected = this.isActive && this.deviceStates.light.connected;
+
         if (this.ambientSynth && this.ambientSynth.volume) {
-            const dynamicVolumePart = this.currentLightAppValue * 10; 
-            const targetVolume = (this.isActive && this.deviceStates.light.connected) ? this.baseAmbientVolume + dynamicVolumePart : -Infinity;
-            this.ambientSynth.volume.linearRampTo(targetVolume, 0.5);
+            const dynamicVolumePart = this.currentLightAppValue * 8; // Less aggressive volume change
+            const targetVolume = sensorIsActiveAndConnected ? (this.baseAmbientVolume - 6 + dynamicVolumePart) : -Infinity; // Lower base for ambient
+            this.ambientSynth.volume.linearRampTo(targetVolume, 0.8); // Slower ramp
         }
 
         if (this.sparkleLoop && this.sparkleSynth && this.sparkleSynth.volume) {
             let probability = 0;
             let sparkleVolMod = 0;
             if (this.currentLightCondition === 'bright' || this.currentLightCondition === 'very_bright' || this.currentLightCondition === 'extremely_bright') {
-                probability = this.currentLightAppValue * 0.5 + 0.2; 
-                sparkleVolMod = 0;
+                probability = this.currentLightAppValue * 0.4 + 0.1; 
+                sparkleVolMod = -3; // Sparkles a bit quieter at brightest
             } else if (this.currentLightCondition === 'dim') {
-                probability = this.currentLightAppValue * 0.3 + 0.1; 
-                sparkleVolMod = 9;
-            } else { 
+                probability = this.currentLightAppValue * 0.25 + 0.05; 
+                sparkleVolMod = 0;
+            } else { // dark
                 probability = this.currentLightAppValue * 0.1; 
-                sparkleVolMod = 6;
+                sparkleVolMod = -3;
             }
-            this.sparkleLoop.probability = (this.isActive && this.deviceStates.light.connected && this.isPlaying) ? Math.min(0.8, probability) : 0;
-            const targetSparkleVol = (this.isActive && this.deviceStates.light.connected) ? this.baseSparkleVolume + sparkleVolMod : -Infinity;
-            this.sparkleSynth.volume.linearRampTo(targetSparkleVol, 0.7);
+            this.sparkleLoop.probability = sensorIsActiveAndConnected ? Math.min(0.6, probability) : 0; // Max probability 0.6
+            const targetSparkleVol = sensorIsActiveAndConnected ? this.baseSparkleVolume + sparkleVolMod : -Infinity;
+            this.sparkleSynth.volume.linearRampTo(targetSparkleVol, 1.0); // Slower ramp
+        }
+
+        // ADDED: Manage woodenPluckSynth volume
+        if (this.woodenPluckSynth && this.woodenPluckSynth.volume) {
+            const woodenPluckDynamicVol = this.currentLightAppValue * 5; // Gentle volume modulation
+            const targetWoodenVolume = sensorIsActiveAndConnected ? (this.baseWoodenPluckVolume - 3 + woodenPluckDynamicVol) : -Infinity;
+            this.woodenPluckSynth.volume.linearRampTo(targetWoodenVolume, 0.9);
         }
     }
 
@@ -692,7 +731,17 @@ class LightHandler {
         
         if (this.ambientSynth && this.ambientSynth.volume) this.ambientSynth.volume.value = -Infinity;
         if (this.sparkleSynth && this.sparkleSynth.volume) this.sparkleSynth.volume.value = -Infinity;
-        if (this.ambientSynth) this.ambientSynth.releaseAll(); // For PolySynth
+        if (this.woodenPluckSynth && this.woodenPluckSynth.volume) this.woodenPluckSynth.volume.value = -Infinity; // ADDED
+        if (this.ambientSynth) this.ambientSynth.releaseAll(); 
+        
+        // Dispose wooden pluck synth and loop
+        if (this.woodenPluckLoop) {
+            if (this.woodenPluckLoop.state === "started") this.woodenPluckLoop.stop(0);
+            this.woodenPluckLoop.dispose(); this.woodenPluckLoop = null;
+        }
+        if (this.woodenPluckSynth) {
+            this.woodenPluckSynth.dispose(); this.woodenPluckSynth = null;
+        }
         
         this.isPlaying = false; 
         this.isFadingOut = false;
@@ -734,14 +783,13 @@ class LightHandler {
             if (this.debugMode) console.log(`💡 startAudio (generative): Conditions not met (DeviceConnected:${this.deviceStates.light.connected}, SensorActive:${this.isActive}).`);
             this.updateUI(); return;
         }
-        if (!this.ambientSynth || !this.sparkleSynth || !this.mainLoop || !this.sparkleLoop) {
+        if (!this.ambientSynth || !this.sparkleSynth || !this.woodenPluckSynth || !this.mainLoop || !this.sparkleLoop || !this.woodenPluckLoop) { // ADDED woodenPluckSynth and loop
             console.error("❌ startAudio (generative) Light: Critical: Synths/Loops not available. Attempting re-init.");
             this.initTone(); 
-             if (!this.ambientSynth || !this.sparkleSynth || !this.mainLoop || !this.sparkleLoop) {
+             if (!this.ambientSynth || !this.sparkleSynth || !this.woodenPluckSynth || !this.mainLoop || !this.sparkleLoop || !this.woodenPluckLoop) { // ADDED woodenPluckSynth and loop
                 console.error("❌ startAudio (generative) Light: Critical: Re-init failed. Cannot start.");
                 return;
              }
-            // if (this.isPlaying) return; // This was the duplicated line, removed. The check is already done above.
         }
 
         if (this.debugMode) console.log('💡 startAudio (generative): Starting...');
@@ -754,9 +802,10 @@ class LightHandler {
         
         this.updateSoundParameters(); 
 
-        if (this.mainLoop && this.mainLoop.state !== "started") this.mainLoop.start(0);
-        if (this.sparkleLoop && this.sparkleLoop.state !== "started") this.sparkleLoop.start(0);
-        
+        if (this.mainLoop && this.mainLoop.state !== "started") this.mainLoop.start(); // Use start() for current time
+        if (this.sparkleLoop && this.sparkleLoop.state !== "started") this.sparkleLoop.start(); // Use start()
+        if (this.woodenPluckLoop && this.woodenPluckLoop.state !== "started") this.woodenPluckLoop.start(); // ADDED: Start wooden pluck loop
+
         if (this.debugMode) console.log('💡 startAudio (generative): Loops started. isPlayingGen is true.');
         this.updateUI();
     }
@@ -795,18 +844,25 @@ class LightHandler {
             this.sparkleSynth.volume.cancelScheduledValues(Tone.now());
             this.sparkleSynth.volume.rampTo(-Infinity, fadeTime, Tone.now());
         }
+        // ADDED: Stop woodenPluckSynth
+        if (this.woodenPluckSynth && this.woodenPluckSynth.volume) {
+            this.woodenPluckSynth.volume.cancelScheduledValues(Tone.now());
+            this.woodenPluckSynth.volume.rampTo(-Infinity, fadeTime, Tone.now());
+        }
 
         if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
         
         const completeStop = () => {
             if (this.mainLoop && this.mainLoop.state === "started") this.mainLoop.stop(0);
             if (this.sparkleLoop && this.sparkleLoop.state === "started") this.sparkleLoop.stop(0);
+            if (this.woodenPluckLoop && this.woodenPluckLoop.state === "started") this.woodenPluckLoop.stop(0); // ADDED
             
             if (this.ambientSynth) { 
                 this.ambientSynth.releaseAll(); 
                 if (this.ambientSynth.volume) this.ambientSynth.volume.value = -Infinity;
             }
             if (this.sparkleSynth && this.sparkleSynth.volume) this.sparkleSynth.volume.value = -Infinity; 
+            if (this.woodenPluckSynth && this.woodenPluckSynth.volume) this.woodenPluckSynth.volume.value = -Infinity; // ADDED
             
             this.isFadingOut = false; 
             if (this.debugMode) console.log('💡 stopAudio (generative): Fully stopped and loops cleared.');
