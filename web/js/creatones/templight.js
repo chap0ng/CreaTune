@@ -36,7 +36,7 @@ class TempLightHandler {
         this.generativeLoop = null; // For Bell
         this.accentLoop = null;     // For FM
         this.fadeDuration = 1.5;
-        this.baseVolume = -6; // Base volume for the mainVolume node
+        this.baseVolume = 6; // Base volume for the mainVolume node
 
         // --- Record Mode Properties ---
         this.isRecordMode = false;
