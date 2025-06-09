@@ -12,7 +12,8 @@ class TemperatureHandler {
         this.fadeDuration = 1.8;
         this.baseLiquidVolume = 6; 
         this.basePunchyVolume = 9;
-        this.rhythmicPlaybackVolume = 6; 
+        // Let's try a moderate volume for rhythmic playback, considering the compressor
+        this.rhythmicPlaybackVolume = 0; // MODIFIED: Try 0dB or -3dB
 
         // State
         this.isActive = false;
@@ -50,7 +51,7 @@ class TemperatureHandler {
         this.rhythmicLoop = null;
         this.recordingDuration = 5000;
         // Adjusted to match light.js for sensitivity
-        this.rhythmThreshold = -30; // Was -28, made more sensitive like light.js
+        this.rhythmThreshold = -30; 
         this.rhythmNoteCooldown = 150; // Was 180, matched light.js
         this.lastRhythmNoteTime = 0; // Used by _setupRhythmicPlayback
         this.recordedAudioBlobUrl = null;
@@ -221,13 +222,13 @@ class TemperatureHandler {
                 modulationIndex: 7,
                 detune: 0,
                 oscillator: {
-                    type: "triangle8"  // More harmonics for bright attack
+                    type: "triangle8"
                 },
                 envelope: {
                     attack: 0.002,
-                    decay: 0.3,
-                    sustain: 0.0,
-                    release: 0.05
+                    decay: 0.25, // MODIFIED: Shortened decay slightly for punch
+                    sustain: 0.0, // Keep sustain at 0 for percussive
+                    release: 0.1  // MODIFIED: Slightly longer release for a bit of tail
                 },
                 modulation: {
                     type: "square" // Sharp attack modulation
@@ -477,10 +478,12 @@ class TemperatureHandler {
 
     updateSoundParameters() {
         if (!this.toneInitialized || !this.audioEnabled || this.isExternallyMuted || this.isRecordMode || !this.isPlaying) {
+            if (this.debugMode) console.log(`🌡️ updateSoundParameters: Bailed. Conditions: toneInitialized=${this.toneInitialized}, audioEnabled=${this.audioEnabled}, isExternallyMuted=${this.isExternallyMuted}, isRecordMode=${this.isRecordMode}, isPlaying=${this.isPlaying}`);
             return;
         }
 
         const isSensorActive = this.isActive && this.deviceStates.temperature.connected;
+        if (this.debugMode) console.log(`🌡️ updateSoundParameters: Called. isSensorActive=${isSensorActive} (isActive=${this.isActive}, temp.connected=${this.deviceStates.temperature.connected})`);
 
         // Liquid Synth Parameters (Gamelan-inspired)
         // Using liquidSynthWrapper which controls both liquidSynth and membraneComp
@@ -523,7 +526,13 @@ class TemperatureHandler {
 
         // Punchy Synth Parameters & Accent Loop (Gamelan-inspired)
         if (this.punchySynth && this.punchySynth.volume && this.accentLoop) {
-            const targetPunchyVol = isSensorActive ? (this.basePunchyVolume - 2 + (this.currentTempAppValue * 4)) : -Infinity; 
+            const calculatedGenerativePunchyVol = this.basePunchyVolume - 2 + (this.currentTempAppValue * 4);
+            const targetPunchyVol = isSensorActive ? calculatedGenerativePunchyVol : -Infinity;
+
+            if (this.debugMode) {
+                console.log(`%c🌡️ updateSoundParameters (PunchySynth): isSensorActive=${isSensorActive}. Calculated Generative Vol (if active): ${calculatedGenerativePunchyVol.toFixed(2)}. Final Target Vol for Ramp: ${targetPunchyVol}. Current PunchySynth Vol before ramp: ${this.punchySynth.volume.value.toFixed(2)}`, "color: #3498db");
+            }
+
             this.punchySynth.volume.linearRampTo(targetPunchyVol, 0.6);
 
             let accentProb = 0.15; 
@@ -1011,29 +1020,28 @@ class TemperatureHandler {
                         const level = this.rhythmFollower.getValue();
                         const currentTime = Tone.now() * 1000;
 
-                        // ADDED: More detailed logging of the level BEFORE the check
-                        if (this.debugMode && Math.random() < 0.1) { // Log occasionally to avoid flooding
+                        if (this.debugMode && Math.random() < 0.1) { 
                             console.log(`🌡️ Temp Rhythmic Loop: Level=${typeof level === 'number' ? level.toFixed(2) : level} dB, Threshold=${this.rhythmThreshold} dB, CooldownMet=${(currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)}`);
                         }
 
                         if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
                             const noteToPlay = rhythmicNotes[Math.floor(Math.random() * rhythmicNotes.length)];
-                            // Using a velocity calculation similar to light.js for consistency in response feel
-                            const levelAboveThreshold = Math.max(0, level - this.rhythmThreshold); // Ensures positive value
-                            let velocity = 0.25 + (levelAboveThreshold * 0.045); // Adjusted base and scaling factor
-                            velocity = Math.min(1.0, Math.max(0.1, velocity)); // Clamp velocity between 0.1 and 1.0
+                            const levelAboveThreshold = Math.max(0, level - this.rhythmThreshold); 
+                            let velocity = 0.25 + (levelAboveThreshold * 0.045); 
+                            velocity = Math.min(1.0, Math.max(0.1, velocity));
 
 
-                            if (this.debugMode && Math.random() < 0.35) { // Increased log probability for triggers
-                                console.log(`%c🌡️ Rhythmic trigger (Temp PunchySynth)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}`, "color: orange");
+                            if (this.debugMode && Math.random() < 0.35) { 
+                                console.log(`%c🌡️ Rhythmic trigger (Temp PunchySynth)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}, Duration: "8n"`, "color: orange");
                             }
                             
-                            this.punchySynth.triggerAttackRelease(noteToPlay, "16n", time, velocity);
+                            // MODIFIED: Changed duration from "16n" to "8n"
+                            this.punchySynth.triggerAttackRelease(noteToPlay, "8n", time, velocity);
                             this.triggerCreatureAnimation();
                             this._displayNote(noteToPlay);
                             this.lastRhythmNoteTime = currentTime;
                         }
-                    }, "16n").start(0); // Start the loop immediately relative to transport
+                    }, "16n").start(0); 
                     if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Rhythmic loop initiated.');
                 },
                 onerror: (err) => {
