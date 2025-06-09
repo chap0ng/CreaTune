@@ -12,8 +12,8 @@ class TemperatureHandler {
         this.fadeDuration = 1.8;
         this.baseLiquidVolume = 6; 
         this.basePunchyVolume = 9;
-        // Let's try a moderate volume for rhythmic playback, considering the compressor
-        this.rhythmicPlaybackVolume = 18; // MODIFIED: Drastically increased to +18dB for testing
+        // Rhythmic playback volume will be handled by basePunchyVolume directly
+        // this.rhythmicPlaybackVolume = 18; // REMOVED or use basePunchyVolume
 
         // State
         this.isActive = false;
@@ -307,7 +307,9 @@ class TemperatureHandler {
                     finalNote = Tone.Frequency(note).transpose(octaveShift).toNote();
                 } catch (e) { /* In case transposition goes out of range, use original */ }
             }
-            this.liquidSynthWrapper.triggerAttackRelease(finalNote, "0:2", time, velocity); 
+            // MODIFIED: Added lookAhead
+            const lookAhead = Tone.context.lookAhead > 0 ? Tone.context.lookAhead : 0.01; // Ensure positive lookahead
+            this.liquidSynthWrapper.triggerAttackRelease(finalNote, "0:2", time + lookAhead, velocity); 
             this.triggerCreatureAnimation();
             this._displayNote(finalNote);
         }, tempNotes, "random"); // Changed from "randomWalk" to "random" for less melodic, more unpredictable selection
@@ -360,14 +362,12 @@ class TemperatureHandler {
                     } else { // Slight detune (if synth supports it directly, else skip or use a different approach)
                         // MetalSynth doesn't have a per-note detune. We could use a very short pitch bend,
                         // but for simplicity, we'll stick to transposition for now or just play the original note.
-                        // For synths with Tone.Param for detune, you could do:
-                        // this.liquidSynth.detune.setValueAtTime( (Math.random() - 0.5) * 50, time); // Detune by +/- 50 cents
-                        // this.liquidSynth.detune.setValueAtTime(0, time + 0.05); // Reset detune quickly
                     }
                 } catch(e) { /* Use original note if variation fails */ }
             }
-
-            this.liquidSynthWrapper.triggerAttackRelease(finalNote, duration, time, velocity);
+            // MODIFIED: Added lookAhead
+            const lookAhead = Tone.context.lookAhead > 0 ? Tone.context.lookAhead : 0.01; // Ensure positive lookahead
+            this.liquidSynthWrapper.triggerAttackRelease(finalNote, duration, time + lookAhead, velocity);
             if (Math.random() < 0.3) {
                 this.triggerCreatureAnimation();
             }
@@ -971,9 +971,10 @@ class TemperatureHandler {
         }
 
         try {
+            // Set punchySynth volume to its base generative volume for consistency
             if (this.punchySynth && this.punchySynth.volume) {
-                this.punchySynth.volume.value = this.rhythmicPlaybackVolume;
-                if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to ${this.rhythmicPlaybackVolume} dB for rhythmic notes.`);
+                this.punchySynth.volume.value = this.basePunchyVolume; 
+                if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to ${this.basePunchyVolume} dB (basePunchyVolume) for rhythmic notes.`);
             }
 
             if (this.recordedAudioBlobUrl) {
@@ -984,27 +985,27 @@ class TemperatureHandler {
             this.rhythmFollower = new Tone.Meter({ smoothing: 0.2 });
             this.lastRhythmNoteTime = 0;
 
-            // Notes for rhythmic playback with punchySynth
-            const rhythmicNotes = ["F1", "G1", "A1", "A#1", "C2", "D2", "D#1"];
+            const rhythmicNotes = ["F1", "G1", "A1", "A#1", "C2", "D2", "D#1"]; // Notes for punchySynth
 
             this.recordedBufferPlayer = new Tone.Player({
                 url: this.recordedAudioBlobUrl,
-                loop: true, // The recorded sample will loop
+                loop: true,
                 onload: () => {
                     if (!this.isRecordMode || !this.recordedBufferPlayer) {
                         if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Record mode exited or player disposed. Aborting.');
                         this.recordedBufferPlayer?.dispose(); this.recordedBufferPlayer = null;
                         this.rhythmFollower?.dispose(); this.rhythmFollower = null;
                         this.rhythmicLoop?.dispose(); this.rhythmicLoop = null;
-                        if (this.punchySynth?.volume.value === this.rhythmicPlaybackVolume) {
+                        // Ensure punchySynth volume is reset if it was set for rhythmic playback
+                        if (this.punchySynth?.volume.value === this.basePunchyVolume) { 
                             this.punchySynth.volume.value = -Infinity;
                         }
                         return;
                     }
 
                     if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Recorded buffer player loaded.');
-                    this.recordedBufferPlayer.connect(this.rhythmFollower);
-                    this.recordedBufferPlayer.toDestination(); // Play back the recorded audio
+                    this.recordedBufferPlayer.connect(this.rhythmFollower); // For level detection
+                    this.recordedBufferPlayer.toDestination(); // So user hears their recording
                     this.recordedBufferPlayer.start();
                     if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Recorded buffer player started.');
 
@@ -1022,22 +1023,18 @@ class TemperatureHandler {
 
                         if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
                             const noteToPlay = rhythmicNotes[Math.floor(Math.random() * rhythmicNotes.length)];
-                            const levelAboveThreshold = Math.max(0, level - this.rhythmThreshold); 
-                            let velocity = 0.25 + (levelAboveThreshold * 0.045); 
-                            velocity = Math.min(1.0, Math.max(0.1, velocity));
-
+                            const velocity = 1.0; // Fixed velocity for consistent max loudness
 
                             if (this.debugMode && Math.random() < 0.35) { 
                                 console.log(`%c🌡️ Rhythmic trigger (Temp PunchySynth)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}, Duration: "8n"`, "color: orange");
                             }
                             
-                            // MODIFIED: Changed duration from "16n" to "8n"
                             this.punchySynth.triggerAttackRelease(noteToPlay, "8n", time, velocity);
                             this.triggerCreatureAnimation();
                             this._displayNote(noteToPlay);
                             this.lastRhythmNoteTime = currentTime;
                         }
-                    }, "16n").start(0); 
+                    }, "16n").start(); // Start relative to transport now
                     if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Rhythmic loop initiated.');
                 },
                 onerror: (err) => {
