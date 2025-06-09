@@ -10,9 +10,9 @@ class TemperatureHandler {
 
         // Audio Params - Temperature Style
         this.fadeDuration = 1.8;
-        this.baseLiquidVolume = 4; 
-        this.basePunchyVolume = 12; // INCREASED for more punchySynth volume
-        // Rhythmic playback volume will be handled by basePunchyVolume directly
+        this.baseLiquidVolume = 4; // INCREASED: For more prominent liquidSynth in general and for record mode
+        this.basePunchyVolume = 9; // DECREASED: As punchySynth is now only for generative accents
+        // Rhythmic playback volume will be handled by baseLiquidVolume directly
 
         // State
         this.isActive = false;
@@ -764,31 +764,29 @@ class TemperatureHandler {
     async _setupRhythmicPlayback(audioBlob) {
         if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback: Starting with blob size:', audioBlob.size);
 
-        if (!this.isRecordMode || !this.toneInitialized || !this.punchySynth) {
-            if (this.debugMode) console.warn(`🌡️ _setupRhythmicPlayback: Conditions not met. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, punchySynth=${!!this.punchySynth}. Forcing exit.`);
+        if (!this.isRecordMode || !this.toneInitialized || !this.liquidSynthWrapper || !this.liquidSynth) { // Check for liquidSynthWrapper
+            if (this.debugMode) console.warn(`🌡️ _setupRhythmicPlayback: Conditions not met. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, liquidSynthWrapper=${!!this.liquidSynthWrapper}. Forcing exit.`);
             this.exitRecordMode(true); // Force exit if conditions are bad
             return;
         }
 
         try {
-            // Ensure punchySynth is ready and set to its rhythmic playback volume
-            if (this.punchySynth && this.punchySynth.volume) {
-                this.punchySynth.volume.cancelScheduledValues(Tone.now()); // Cancel any ramps
-                this.punchySynth.volume.value = this.basePunchyVolume; // Uses updated basePunchyVolume
-                if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to ${this.basePunchyVolume} dB for rhythmic notes.`);
+            // Ensure liquidSynthWrapper (and its underlying liquidSynth) is ready for rhythmic playback
+            if (this.liquidSynth && this.liquidSynth.volume) {
+                this.liquidSynth.volume.cancelScheduledValues(Tone.now()); // Cancel any ramps
+                this.liquidSynth.volume.value = this.baseLiquidVolume; 
+                if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: liquidSynth (for wrapper) volume set to ${this.baseLiquidVolume} dB for rhythmic notes.`);
             } else {
-                console.error("❌ _setupRhythmicPlayback: punchySynth not available for rhythmic playback.");
+                console.error("❌ _setupRhythmicPlayback: liquidSynth not available for rhythmic playback.");
                 this.exitRecordMode(true);
                 return;
             }
 
-            // Ensure liquidSynth (generative) remains silent
-            if (this.liquidSynthWrapper?.volume) {
-                 this.liquidSynthWrapper.volume.cancelScheduledValues(Tone.now());
-                 this.liquidSynthWrapper.volume.value = -Infinity;
-            } else if (this.liquidSynth?.volume) {
-                 this.liquidSynth.volume.cancelScheduledValues(Tone.now());
-                 this.liquidSynth.volume.value = -Infinity;
+            // Ensure punchySynth (generative accent) is silent during record mode playback
+            if (this.punchySynth?.volume) {
+                 this.punchySynth.volume.cancelScheduledValues(Tone.now());
+                 this.punchySynth.volume.value = -Infinity;
+                 if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to -Infinity.`);
             }
 
 
@@ -800,7 +798,8 @@ class TemperatureHandler {
             this.rhythmFollower = new Tone.Meter({ smoothing: 0.2 });
             this.lastRhythmNoteTime = 0;
 
-            const rhythmicNotes = ["F1", "G1", "A1", "A#1", "C2", "D2", "D#1"];
+            // Notes more suitable for the liquidSynthWrapper's character
+            const rhythmicNotes = ["C2", "D2", "F2", "G2", "A#2", "C3", "D3"]; 
 
             this.recordedBufferPlayer = new Tone.Player({
                 url: this.recordedAudioBlobUrl,
@@ -808,16 +807,13 @@ class TemperatureHandler {
                 onload: () => {
                     if (!this.isRecordMode || !this.recordedBufferPlayer) {
                         if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Record mode exited or player disposed during load. Aborting playback setup.');
-                        // Cleanup partially created resources if any
                         this.recordedBufferPlayer?.dispose(); this.recordedBufferPlayer = null;
                         this.rhythmFollower?.dispose(); this.rhythmFollower = null;
                         this.rhythmicLoop?.dispose(); this.rhythmicLoop = null;
-                        if (this.punchySynth?.volume.value === this.basePunchyVolume) {
-                            this.punchySynth.volume.value = -Infinity; // Ensure it's silenced if we abort
+                        if (this.liquidSynth?.volume.value === this.baseLiquidVolume) { // Check against baseLiquidVolume
+                            this.liquidSynth.volume.value = -Infinity; // Ensure it's silenced if we abort
                         }
-                        // Do not call full exitRecordMode here if it was called by something else,
-                        // but ensure UI and other handlers are managed if this was an unexpected abort.
-                        this.manageAudioAndVisuals(); // To update UI and potentially unmute others if needed
+                        this.manageAudioAndVisuals(); 
                         return;
                     }
 
@@ -828,8 +824,8 @@ class TemperatureHandler {
                     if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Recorded buffer player started.');
 
                     this.rhythmicLoop = new Tone.Loop(time => {
-                        if (!this.isRecordMode || !this.rhythmFollower || !this.punchySynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
-                            return; // Exit loop callback if state is no longer valid
+                        if (!this.isRecordMode || !this.rhythmFollower || !this.liquidSynthWrapper || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
+                            return; 
                         }
 
                         const level = this.rhythmFollower.getValue();
@@ -837,23 +833,24 @@ class TemperatureHandler {
 
                         if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
                             const noteToPlay = rhythmicNotes[Math.floor(Math.random() * rhythmicNotes.length)];
-                            const velocity = 1.0; // Max velocity for consistent loudness
+                            const velocity = 1.0; 
+                            const duration = "8n."; // Slightly longer duration for liquidSynthWrapper
 
                             if (this.debugMode) {
-                                console.log(`%c🌡️ Rhythmic trigger (Temp PunchySynth)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}, Duration: "8n"`, "color: orange");
+                                console.log(`%c🌡️ Rhythmic trigger (Temp LiquidSynthWrapper)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}, Duration: "${duration}"`, "color: #2ecc71");
                             }
                             
-                            this.punchySynth.triggerAttackRelease(noteToPlay, "8n", time, velocity);
+                            this.liquidSynthWrapper.triggerAttackRelease(noteToPlay, duration, time, velocity);
                             this.triggerCreatureAnimation();
                             this._displayNote(noteToPlay);
                             this.lastRhythmNoteTime = currentTime;
                         }
-                    }, "16n").start(); // Start loop relative to transport
-                    if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Rhythmic loop initiated.');
+                    }, "16n").start(); 
+                    if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Rhythmic loop with liquidSynthWrapper initiated.');
                 },
                 onerror: (err) => {
                     console.error('❌ _setupRhythmicPlayback: Error loading recorded buffer player for Temperature:', err);
-                    this.exitRecordMode(true); // Force exit on player error
+                    this.exitRecordMode(true); 
                 }
             });
 
@@ -1072,31 +1069,29 @@ class TemperatureHandler {
     async _setupRhythmicPlayback(audioBlob) {
         if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback: Starting with blob size:', audioBlob.size);
 
-        if (!this.isRecordMode || !this.toneInitialized || !this.punchySynth) {
-            if (this.debugMode) console.warn(`🌡️ _setupRhythmicPlayback: Conditions not met. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, punchySynth=${!!this.punchySynth}. Forcing exit.`);
+        if (!this.isRecordMode || !this.toneInitialized || !this.liquidSynthWrapper || !this.liquidSynth) { // Check for liquidSynthWrapper
+            if (this.debugMode) console.warn(`🌡️ _setupRhythmicPlayback: Conditions not met. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, liquidSynthWrapper=${!!this.liquidSynthWrapper}. Forcing exit.`);
             this.exitRecordMode(true); // Force exit if conditions are bad
             return;
         }
 
         try {
-            // Ensure punchySynth is ready and set to its rhythmic playback volume
-            if (this.punchySynth && this.punchySynth.volume) {
-                this.punchySynth.volume.cancelScheduledValues(Tone.now()); // Cancel any ramps
-                this.punchySynth.volume.value = this.basePunchyVolume; // Uses updated basePunchyVolume
-                if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to ${this.basePunchyVolume} dB for rhythmic notes.`);
+            // Ensure liquidSynthWrapper (and its underlying liquidSynth) is ready for rhythmic playback
+            if (this.liquidSynth && this.liquidSynth.volume) {
+                this.liquidSynth.volume.cancelScheduledValues(Tone.now()); // Cancel any ramps
+                this.liquidSynth.volume.value = this.baseLiquidVolume; 
+                if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: liquidSynth (for wrapper) volume set to ${this.baseLiquidVolume} dB for rhythmic notes.`);
             } else {
-                console.error("❌ _setupRhythmicPlayback: punchySynth not available for rhythmic playback.");
+                console.error("❌ _setupRhythmicPlayback: liquidSynth not available for rhythmic playback.");
                 this.exitRecordMode(true);
                 return;
             }
 
-            // Ensure liquidSynth (generative) remains silent
-            if (this.liquidSynthWrapper?.volume) {
-                 this.liquidSynthWrapper.volume.cancelScheduledValues(Tone.now());
-                 this.liquidSynthWrapper.volume.value = -Infinity;
-            } else if (this.liquidSynth?.volume) {
-                 this.liquidSynth.volume.cancelScheduledValues(Tone.now());
-                 this.liquidSynth.volume.value = -Infinity;
+            // Ensure punchySynth (generative accent) is silent during record mode playback
+            if (this.punchySynth?.volume) {
+                 this.punchySynth.volume.cancelScheduledValues(Tone.now());
+                 this.punchySynth.volume.value = -Infinity;
+                 if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to -Infinity.`);
             }
 
 
@@ -1108,7 +1103,8 @@ class TemperatureHandler {
             this.rhythmFollower = new Tone.Meter({ smoothing: 0.2 });
             this.lastRhythmNoteTime = 0;
 
-            const rhythmicNotes = ["F1", "G1", "A1", "A#1", "C2", "D2", "D#1"];
+            // Notes more suitable for the liquidSynthWrapper's character
+            const rhythmicNotes = ["C2", "D2", "F2", "G2", "A#2", "C3", "D3"]; 
 
             this.recordedBufferPlayer = new Tone.Player({
                 url: this.recordedAudioBlobUrl,
@@ -1116,16 +1112,13 @@ class TemperatureHandler {
                 onload: () => {
                     if (!this.isRecordMode || !this.recordedBufferPlayer) {
                         if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Record mode exited or player disposed during load. Aborting playback setup.');
-                        // Cleanup partially created resources if any
                         this.recordedBufferPlayer?.dispose(); this.recordedBufferPlayer = null;
                         this.rhythmFollower?.dispose(); this.rhythmFollower = null;
                         this.rhythmicLoop?.dispose(); this.rhythmicLoop = null;
-                        if (this.punchySynth?.volume.value === this.basePunchyVolume) {
-                            this.punchySynth.volume.value = -Infinity; // Ensure it's silenced if we abort
+                        if (this.liquidSynth?.volume.value === this.baseLiquidVolume) { // Check against baseLiquidVolume
+                            this.liquidSynth.volume.value = -Infinity; // Ensure it's silenced if we abort
                         }
-                        // Do not call full exitRecordMode here if it was called by something else,
-                        // but ensure UI and other handlers are managed if this was an unexpected abort.
-                        this.manageAudioAndVisuals(); // To update UI and potentially unmute others if needed
+                        this.manageAudioAndVisuals(); 
                         return;
                     }
 
@@ -1136,8 +1129,8 @@ class TemperatureHandler {
                     if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Recorded buffer player started.');
 
                     this.rhythmicLoop = new Tone.Loop(time => {
-                        if (!this.isRecordMode || !this.rhythmFollower || !this.punchySynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
-                            return; // Exit loop callback if state is no longer valid
+                        if (!this.isRecordMode || !this.rhythmFollower || !this.liquidSynthWrapper || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
+                            return; 
                         }
 
                         const level = this.rhythmFollower.getValue();
@@ -1145,23 +1138,24 @@ class TemperatureHandler {
 
                         if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
                             const noteToPlay = rhythmicNotes[Math.floor(Math.random() * rhythmicNotes.length)];
-                            const velocity = 1.0; // Max velocity for consistent loudness
+                            const velocity = 1.0; 
+                            const duration = "8n."; // Slightly longer duration for liquidSynthWrapper
 
                             if (this.debugMode) {
-                                console.log(`%c🌡️ Rhythmic trigger (Temp PunchySynth)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}, Duration: "8n"`, "color: orange");
+                                console.log(`%c🌡️ Rhythmic trigger (Temp LiquidSynthWrapper)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}, Duration: "${duration}"`, "color: #2ecc71");
                             }
                             
-                            this.punchySynth.triggerAttackRelease(noteToPlay, "8n", time, velocity);
+                            this.liquidSynthWrapper.triggerAttackRelease(noteToPlay, duration, time, velocity);
                             this.triggerCreatureAnimation();
                             this._displayNote(noteToPlay);
                             this.lastRhythmNoteTime = currentTime;
                         }
-                    }, "16n").start(); // Start loop relative to transport
-                    if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Rhythmic loop initiated.');
+                    }, "16n").start(); 
+                    if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Rhythmic loop with liquidSynthWrapper initiated.');
                 },
                 onerror: (err) => {
                     console.error('❌ _setupRhythmicPlayback: Error loading recorded buffer player for Temperature:', err);
-                    this.exitRecordMode(true); // Force exit on player error
+                    this.exitRecordMode(true); 
                 }
             });
 
