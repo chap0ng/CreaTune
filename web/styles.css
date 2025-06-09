@@ -255,6 +255,14 @@ body {
   background-position: center;
 }
 
+/* --- TempLight Background State --- */
+.framebackground.templight-active-bg {
+  /* background-image: url(sprites/backgrounds/Background_templight.gif); /* CREATE THIS GIF */
+  background-color: var(--warm-beige); /* Or a new blend for temp+light */
+  background-size: cover;
+  background-position: center;
+}
+
 /* --- Record Mode Background --- */
 .framebackground.record-mode-pulsing {
   animation: recordPulseEffect 1.2s ease-in-out infinite alternate;
@@ -279,7 +287,8 @@ body {
 .light-creature,
 .temp-creature,
 .lightsoil-creature,
-.tempsoil-creature { /* ADD .tempsoil-creature */
+.tempsoil-creature,
+.templight-creature { /* ADD .templight-creature */
   position: absolute; 
   top: 50%; 
   left: 50%;
@@ -365,6 +374,16 @@ body {
   animation: tempSoilCreatureWobble 4s ease-in-out infinite alternate; /* Example animation */
 }
 
+/* --- TempLight Creature --- */
+.templight-creature { 
+  background-image: url('../sprites/creatures/templight-creature.png'); /* CREATE THIS SPRITE */
+  background-size: 600% 100%; /* Assuming 6 frames */
+  background-position: 0% 0%;
+}
+.templight-creature.active {
+  animation: tempLightCreatureGlow 3.5s ease-in-out infinite alternate; /* Example animation */
+}
+
 
 /* --- Common Active State for Creatures --- */
 .idle-creature.active,
@@ -372,7 +391,8 @@ body {
 .light-creature.active,
 .temp-creature.active,
 .lightsoil-creature.active,
-.tempsoil-creature.active { /* ADD .tempsoil-creature.active */
+.tempsoil-creature.active,
+.templight-creature.active { /* ADD .templight-creature.active */
   display: block; /* Make visible */
   opacity: 1;     /* Fade in */
 }
@@ -404,6 +424,12 @@ body {
   0%   { transform: translate(-50%, -50%) scale(1.0) skewX(-3deg) skewY(2deg) translateZ(0); filter: saturate(0.8) contrast(1.1); }
   50%  { transform: translate(-50%, -50%) scale(1.05) skewX(3deg) skewY(-2deg) translateZ(0); filter: saturate(1.2) contrast(0.9); }
   100% { transform: translate(-50%, -50%) scale(1.0) skewX(-3deg) skewY(2deg) translateZ(0); filter: saturate(0.8) contrast(1.1); }
+}
+
+@keyframes tempLightCreatureGlow { /* New animation for TempLight */
+  0%   { transform: translate(-50%, -50%) scale(1.0) translateZ(0); filter: drop-shadow(0 0 2px var(--warm-yellow)) brightness(0.9); }
+  50%  { transform: translate(-50%, -50%) scale(1.04) translateZ(0); filter: drop-shadow(0 0 8px var(--steel-blue)) brightness(1.1); }
+  100% { transform: translate(-50%, -50%) scale(1.0) translateZ(0); filter: drop-shadow(0 0 2px var(--warm-yellow)) brightness(0.9); }
 }
 
 /* ==========================================================================
@@ -502,7 +528,7 @@ body {
 
 /* --- General Creature Size Adjustments --- */
 @media (max-width: 768px) { 
-  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature, .tempsoil-creature { /* ADD .tempsoil-creature */
+  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature, .tempsoil-creature, .templight-creature { /* ADD .templight-creature */
     width: min(35vw, 30vh);
     height: min(35vw, 30vh);
   }
@@ -510,7 +536,7 @@ body {
 }
 
 @media (max-height: 500px) { 
-  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature, .tempsoil-creature { /* ADD .tempsoil-creature */
+  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature, .tempsoil-creature, .templight-creature { /* ADD .templight-creature */
     width: min(30vw, 25vh);
     height: min(30vw, 25vh);
   }
@@ -519,7 +545,7 @@ body {
 }
 
 @media (min-width: 1200px) { 
-  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature, .tempsoil-creature { /* ADD .tempsoil-creature */
+  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature, .tempsoil-creature, .templight-creature { /* ADD .templight-creature */
     width: min(35vw, 40vh); 
     height: min(35vw, 40vh);
   }
@@ -533,7 +559,7 @@ body {
     padding: 10px;    /* Adjust padding for smaller landscape view */
   }
   
-  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature, .tempsoil-creature { /* ADD .tempsoil-creature */
+  .idle-creature, .soil-creature, .light-creature, .temp-creature, .lightsoil-creature, .tempsoil-creature, .templight-creature { /* ADD .templight-creature */
     width: min(50vw, 40vh); 
     height: min(50vw, 40vh); 
   }
