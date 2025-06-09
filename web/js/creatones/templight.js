@@ -355,9 +355,10 @@ class TempLightHandler {
         if (this.isCurrentlyRecording) return;
         if (this.creatureVisual && this.creatureVisual.classList.contains('active')) {
             this.creatureCurrentFrame = (this.creatureCurrentFrame + 1) % this.creatureTotalFrames;
-            this.creatureVisual.style.backgroundPositionX = (this.creatureCurrentFrame * (100 / this.creatureTotalFrames)) + '%';
+            // Apply the 20% rule for backgroundPositionX
+            this.creatureVisual.style.backgroundPositionX = (this.creatureCurrentFrame * 20) + '%';
             if (this.debugMode && Math.random() < 0.03) {
-                 console.log(`🌡️💡 TempLight Creature Animation: Frame ${this.creatureCurrentFrame}`);
+                 console.log(`🌡️💡 TempLight Creature Animation: Frame ${this.creatureCurrentFrame}, PosX: ${this.creatureVisual.style.backgroundPositionX}`);
             }
         }
     }
