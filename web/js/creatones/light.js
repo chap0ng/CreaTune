@@ -251,7 +251,7 @@ class LightHandler {
             const velocity = this.currentLightAppValue * 0.3 + 0.2; // Modest velocity
             this.woodenPluckSynth.triggerAttackRelease(note, "0:2", time, velocity); // Half note duration
             if (Math.random() < 0.3) this.triggerCreatureAnimation(); // Less frequent animation
-            this._displayNote(`🪵 ${note}`);
+            this._displayNote(note); // MODIFIED: Removed emoji prefix
         }, woodenNotes, "0:3:0"); // MODIFIED: Slow interval (dotted half note, or 3 quarter notes)
         this.woodenPluckLoop.humanize = "8n";
         this.woodenPluckLoop.probability = 0.7; // Plays fairly often when active

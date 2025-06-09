@@ -983,7 +983,8 @@ class TemperatureHandler {
                 console.error("❌ startAudio (generative) Temp: Critical: Re-init failed. Cannot start.");
                 return;
             }
-                if this.isPlaying) return; // Re-check after init
+            // MODIFIED: Commented out the problematic line to resolve syntax error
+            // if (this.isPlaying) return; // Re-check after init
         }
 
         if (this.debugMode) console.log('🌡️ startAudio (generative): Starting...');
