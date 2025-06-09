@@ -10,10 +10,9 @@ class TemperatureHandler {
 
         // Audio Params - Temperature Style
         this.fadeDuration = 1.8;
-        this.baseLiquidVolume = 6; 
-        this.basePunchyVolume = 9;
+        this.baseLiquidVolume = 4; 
+        this.basePunchyVolume = 12; // INCREASED for more punchySynth volume
         // Rhythmic playback volume will be handled by basePunchyVolume directly
-        // this.rhythmicPlaybackVolume = 18; // REMOVED or use basePunchyVolume
 
         // State
         this.isActive = false;
@@ -226,9 +225,9 @@ class TemperatureHandler {
                 },
                 envelope: {
                     attack: 0.002,
-                    decay: 0.25, 
+                    decay: 0.3, // SLIGHTLY INCREASED from 0.25
                     sustain: 0.0, 
-                    release: 0.1  
+                    release: 0.15  // SLIGHTLY INCREASED from 0.1
                 },
                 modulation: {
                     type: "square" 
@@ -290,88 +289,67 @@ class TemperatureHandler {
 
     createMainTempLoop() {
         if (!this.liquidSynthWrapper) return; 
-        // Expanded and varied notes for a richer Gamelan feel, more randomness
-        const tempNotes = [
-            "C2", "D2", "E2", "F2", "G2", "A2", "A#2",
-            "C3", "D3", "E3", "F3", "G3", "A3", "A#3", 
-            "C4", "D4", "E4", "F4", "G4"
-        ]; 
+        // Gamelan Slendro-ish scale C, D, F, G, A# (using common Western equivalents)
+        const tempNotes = ["C3", "D3", "F3", "G3", "A#3", "C4", "D4", "F4", "G4", "A#4"]; 
+        
         this.mainTempLoop = new Tone.Pattern((time, note) => {
             if (!this.isPlaying || !this.liquidSynthWrapper || this.liquidSynthWrapper.volume.value === -Infinity) return;
             const velocity = Math.max(0.25, this.currentTempAppValue * 0.5 + 0.2); 
-            // Occasionally transpose a note by an octave for more surprise
+            
             let finalNote = note;
-            if (Math.random() < 0.15) { // 15% chance to shift octave
+            if (Math.random() < 0.15) { 
                 const octaveShift = Math.random() < 0.5 ? 12 : -12;
                 try {
-                    finalNote = Tone.Frequency(note).transpose(octaveShift).toNote();
-                } catch (e) { /* In case transposition goes out of range, use original */ }
+                    const shifted = Tone.Frequency(note).transpose(octaveShift).toNote();
+                    // Ensure the shifted note is within a reasonable range if desired
+                    if (tempNotes.includes(shifted.slice(0,-1) + "3") || tempNotes.includes(shifted.slice(0,-1) + "4")) { // Basic check
+                        finalNote = shifted;
+                    }
+                } catch (e) { /* Use original */ }
             }
-            // MODIFIED: Added lookAhead
-            const lookAhead = Tone.context.lookAhead > 0 ? Tone.context.lookAhead : 0.01; // Ensure positive lookahead
+            
+            const lookAhead = Tone.context.lookAhead > 0 ? Tone.context.lookAhead : 0.01;
             this.liquidSynthWrapper.triggerAttackRelease(finalNote, "0:2", time + lookAhead, velocity); 
             this.triggerCreatureAnimation();
             this._displayNote(finalNote);
-        }, tempNotes, "random"); // Changed from "randomWalk" to "random" for less melodic, more unpredictable selection
-        this.mainTempLoop.interval = "0:3"; 
+        }, tempNotes, "randomWalk"); // CHANGED to randomWalk for more melodic movement
+        this.mainTempLoop.interval = "0:2"; // SLOWED DOWN from "0:3" (now half note)
         this.mainTempLoop.humanize = "8n";
     }
 
     createAccentLoop() {
         if (!this.punchySynth) return;
-        // Expanded varied low notes for punchy Gamelan accents
         const accentNotes = ["F1", "G1", "A1", "A#1", "C2", "D2", "D#1"];
-        // Removed accentNoteIndex for random selection
-
+        
         this.accentLoop = new Tone.Loop(time => {
             if (!this.isPlaying || !this.punchySynth || this.punchySynth.volume.value === -Infinity) return;
             const velocity = Math.max(0.35, (1 - this.currentTempAppValue) * 0.45 + 0.25); 
-            
-            const noteToPlay = accentNotes[Math.floor(Math.random() * accentNotes.length)]; // Random selection
+            const noteToPlay = accentNotes[Math.floor(Math.random() * accentNotes.length)]; 
 
-            this.punchySynth.triggerAttackRelease(noteToPlay, "8n", time, velocity); 
-            // this._displayNote(noteToPlay); // Optionally display accent notes
-        }, "1m"); 
-        this.accentLoop.probability = 0.15; 
+            const lookAhead = Tone.context.lookAhead > 0 ? Tone.context.lookAhead : 0.01; // ADDED lookAhead
+            this.punchySynth.triggerAttackRelease(noteToPlay, "8n", time + lookAhead, velocity); 
+        }, "2m"); // SLOWED DOWN from "1m" (now every 2 measures)
+        this.accentLoop.probability = 0.20; // Slightly increased base probability
         this.accentLoop.humanize = "8n";
     }
 
     createCyclicLoop() {
         if (!this.liquidSynthWrapper) return;
+        // Using a more structured melodic phrase
+        const cyclicNotes = [ "C3", "D3", "F3", "D3", "C3", null, "G2", "A#2", "C3", null ]; // Added nulls for rests
         
-        // Expanded and more varied cyclical pattern, making the sequence longer and less predictable
-        const cyclicNotes = [
-            "C2", "F2", "G2", "A#2", "D3", "C3", 
-            "F3", "G3", "A#3", "C4", "G3", "F3",
-            "A#2", "G2", "F2", "D2", "C2", "A#1"
-        ]; 
         this.cyclicLoop = new Tone.Sequence((time, note) => {
-            if (!this.isPlaying || !this.liquidSynthWrapper || this.liquidSynthWrapper.volume.value === -Infinity) return;
+            if (!this.isPlaying || !this.liquidSynthWrapper || this.liquidSynthWrapper.volume.value === -Infinity || note === null) return;
             
             const velocity = Math.max(0.2, this.currentTempAppValue * 0.4 + 0.15);
-            const duration = note.includes("2") || note.includes("1") ? "0:2.5" : "0:1.5"; 
+            const duration = "0:1.5"; // Consistent duration for this melodic line
             
-            // Add a small chance to play a slightly detuned note or a neighboring tone for variation
-            let finalNote = note;
-            if (Math.random() < 0.1) { // 10% chance for variation
-                const variationType = Math.random();
-                try {
-                    if (variationType < 0.5) { // Transpose slightly
-                        const semitones = Math.random() < 0.5 ? 1 : -1;
-                        finalNote = Tone.Frequency(note).transpose(semitones).toNote();
-                    } else { // Slight detune (if synth supports it directly, else skip or use a different approach)
-                        // MetalSynth doesn't have a per-note detune. We could use a very short pitch bend,
-                        // but for simplicity, we'll stick to transposition for now or just play the original note.
-                    }
-                } catch(e) { /* Use original note if variation fails */ }
-            }
-            // MODIFIED: Added lookAhead
-            const lookAhead = Tone.context.lookAhead > 0 ? Tone.context.lookAhead : 0.01; // Ensure positive lookahead
-            this.liquidSynthWrapper.triggerAttackRelease(finalNote, duration, time + lookAhead, velocity);
+            const lookAhead = Tone.context.lookAhead > 0 ? Tone.context.lookAhead : 0.01;
+            this.liquidSynthWrapper.triggerAttackRelease(note, duration, time + lookAhead, velocity);
             if (Math.random() < 0.3) {
                 this.triggerCreatureAnimation();
             }
-            this._displayNote(finalNote); 
+            this._displayNote(note); 
         }, cyclicNotes, "4n"); 
         
         this.cyclicLoop.probability = 0.8;
@@ -796,7 +774,7 @@ class TemperatureHandler {
             // Ensure punchySynth is ready and set to its rhythmic playback volume
             if (this.punchySynth && this.punchySynth.volume) {
                 this.punchySynth.volume.cancelScheduledValues(Tone.now()); // Cancel any ramps
-                this.punchySynth.volume.value = this.basePunchyVolume; 
+                this.punchySynth.volume.value = this.basePunchyVolume; // Uses updated basePunchyVolume
                 if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to ${this.basePunchyVolume} dB for rhythmic notes.`);
             } else {
                 console.error("❌ _setupRhythmicPlayback: punchySynth not available for rhythmic playback.");
@@ -1005,7 +983,7 @@ class TemperatureHandler {
                 console.error("❌ startAudio (generative) Temp: Critical: Re-init failed. Cannot start.");
                 return;
             }
-                if (this.isPlaying) return; // Re-check after init
+                if this.isPlaying) return; // Re-check after init
         }
 
         if (this.debugMode) console.log('🌡️ startAudio (generative): Starting...');
@@ -1019,10 +997,11 @@ class TemperatureHandler {
 
         this.updateSoundParameters(); // Set initial volumes and params
 
-        // Start loops at the current time on the transport
-        if (this.mainTempLoop && this.mainTempLoop.state !== "started") this.mainTempLoop.start(); // Changed from start(0)
-        if (this.accentLoop && this.accentLoop.state !== "started") this.accentLoop.start(); // Changed from start(0)
-        if (this.cyclicLoop && this.cyclicLoop.state !== "started") this.cyclicLoop.start(); // Changed from start(0)
+        // Start loops at the current time on the transport with a small offset
+        const loopStartTime = Tone.now() + 0.1; // 100ms offset
+        if (this.mainTempLoop && this.mainTempLoop.state !== "started") this.mainTempLoop.start(loopStartTime);
+        if (this.accentLoop && this.accentLoop.state !== "started") this.accentLoop.start(loopStartTime);
+        if (this.cyclicLoop && this.cyclicLoop.state !== "started") this.cyclicLoop.start(loopStartTime);
 
         if (this.debugMode) console.log('🌡️ startAudio (generative): Loops started. isPlaying is true.');
         this.updateUI();
@@ -1102,7 +1081,7 @@ class TemperatureHandler {
             // Ensure punchySynth is ready and set to its rhythmic playback volume
             if (this.punchySynth && this.punchySynth.volume) {
                 this.punchySynth.volume.cancelScheduledValues(Tone.now()); // Cancel any ramps
-                this.punchySynth.volume.value = this.basePunchyVolume; 
+                this.punchySynth.volume.value = this.basePunchyVolume; // Uses updated basePunchyVolume
                 if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to ${this.basePunchyVolume} dB for rhythmic notes.`);
             } else {
                 console.error("❌ _setupRhythmicPlayback: punchySynth not available for rhythmic playback.");

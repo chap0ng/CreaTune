@@ -698,6 +698,7 @@ class LightHandler {
 
     exitRecordMode(force = false) {
         if (!this.isRecordMode && !force) { 
+            if (this.debugMode) console.log(`💡 exitRecordMode: Called when not in record mode and not forced. Returning.`);
             return;
         }
         if (this.debugMode) console.log(`💡 exitRecordMode: Starting. Forced: ${force}. Was inRecordMode: ${this.isRecordMode}`);
@@ -706,6 +707,7 @@ class LightHandler {
         this.isRecordMode = false;
         this.isCurrentlyRecording = false; 
 
+        // Stop and dispose of record-mode specific resources
         if (this.mic && this.mic.state === "started") this.mic.close();
         this.mic = null;
         if (this.recorder) {
@@ -729,21 +731,33 @@ class LightHandler {
             this.rhythmFollower.dispose(); this.rhythmFollower = null;
         }
         
-        if (this.ambientSynth && this.ambientSynth.volume) this.ambientSynth.volume.value = -Infinity;
-        if (this.sparkleSynth && this.sparkleSynth.volume) this.sparkleSynth.volume.value = -Infinity;
-        if (this.woodenPluckSynth && this.woodenPluckSynth.volume) this.woodenPluckSynth.volume.value = -Infinity; // ADDED
-        if (this.ambientSynth) this.ambientSynth.releaseAll(); 
-        
-        // Dispose wooden pluck synth and loop
-        if (this.woodenPluckLoop) {
-            if (this.woodenPluckLoop.state === "started") this.woodenPluckLoop.stop(0);
-            this.woodenPluckLoop.dispose(); this.woodenPluckLoop = null;
+        // Ensure generative synths are silenced.
+        // Their loops should have been stopped by stopAudio(true) when entering record mode.
+        if (this.ambientSynth && this.ambientSynth.volume) {
+            this.ambientSynth.volume.cancelScheduledValues(Tone.now());
+            this.ambientSynth.volume.value = -Infinity;
+            this.ambientSynth.releaseAll(); // For PolySynth
         }
-        if (this.woodenPluckSynth) {
-            this.woodenPluckSynth.dispose(); this.woodenPluckSynth = null;
+        if (this.sparkleSynth && this.sparkleSynth.volume) {
+            this.sparkleSynth.volume.cancelScheduledValues(Tone.now());
+            this.sparkleSynth.volume.value = -Infinity;
+        }
+        if (this.woodenPluckSynth && this.woodenPluckSynth.volume) {
+            this.woodenPluckSynth.volume.cancelScheduledValues(Tone.now());
+            this.woodenPluckSynth.volume.value = -Infinity;
         }
         
-        this.isPlaying = false; 
+        // REMOVED incorrect disposal of generative woodenPluckSynth and woodenPluckLoop
+        // These are generative components and should not be disposed here.
+        // if (this.woodenPluckLoop) {
+        //     if (this.woodenPluckLoop.state === "started") this.woodenPluckLoop.stop(0);
+        //     this.woodenPluckLoop.dispose(); this.woodenPluckLoop = null;
+        // }
+        // if (this.woodenPluckSynth) {
+        //     this.woodenPluckSynth.dispose(); this.woodenPluckSynth = null;
+        // }
+        
+        this.isPlaying = false; // Generative audio is not playing at this point
         this.isFadingOut = false;
         if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
 
@@ -753,9 +767,11 @@ class LightHandler {
             if (noteDisplayElement) noteDisplayElement.textContent = '-';
         }
         
-        this.updateUI(); 
+        this.updateUI(); // Update UI to reflect exit from record mode
         
+        // Attempt to restore generative audio if applicable
         if (wasRecordMode || force) { 
+            if (this.debugMode) console.log('💡 exitRecordMode: Calling manageAudioAndVisuals to potentially restore generative audio.');
             this.manageAudioAndVisuals(); 
         }
         if (this.debugMode) console.log(`💡 exitRecordMode: Finished. isRecordMode is now ${this.isRecordMode}, isPlayingGen is ${this.isPlaying}`);
