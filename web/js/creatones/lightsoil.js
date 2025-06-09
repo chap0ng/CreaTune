@@ -259,22 +259,25 @@ class LightSoilHandler {
 
         if (this.frameBackground) {
             this.frameBackground.addEventListener('click', () => {
-                const tempRec = window.temperatureHandlerInstance?.isRecordMode;
-                const tempSoilRec = window.tempSoilHandlerInstance?.isRecordMode;
-                const tempLightRec = window.tempLightHandlerInstance?.isRecordMode; // ADDED
-                // Individual light and soil handlers are implicitly not in record mode if LightSoil can enter.
+                // Define lightRec and soilRec here
+                const lightRec = window.lightHandlerInstance?.isRecordMode;
+                const soilRec = window.soilHandlerInstance?.isRecordMode;
 
-                if (this.isCombinedActive &&
+                if (this.isCombinedActive && // Only allow record mode if LightSoil itself is fully active
                     !this.isRecordMode &&
                     this.audioEnabled &&
                     this.toneInitialized &&
-                    !tempRec && !tempSoilRec && !tempLightRec && // ADDED tempLightRec
-                    this.frameBackground.classList.contains('lightsoil-active-bg')
+                    !lightRec && !soilRec && // No other handler is recording
+                    this.frameBackground.classList.contains('lightsoil-active-bg') // CRUCIAL: Only if LS background is showing
                 ) {
-                    if (this.debugMode) console.log(`🌿💡 LightSoil frameBackground click: Conditions met. Entering record mode.`);
+                    if (this.debugMode) console.log(`🌿💡 LightSoil frameBackground click: Conditions met, 'lightsoil-active-bg' is present. Entering record mode for LightSoil.`);
                     this.enterRecordMode();
-                } else if (!this.isRecordMode && !tempRec && !tempSoilRec && !tempLightRec) { // ADDED tempLightRec
-                    if (this.debugMode) {
+                }
+                // Log if LightSoil could have entered but its BG wasn't showing, or other general failure conditions
+                else if (!this.isRecordMode && !lightRec && !soilRec) { // Only log detailed failure if no one is recording (to avoid noise)
+                    if (this.isCombinedActive && this.audioEnabled && this.toneInitialized && !this.frameBackground.classList.contains('lightsoil-active-bg')) {
+                        if (this.debugMode) console.log(`🌿💡 LightSoil frameBackground click: LightSoil eligible (combinedActive, audio, toneInit), but 'lightsoil-active-bg' NOT present. Current BGs: ${Array.from(this.frameBackground.classList).join(', ')}. No action for LightSoil.`);
+                    } else if (this.debugMode) {
                         console.log(`🌿💡 LightSoil frameBackground click: Record mode NOT entered for LightSoil. Conditions: isCombinedActive=${this.isCombinedActive}, isRecordMode=${this.isRecordMode}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}, lightRec=${lightRec}, soilRec=${soilRec}, hasLSbg=${this.frameBackground.classList.contains('lightsoil-active-bg')}`);
                     }
                 }
@@ -522,11 +525,8 @@ class LightSoilHandler {
             const lightSoilBgClass = 'lightsoil-active-bg';
             // Backgrounds from individual handlers that LightSoil might override
             const individualHandlersBgClasses = [
-                'temp-active-bg', // Keep temp for clearing
-                'light-active-bg', 
-                'soil-active-bg',
-                'tempsoil-active-bg', // Add tempsoil for clearing
-                'templight-active-bg', // ADDED
+                'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg',
+                'soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg', 'soil-connected-bg', // Added soil-connected-bg
                 'idle-bg'
             ];
 
@@ -551,17 +551,14 @@ class LightSoilHandler {
         }
 
         if (this.stopRecordModeButton) {
-            const lightInRec = window.lightHandlerInstance?.isRecordMode; // Individual
-            const soilInRec = window.soilHandlerInstance?.isRecordMode;   // Individual
-            const tempInRec = window.temperatureHandlerInstance?.isRecordMode; // Other individual
-            const tempSoilInRec = window.tempSoilHandlerInstance?.isRecordMode; // Other combined
-            const tempLightInRec = window.tempLightHandlerInstance?.isRecordMode; // ADDED
-
-            if (this.isRecordMode) { 
+            const lightInRec = window.lightHandlerInstance?.isRecordMode;
+            const soilInRec = window.soilHandlerInstance?.isRecordMode;
+            if (this.isRecordMode) { // LightSoil is in record mode
                 this.stopRecordModeButton.style.display = 'block';
-            } else if (!lightInRec && !soilInRec && !tempInRec && !tempSoilInRec && !tempLightInRec) { // ADDED tempLightInRec
+            } else if (!lightInRec && !soilInRec) { // No creature is in record mode
                 this.stopRecordModeButton.style.display = 'none';
             }
+            // If light or soil is in record mode, their own handlers will show the button.
         }
         // Corrected debug log to use classList.toString()
         if (this.debugMode && Math.random() < 0.02) console.log(`🌿💡 UI Update (LS): CreatureVis=${showCreature}, ShowLSVisualContext=${this.showLightSoilVisualContext}, RecModeLS=${this.isRecordMode}, FrameBG Classes: ${this.frameBackground?.classList.toString()}`);
@@ -637,17 +634,20 @@ class LightSoilHandler {
     }
 
     async enterRecordMode() {
+        // Removed this.isExternallyMuted check
         if (this.isRecordMode || !this.audioEnabled || !this.toneInitialized || !this.isCombinedActive) {
-            if (this.debugMode) console.warn(`🌿💡 LS enterRecordMode: Blocked. Conditions not met.`);
+            if (this.debugMode) console.warn(`🌿💡 LS enterRecordMode: Blocked. isRec=${this.isRecordMode}, audioEn=${this.audioEnabled}, toneInit=${this.toneInitialized}, combinedAct=${this.isCombinedActive}`);
             return;
         }
-        if (window.temperatureHandlerInstance?.isRecordMode || 
-            window.tempSoilHandlerInstance?.isRecordMode ||
-            window.tempLightHandlerInstance?.isRecordMode) { // ADDED tempLightHandlerInstance CHECK
-            if (this.debugMode) console.warn(`🌿💡 LS enterRecordMode: Blocked. Another creature (Temp, TempSoil, TempLight) is in record mode.`);
+        if ((window.lightHandlerInstance?.isRecordMode) || (window.soilHandlerInstance?.isRecordMode)) {
+            if (this.debugMode) console.warn(`🌿💡 LS enterRecordMode: Blocked. Another creature is in record mode.`);
             return;
         }
-        // Individual light and soil handlers are managed by this combined handler's muting logic
+        if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+            console.error('❌ LS enterRecordMode: getUserMedia API not available.');
+            alert('Microphone access not available. Ensure HTTPS or localhost.');
+            return;
+        }
 
         if (this.debugMode) console.log('🌿💡 LS enterRecordMode: Starting...');
         this.isRecordMode = true; // Set early to prevent re-entry and for UI updates

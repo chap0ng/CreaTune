@@ -175,7 +175,7 @@ class TempSoilHandler {
 
             if (deviceType === 'temperature') {
                 if (data.connected !== undefined && this.tempConnected !== data.connected) { this.tempConnected = data.connected; stateChanged = true; }
-                if (data.active !== undefined && this.tempActive !== data.active) { this.tempActive = state.active; stateChanged = true; }
+                if (data.active !== undefined && this.tempActive !== data.active) { this.tempActive = data.active; stateChanged = true; }
                 if (data.rawData) {
                     this.currentTempAppValue = data.rawData.temp_app_value !== undefined ? data.rawData.temp_app_value : this.currentTempAppValue;
                     this.currentTempCondition = data.rawData.temp_condition || this.currentTempCondition;
@@ -185,7 +185,7 @@ class TempSoilHandler {
                 }
             } else if (deviceType === 'soil') {
                 if (data.connected !== undefined && this.soilConnected !== data.connected) { this.soilConnected = data.connected; stateChanged = true; }
-                if (data.active !== undefined && this.soilActive !== data.active) { this.soilActive = state.active; stateChanged = true; }
+                if (data.active !== undefined && this.soilActive !== data.active) { this.soilActive = data.active; stateChanged = true; }
                 if (data.rawData) {
                     this.currentSoilAppValue = data.rawData.moisture_app_value !== undefined ? data.rawData.moisture_app_value : this.currentSoilAppValue;
                     this.currentSoilCondition = data.rawData.soil_condition || this.currentSoilCondition;
@@ -247,21 +247,21 @@ class TempSoilHandler {
 
         if (this.frameBackground) {
             this.frameBackground.addEventListener('click', () => {
+                const tempRec = window.temperatureHandlerInstance?.isRecordMode;
+                const soilRec = window.soilHandlerInstance?.isRecordMode;
                 const lightRec = window.lightHandlerInstance?.isRecordMode;
-                const lightSoilRec = window.lightSoilHandlerInstance?.isRecordMode;
-                const tempLightRec = window.tempLightHandlerInstance?.isRecordMode; // ADDED
-                // Individual temp and soil handlers are implicitly not in record mode if TempSoil can enter.
+                const lightSoilRec = window.lightSoilHandlerInstance?.isRecordMode; // Check lightsoil
 
                 if (this.isCombinedActive &&
                     !this.isRecordMode &&
                     this.audioEnabled &&
                     this.toneInitialized &&
-                    !lightRec && !lightSoilRec && !tempLightRec && // ADDED tempLightRec
+                    !tempRec && !soilRec && !lightRec && !lightSoilRec && // No other handler is recording
                     this.frameBackground.classList.contains('tempsoil-active-bg')
                 ) {
                     if (this.debugMode) console.log(`🌡️💧 TempSoil frameBackground click: Conditions met. Entering record mode.`);
                     this.enterRecordMode();
-                } else if (!this.isRecordMode && !lightRec && !lightSoilRec && !tempLightRec ) { // ADDED tempLightRec
+                } else if (!this.isRecordMode && !tempRec && !soilRec && !lightRec && !lightSoilRec) {
                     if (this.isCombinedActive && this.audioEnabled && this.toneInitialized && !this.frameBackground.classList.contains('tempsoil-active-bg')) {
                         if (this.debugMode) console.log(`🌡️💧 TempSoil frameBackground click: Could enter record, but TempSoil BG not active.`);
                     } else if (this.debugMode) {
@@ -562,12 +562,9 @@ class TempSoilHandler {
         if (this.frameBackground) {
             const tempSoilBgClass = 'tempsoil-active-bg';
             const individualHandlersBgClasses = [
-                'temp-active-bg', 
-                'soil-active-bg',
-                'light-active-bg', // Keep light for clearing
-                'lightsoil-active-bg', // Add lightsoil for clearing
-                'templight-active-bg', // ADDED
-                'idle-bg'
+                'temp-active-bg', 'soil-active-bg',
+                'light-active-bg', 'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg',
+                'lightsoil-active-bg', 'idle-bg'
             ];
 
             if (this.isRecordMode) {
@@ -586,15 +583,14 @@ class TempSoilHandler {
         }
 
         if (this.stopRecordModeButton) {
-            const tempInRec = window.temperatureHandlerInstance?.isRecordMode; // Individual
-            const soilInRec = window.soilHandlerInstance?.isRecordMode;   // Individual
-            const lightInRec = window.lightHandlerInstance?.isRecordMode; // Other individual
-            const lightSoilInRec = window.lightSoilHandlerInstance?.isRecordMode; // Other combined
-            const tempLightInRec = window.tempLightHandlerInstance?.isRecordMode; // ADDED
+            const tempInRec = window.temperatureHandlerInstance?.isRecordMode;
+            const soilInRec = window.soilHandlerInstance?.isRecordMode;
+            const lightInRec = window.lightHandlerInstance?.isRecordMode;
+            const lightSoilInRec = window.lightSoilHandlerInstance?.isRecordMode;
 
             if (this.isRecordMode) {
                 this.stopRecordModeButton.style.display = 'block';
-            } else if (!tempInRec && !soilInRec && !lightInRec && !lightSoilInRec && !tempLightInRec) { // ADDED tempLightInRec
+            } else if (!tempInRec && !soilInRec && !lightInRec && !lightSoilInRec) {
                 this.stopRecordModeButton.style.display = 'none';
             }
         }
@@ -663,13 +659,14 @@ class TempSoilHandler {
             if (this.debugMode) console.warn(`🌡️💧 TS enterRecordMode: Blocked. Conditions not met.`);
             return;
         }
-        if (window.lightHandlerInstance?.isRecordMode || 
-            window.lightSoilHandlerInstance?.isRecordMode ||
-            window.tempLightHandlerInstance?.isRecordMode) { // ADDED tempLightHandlerInstance CHECK
-            if (this.debugMode) console.warn(`🌡️💧 TS enterRecordMode: Blocked. Another creature (Light, LightSoil, TempLight) is in record mode.`);
+        if (window.temperatureHandlerInstance?.isRecordMode || window.soilHandlerInstance?.isRecordMode || window.lightHandlerInstance?.isRecordMode || window.lightSoilHandlerInstance?.isRecordMode) {
+            if (this.debugMode) console.warn(`🌡️💧 TS enterRecordMode: Blocked. Another creature is in record mode.`);
             return;
         }
-        // Individual temp and soil handlers are managed by this combined handler's muting logic
+        if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+            alert('Microphone access not available. Ensure HTTPS or localhost.');
+            return;
+        }
 
         this.isRecordMode = true;
 
