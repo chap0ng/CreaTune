@@ -647,27 +647,23 @@ class TemperatureHandler {
                 'lightsoil-active-bg',
                 'idle-bg' 
             ];
-            // Ensure any old specific temperature condition background classes are removed from the frameBackground
             const allOldTempConditionBgs = ['temp-very-cold-bg', 'temp-cold-bg', 'temp-cool-bg', 'temp-mild-bg', 'temp-warm-bg', 'temp-hot-bg'];
             allOldTempConditionBgs.forEach(cls => this.frameBackground.classList.remove(cls));
 
             if (this.isRecordMode) {
                 this.frameBackground.classList.add('record-mode-pulsing');
                 this.frameBackground.classList.add(tempBgClass);
-                // When temp is in record mode, it takes precedence and clears other backgrounds.
                 otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
             } else {
                 this.frameBackground.classList.remove('record-mode-pulsing');
 
-                const shouldShowTempBackground = this.deviceStates.temperature.connected && this.isActive && !this.isExternallyMuted;
+                // MODIFIED: Rely only on 'connected' and 'not externally muted' for showing temp-active-bg
+                const shouldShowTempBackground = this.deviceStates.temperature.connected && !this.isExternallyMuted;
 
                 if (shouldShowTempBackground) {
                     this.frameBackground.classList.add(tempBgClass);
-                    // This handler is active, clear other handlers' backgrounds.
                     otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
                 } else {
-                    // This handler is not responsible for the background. Remove its class.
-                    // It won't clear other handler's classes here, as another handler might be active.
                     this.frameBackground.classList.remove(tempBgClass);
                 }
             }
