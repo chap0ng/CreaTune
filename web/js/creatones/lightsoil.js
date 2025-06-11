@@ -330,8 +330,14 @@ class LightSoilHandler {
                 window.lightHandlerInstance.setExternallyMuted(false);
             }
             if (window.soilHandlerInstance?.setExternallyMuted) {
-                if (this.debugMode && window.soilHandlerInstance.isExternallyMuted) console.log(`🌿💡 LightSoil: Un-muting SoilHandler (LS context not active or LS in rec mode).`);
-                window.soilHandlerInstance.setExternallyMuted(false);
+                // Before unmuting Soil, check if TempSoil wants it muted
+                const tempSoilShowsContext = window.tempSoilHandlerInstance?.showTempSoilVisualContext;
+                if (!tempSoilShowsContext) { // Only unmute if TempSoil is NOT showing its context
+                    if (this.debugMode && window.soilHandlerInstance.isExternallyMuted) console.log(`🌿💡 LightSoil: Un-muting SoilHandler (LS context not active, TS context not active).`);
+                    window.soilHandlerInstance.setExternallyMuted(false);
+                } else if (this.debugMode) {
+                    console.log(`🌿💡 LightSoil: NOT un-muting SoilHandler because TempSoil context is active.`);
+                }
             }
         }
         // --- End Muting Logic ---

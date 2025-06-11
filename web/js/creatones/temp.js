@@ -885,17 +885,40 @@ class TemperatureHandler {
     startAudio() {
         if (this.isRecordMode) {
             if (this.debugMode) console.log("🌡️ startAudio (generative): Blocked, in record mode.");
+            this.updateUI(); // Ensure UI is updated even if blocked
             return;
         }
-        if (this.isExternallyMuted || !this.audioEnabled || !this.toneInitialized || !this.isSensorActive || this.isRecordMode || !this.punchySynth || !this.generativeLoop) {
-            if (this.debugMode) console.warn(`🌡️ startAudio (generative): Blocked. ExtMuted=${this.isExternallyMuted}, AudioEnabled=${this.audioEnabled}, ToneInit=${this.toneInitialized}`);
-            this.updateUI(); return;
+
+        const sensorEffectivelyActive = this.isActive && this.deviceStates.temperature.connected;
+
+        if (this.isExternallyMuted || 
+            !this.audioEnabled || 
+            !this.toneInitialized || 
+            !sensorEffectivelyActive || // Corrected check
+            this.isRecordMode || // This is redundant due to the early exit but kept for clarity in the combined check
+            !this.punchySynth || 
+            !this.mainTempLoop) { // Corrected to check mainTempLoop
+
+            if (this.debugMode) {
+                console.warn(`🌡️ startAudio (generative): Blocked. Details:
+                    ExtMuted=${this.isExternallyMuted}, 
+                    AudioEnabled=${this.audioEnabled}, 
+                    ToneInit=${this.toneInitialized}, 
+                    SensorEffectivelyActive=${sensorEffectivelyActive} (isActive=${this.isActive}, temp.connected=${this.deviceStates.temperature.connected}), 
+                    RecordMode=${this.isRecordMode}, 
+                    PunchySynthExists=${!!this.punchySynth}, 
+                    MainTempLoopExists=${!!this.mainTempLoop}`);
+            }
+            this.updateUI(); 
+            return;
         }
+
         if (this.isFadingOut) {
             if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
             this.isFadingOut = false;
             // If fading out, volume might be ramping down. Ensure it's reset or ramped up correctly.
-            // this.mainVolume.volume.cancelScheduledValues(Tone.now()); // Optional: cancel previous ramp
+            // if (this.liquidSynthWrapper?.volume) this.liquidSynthWrapper.volume.cancelScheduledValues(Tone.now()); 
+            // if (this.punchySynth?.volume) this.punchySynth.volume.cancelScheduledValues(Tone.now());
         }
         
         // If already playing, just update parameters
@@ -914,13 +937,23 @@ class TemperatureHandler {
             Tone.Transport.start();
         }
 
-        // Ensure loop is stopped before starting to avoid potential conflicts
-        if (this.generativeLoop.state === "started") {
-            this.generativeLoop.stop(0);
+        // Ensure mainTempLoop is stopped before starting to avoid potential conflicts
+        if (this.mainTempLoop.state === "started") {
+            this.mainTempLoop.stop(0);
         }
-        this.generativeLoop.start(0); // Start the loop relative to the transport
+        this.mainTempLoop.start(0); // Start the mainTempLoop
 
-        if (this.debugMode) console.log('🌡️ TempHandler: Audio started.');
+        // Also ensure accentLoop and cyclicLoop are started if they should be active
+        // Their probability is controlled in updateSoundParameters
+        if (this.accentLoop && this.accentLoop.state !== "started") {
+            this.accentLoop.start(0);
+        }
+        if (this.cyclicLoop && this.cyclicLoop.state !== "started") {
+            this.cyclicLoop.start(0);
+        }
+
+
+        if (this.debugMode) console.log('🌡️ TempHandler: Audio started (mainTempLoop, accentLoop, cyclicLoop).');
         this.updateUI();
     }
 
