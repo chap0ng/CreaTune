@@ -266,8 +266,11 @@ class TemperatureHandler {
         }
         if (this.tempCreatureVisual && this.tempCreatureVisual.classList.contains('active')) {
             this.tempCreatureCurrentFrame = (this.tempCreatureCurrentFrame + 1) % this.tempCreatureTotalFrames;
-            // Changed to match the sprite reading method in soil.js
-            this.tempCreatureVisual.style.backgroundPositionX = (this.tempCreatureCurrentFrame * 20) + '%'; 
+            this.tempCreatureVisual.style.backgroundPositionX = (this.tempCreatureCurrentFrame * 20) + '%';
+            // Reduced log spam
+            if (this.debugMode && Math.random() < 0.01) {
+                 console.log(`🌡️ Temp Creature Animation: Frame ${this.tempCreatureCurrentFrame}`);
+            }
         }
     }
 
@@ -398,8 +401,11 @@ class TemperatureHandler {
                 if (this.debugMode) console.log(`🌡️ TemperatureHandler: Temperature device disconnected event.`);
                 this.deviceStates.temperature.connected = false;
                 this.isActive = false;
-                if (this.isRecordMode) this.exitRecordMode(true);
-                else this.manageAudioAndVisuals();
+                if (this.isRecordMode) {
+                    this.exitRecordMode(true); // Force exit
+                } else {
+                    this.manageAudioAndVisuals(); // This will stop audio if needed
+                }
             }
         });
 
@@ -465,18 +471,21 @@ class TemperatureHandler {
         const isSensorActive = this.isActive && this.deviceStates.temperature.connected;
         if (this.debugMode) console.log(`🌡️ updateSoundParameters: Called. isSensorActive=${isSensorActive} (isActive=${this.isActive}, temp.connected=${this.deviceStates.temperature.connected})`);
 
+        const RAMP_TOLERANCE = 0.01; // If diff is less than this, don't ramp
+
         // Liquid Synth Parameters (Gamelan-inspired)
-        // Using liquidSynthWrapper which controls both liquidSynth and membraneComp
         if (this.liquidSynthWrapper && this.liquidSynthWrapper.volume) { 
             const dynamicVolumePart = this.currentTempAppValue * 10; 
             const targetVolume = isSensorActive ? (this.baseLiquidVolume - 3 + dynamicVolumePart) : -Infinity;
-            this.liquidSynthWrapper.volume.linearRampTo(targetVolume, 0.7); // Control volume via wrapper
+            
+            if (Math.abs(this.liquidSynthWrapper.volume.value - targetVolume) > RAMP_TOLERANCE || targetVolume === -Infinity && this.liquidSynthWrapper.volume.value > -80) {
+                this.liquidSynthWrapper.volume.linearRampTo(targetVolume, 0.7);
+            }
 
-            // Modulate MetalSynth (this.liquidSynth) parameters based on temperature for timbral variation
-            if (this.liquidSynth) { // Check if liquidSynth itself exists
-                let harmonicityTarget = 2.1; // Base from MetalSynth
-                let modIndexTarget = 12;     // Base from MetalSynth
-                let resonanceTarget = 500;   // Base from MetalSynth
+            if (this.liquidSynth) {
+                let harmonicityTarget = 2.1; 
+                let modIndexTarget = 12;     
+                let resonanceTarget = 500;   
 
                 if (this.currentTempCondition === "very_cold") { harmonicityTarget = 1.8; modIndexTarget = 10; resonanceTarget = 400; }
                 else if (this.currentTempCondition === "cold") { harmonicityTarget = 2.0; modIndexTarget = 11; resonanceTarget = 450; }
@@ -485,17 +494,13 @@ class TemperatureHandler {
                 else if (this.currentTempCondition === "warm") { harmonicityTarget = 2.3; modIndexTarget = 14; resonanceTarget = 600; }
                 else if (this.currentTempCondition === "hot") { harmonicityTarget = 2.4; modIndexTarget = 15; resonanceTarget = 650; }
 
-                // For MetalSynth, these are direct properties, not Tone.Param objects.
-                // Set them directly. For smooth transitions, you might need to implement
-                // your own ramping logic using Tone.Transport.scheduleRepeat or similar if desired,
-                // or accept abrupt changes. For now, direct assignment:
                 if (this.liquidSynth.harmonicity !== undefined) this.liquidSynth.harmonicity = harmonicityTarget;
                 if (this.liquidSynth.modulationIndex !== undefined) this.liquidSynth.modulationIndex = modIndexTarget;
                 if (this.liquidSynth.resonance !== undefined) this.liquidSynth.resonance = resonanceTarget;
             }
         }
 
-        // Main Temp Loop Interval (Liquid Synth) - Slower for Gamelan feel
+        // Main Temp Loop Interval (Liquid Synth)
         if (this.mainTempLoop) {
             if (this.currentTempAppValue < 0.2) this.mainTempLoop.interval = "0:4"; 
             else if (this.currentTempAppValue < 0.4) this.mainTempLoop.interval = "0:3"; 
@@ -510,10 +515,15 @@ class TemperatureHandler {
             const targetPunchyVol = isSensorActive ? calculatedGenerativePunchyVol : -Infinity;
 
             if (this.debugMode) {
-                console.log(`%c🌡️ updateSoundParameters (PunchySynth): isSensorActive=${isSensorActive}. Calculated Generative Vol (if active): ${calculatedGenerativePunchyVol.toFixed(2)}. Final Target Vol for Ramp: ${targetPunchyVol}. Current PunchySynth Vol before ramp: ${this.punchySynth.volume.value.toFixed(2)}`, "color: #3498db");
+                // Log the raw targetPunchyVol to see the float precision
+                console.log(`%c🌡️ updateSoundParameters (PunchySynth): isSensorActive=${isSensorActive}. Calculated Generative Vol (if active): ${calculatedGenerativePunchyVol.toFixed(2)}. TargetPunchyVol (raw): ${targetPunchyVol}. Current PunchySynth Vol before ramp: ${this.punchySynth.volume.value.toFixed(2)}`, "color: #3498db");
             }
 
-            this.punchySynth.volume.linearRampTo(targetPunchyVol, 0.6);
+            // Only ramp if the difference is significant or if ramping to -Infinity from a non-silent state
+            if (Math.abs(this.punchySynth.volume.value - targetPunchyVol) > RAMP_TOLERANCE || (targetPunchyVol === -Infinity && this.punchySynth.volume.value > -80) ) {
+                this.punchySynth.volume.linearRampTo(targetPunchyVol, 0.6);
+            }
+
 
             let accentProb = 0.15; 
             if (this.currentTempCondition === "very_cold") accentProb = 0.08;
@@ -1030,91 +1040,77 @@ class TemperatureHandler {
 
     exitRecordMode(force = false) {
         if (!this.isRecordMode && !force) {
-            if (this.debugMode) console.log(`🌡️ exitRecordMode: Called when not in record mode and not forced. Returning.`);
+            if (this.debugMode) console.log(`🌡️ exitRecordMode: Called but not in record mode and not forced.`);
             return;
         }
-        if (this.debugMode) console.log(`%c🌡️ exitRecordMode: Starting. Forced: ${force}. Was inRecordMode: ${this.isRecordMode}`, 'color: red; font-weight: bold;');
-
-        const wasRecordMode = this.isRecordMode; 
+        if (this.debugMode) console.log(`%c🌡️ exitRecordMode: Exiting record mode. Force: ${force}`, 'color: orange; font-weight: bold;');
+        const wasRecordMode = this.isRecordMode;
         this.isRecordMode = false;
-        this.isCurrentlyRecording = false; // Ensure this is also reset
+        this.isCurrentlyRecording = false;
 
-        // Stop and dispose mic and recorder first
-        if (this.mic?.state === "started") this.mic.close();
-        this.mic = null;
-        if (this.recorder) {
-            if (this.recorder.state === "started") {
-                try {
-                    // Recorder.stop() is async, but we don't need to wait for the blob here
-                    this.recorder.stop(); 
-                } catch (e) { /* ignore */ }
-            }
-            this.recorder.dispose();
-            this.recorder = null;
+        this.mic?.close(); this.mic = null;
+        
+        const recorder = this.recorder; this.recorder = null; // Nullify before async
+        recorder?.stop().then(() => recorder.dispose()).catch(e => recorder?.dispose());
+        
+        this.rhythmicLoop?.stop(0).dispose(); this.rhythmicLoop = null;
+        this.recordedBufferPlayer?.stop(0).dispose(); this.recordedBufferPlayer = null;
+        if (this.recordedAudioBlobUrl) { URL.revokeObjectURL(this.recordedAudioBlobUrl); this.recordedAudioBlobUrl = null; }
+        this.rhythmFollower?.dispose(); this.rhythmFollower = null;
+
+        // Reset liquidSynthWrapper volume if it was used for rhythmic playback
+        if (this.liquidSynthWrapper?.volume && this.liquidSynthWrapper.volume.value === this.rhythmicPlaybackVolume) {
+             if (this.debugMode) console.log('🌡️ exitRecordMode: liquidSynthWrapper volume was at rhythmic level.');
+            // Let updateSoundParameters handle the correct generative volume
         }
         
-        // Stop and dispose rhythmic playback components
-        if (this.rhythmicLoop) {
-            if (this.rhythmicLoop.state === "started") this.rhythmicLoop.stop(0);
-            this.rhythmicLoop.dispose();
-            this.rhythmicLoop = null;
-        }
-        if (this.recordedBufferPlayer) {
-            if (this.recordedBufferPlayer.state === "started") this.recordedBufferPlayer.stop(0);
-            this.recordedBufferPlayer.dispose();
-            this.recordedBufferPlayer = null;
-            if (this.recordedAudioBlobUrl) {
-                URL.revokeObjectURL(this.recordedAudioBlobUrl);
-                this.recordedAudioBlobUrl = null;
-            }
-        }
-        if (this.rhythmFollower) {
-            this.rhythmFollower.dispose();
-            this.rhythmFollower = null;
-        }
-
-        // Ensure all synths are silenced before manageAudioAndVisuals might restart them
-        if (this.liquidSynthWrapper?.volume) {
-            this.liquidSynthWrapper.volume.cancelScheduledValues(Tone.now());
-            this.liquidSynthWrapper.volume.value = -Infinity;
-        } else if (this.liquidSynth?.volume) {
-            this.liquidSynth.volume.cancelScheduledValues(Tone.now());
-            this.liquidSynth.volume.value = -Infinity;
-        }
-        if (this.punchySynth?.volume) {
-            this.punchySynth.volume.cancelScheduledValues(Tone.now());
-            this.punchySynth.volume.value = -Infinity;
-        }
-
-        this.isPlaying = false; 
-        this.isFadingOut = false;
-        if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId); // Clear any pending stopAudio timeouts
-
         if (this.noteDisplayTimeoutId) {
             clearTimeout(this.noteDisplayTimeoutId);
             const noteDisplayElement = document.querySelector('#notes-display p');
             if (noteDisplayElement) noteDisplayElement.textContent = '-';
         }
         
-        if (wasRecordMode) { // Only unmute others if this handler was definitively in record mode
-            if (this.debugMode) console.log('🌡️ exitRecordMode: Unmuting other handlers.');
-            if (window.lightHandlerInstance?.setExternallyMuted && window.lightHandlerInstance.isExternallyMuted) window.lightHandlerInstance.setExternallyMuted(false);
-            if (window.soilHandlerInstance?.setExternallyMuted && window.soilHandlerInstance.isExternallyMuted) window.soilHandlerInstance.setExternallyMuted(false);
-            if (window.lightSoilHandlerInstance?.setExternallyMuted && window.lightSoilHandlerInstance.isExternallyMuted) window.lightSoilHandlerInstance.setExternallyMuted(false);
-            if (window.tempSoilHandlerInstance?.setExternallyMuted && window.tempSoilHandlerInstance.isExternallyMuted) window.tempSoilHandlerInstance.setExternallyMuted(false); // ADDED
-            if (window.tempLightHandlerInstance?.setExternallyMuted && window.tempLightHandlerInstance.isExternallyMuted) window.tempLightHandlerInstance.setExternallyMuted(false); // ADDED
-        }
-
-        this.updateUI(); // Update UI to reflect exit from record mode
-        
-        // Attempt to restore generative audio if applicable
-        // This needs to happen after all record mode flags are cleared and synths are reset
         if (wasRecordMode || force) {
-             if (this.debugMode) console.log('🌡️ exitRecordMode: Calling manageAudioAndVisuals to potentially restore generative audio.');
-             this.manageAudioAndVisuals();
+            this._unmuteOtherHandlersForRecordModeExit();
+            this.manageAudioAndVisuals(); // Re-evaluate audio and visual state
+        } else {
+            this.updateUI();
         }
-        if (this.debugMode) console.log(`%c🌡️ exitRecordMode: Finished. isRecordMode=${this.isRecordMode}, isPlaying=${this.isPlaying}`, 'color: red; font-weight: bold;');
+        if (this.debugMode) console.log(`🌡️ exitRecordMode: Finished. isRecordMode is now ${this.isRecordMode}.`);
     }
+
+    _unmuteOtherHandlersForRecordModeExit() {
+        if (this.debugMode) console.log('🌡️ _unmuteOtherHandlersForRecordModeExit: Unmuting other handlers.');
+        // Unmute LightHandler if TempLightHandler doesn't need it muted
+        if (window.lightHandlerInstance?.setExternallyMuted) {
+            const tlWantsLightMuted = window.tempLightHandlerInstance?.showTempLightVisualContext;
+            if (!tlWantsLightMuted) {
+                window.lightHandlerInstance.setExternallyMuted(false, null);
+            } else if (this.debugMode) {
+                console.log(`🌡️ TempHandler: NOT unmuting Light as TL wants mute: ${tlWantsLightMuted}`);
+            }
+        }
+        // Unmute SoilHandler if TempSoilHandler doesn't need it muted
+        if (window.soilHandlerInstance?.setExternallyMuted) {
+            const tsWantsSoilMuted = window.tempSoilHandlerInstance?.showTempSoilVisualContext;
+            if (!tsWantsSoilMuted) {
+                window.soilHandlerInstance.setExternallyMuted(false, null);
+            } else if (this.debugMode) {
+                console.log(`🌡️ TempHandler: NOT unmuting Soil as TS wants mute: ${tsWantsSoilMuted}`);
+            }
+        }
+        // Unmute combined handlers (TempHandler doesn't usually mute them, but for completeness)
+        // if (window.lightSoilHandlerInstance?.setExternallyMuted) window.lightSoilHandlerInstance.setExternallyMuted(false, null);
+        // if (window.tempSoilHandlerInstance?.setExternallyMuted) window.tempSoilHandlerInstance.setExternallyMuted(false, null);
+        // if (window.tempLightHandlerInstance?.setExternallyMuted) window.tempLightHandlerInstance.setExternallyMuted(false, null);
+    }
+
+
+}
+
+// CommonJS export for potential testing, not strictly necessary for browser
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = TemperatureHandler;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1134,8 +1130,3 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     initTemperatureHandler();
 });
-
-// CommonJS export for potential testing, not strictly necessary for browser
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = TemperatureHandler;
-}
