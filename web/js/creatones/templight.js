@@ -426,38 +426,22 @@ class TempLightHandler {
         if (!this.toneInitialized || !this.audioEnabled || !this.isCombinedActive || this.isRecordMode || !this.isPlaying || !this.mainVolume) return;
 
         const combinedTempLightValue = (this.currentTempAppValue + this.currentLightAppValue) / 2;
-        const dynamicVolume = this.baseVolume - 4 + (combinedTempLightValue * 6); // Note: user's code has this.baseVolume = 6
+        const dynamicVolume = this.baseVolume - 4 + (combinedTempLightValue * 6); 
         this.mainVolume.volume.linearRampTo(this.isPlaying ? Math.min(this.baseVolume + 2, dynamicVolume) : -Infinity, 0.9);
 
-        if (this.mainSynth) { // Bell
+        if (this.mainSynth) { // Bell (MetalSynth)
             this.mainSynth.envelope.decay = 0.4 + (this.currentTempAppValue * 0.8);
             this.mainSynth.envelope.release = this.mainSynth.envelope.decay * 0.4;
             
-            // Safely update harmonicity and resonance using rampTo
+            // Directly set harmonicity and resonance for MetalSynth as they are numbers
             const newHarmonicity = 5.0 + (this.currentLightAppValue * 3.0);
-            if (this.mainSynth.harmonicity && typeof this.mainSynth.harmonicity.rampTo === 'function') {
-                this.mainSynth.harmonicity.rampTo(newHarmonicity, 0.05); // Short ramp time for near-immediate effect
-            } else if (this.debugMode) {
-                // Log if it's not a Param object as expected
-                console.warn(`🌡️💡 TempLight: this.mainSynth.harmonicity is not a standard Param object. Type: ${typeof this.mainSynth.harmonicity}, Value: ${this.mainSynth.harmonicity}. Attempting direct .value assignment.`);
-                // Fallback to direct .value assignment if rampTo is not available, though this is what caused the original error
-                try {
-                  if (this.mainSynth.harmonicity) this.mainSynth.harmonicity.value = newHarmonicity;
-                } catch (e) {
-                  console.error(`🌡️💡 TempLight: Failed to set harmonicity.value directly after rampTo check failed. Error: ${e}`);
-                }
-            }
+            this.mainSynth.harmonicity = newHarmonicity;
 
             const newResonance = 3000 + (this.currentLightAppValue * 2000);
-            if (this.mainSynth.resonance && typeof this.mainSynth.resonance.rampTo === 'function') {
-                this.mainSynth.resonance.rampTo(newResonance, 0.05); // Short ramp time
-            } else if (this.debugMode) {
-                console.warn(`🌡️💡 TempLight: this.mainSynth.resonance is not a standard Param object. Type: ${typeof this.mainSynth.resonance}, Value: ${this.mainSynth.resonance}. Attempting direct .value assignment.`);
-                try {
-                  if (this.mainSynth.resonance) this.mainSynth.resonance.value = newResonance;
-                } catch (e) {
-                  console.error(`🌡️💡 TempLight: Failed to set resonance.value directly after rampTo check failed. Error: ${e}`);
-                }
+            this.mainSynth.resonance = newResonance;
+
+            if (this.debugMode && Math.random() < 0.02) { // Reduced logging frequency
+                console.log(`🌡️💡 TL-MetalSynth Params: Harm=${this.mainSynth.harmonicity.toFixed(2)}, Reso=${this.mainSynth.resonance.toFixed(2)}`);
             }
         }
         if (this.secondarySynth) { // FM

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'CreaTune-cache-v11'; // <<< INCREMENTED cache version
+const CACHE_NAME = 'CreaTune-cache-v12'; // <<< INCREMENTED cache version
 const urlsToCache = [
   './',
   './index.html',
@@ -9,8 +9,10 @@ const urlsToCache = [
   './js/client/websocket-client.js',
   './js/creatones/soil.js',
   './js/creatones/light.js',
-  './js/creatones/temp.js', // <<< ADDED TEMP.JS
+  './js/creatones/temp.js', 
   './js/creatones/lightsoil.js',
+  './js/creatones/tempsoil.js', // <<< ADDED TEMPSOIL.JS
+  './js/creatones/templight.js', // This was already in your index.html, adding here for completeness
   './js/other/frame-slider.js',
   './js/other/Tone.js',
   // './js/other/audio-enabler.js', // This was commented out, ensure it's correct
@@ -21,13 +23,17 @@ const urlsToCache = [
   './images/soil-background.jpg', // This seems like an old direct background, ensure it's still used or remove
   './sprites/creatures/soil-creature.png',
   './sprites/creatures/light-creature.png',
-  './sprites/creatures/temp-creature.png', // <<< ADDED TEMP-CREATURE.PNG
+  './sprites/creatures/temp-creature.png', 
   './sprites/creatures/lightsoil-creature.png',
+  './sprites/creatures/tempsoil-creature.png', // <<< ADDED TEMPSOIL-CREATURE.PNG
+  './sprites/creatures/templight-creature.png', // <<< ADDED TEMPLIGHT-CREATURE.PNG
   
-  './sprites/backgrounds/Background_soil.gif', // <<< Using GIF now
-  './sprites/backgrounds/Background_light.gif',// <<< Using GIF now
-  './sprites/backgrounds/Background_temp.gif', // <<< ADDED TEMP BACKGROUND GIF
+  './sprites/backgrounds/Background_soil.gif', 
+  './sprites/backgrounds/Background_light.gif',
+  './sprites/backgrounds/Background_temp.gif', 
   // './sprites/backgrounds/Background_lightsoil.gif', // <<< ADD IF YOU HAVE ONE
+  // './sprites/backgrounds/Background_tempsoil.gif', // <<< ADD IF YOU HAVE ONE
+  // './sprites/backgrounds/Background_templight.gif', // <<< ADD IF YOU HAVE ONE
 
   './sprites/frame/frameropeh.png',
   './sprites/frame/frameropel.png',

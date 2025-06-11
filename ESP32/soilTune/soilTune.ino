@@ -143,70 +143,77 @@ float readSoilMoisture() {
   averageMoisture = totalMoisture / NUM_READINGS;
   
   // Sensor error detection
-  if (rawValue < 0 || rawValue > 4095) {
-    Serial.println("Soil sensor not found! (╥﹏╥) Check wiring to A1");
+  if (rawValue < 0 || rawValue > 4095) { // Using 12-bit ADC max
+    Serial.println("Soil sensor not found or error! (╥﹏╥) Check wiring to A1");
     return -1.0; // Error code
   }
   
   // Your custom ranges (◠‿◠)
   Serial.print("Soil Raw: ");
   Serial.print(rawValue);
+  Serial.print(" | Smoothed Avg: "); // ADDED FOR CALIBRATION
+  Serial.print(averageMoisture);     // ADDED FOR CALIBRATION
   Serial.print(" | Status: ");
   
-  if (rawValue <= MOISTURE_DRY_MAX) {
+  // Use averageMoisture for determining status for consistency with what's returned
+  if (averageMoisture <= MOISTURE_DRY_MAX) {
     Serial.println("Dry soil ＞﹏＜");
   } 
-  else if (rawValue <= MOISTURE_HUMID_MAX) {
+  else if (averageMoisture <= MOISTURE_HUMID_MAX) {
     Serial.println("Humid soil (￣ω￣)");
   }
-  else if (rawValue <= MOISTURE_WET_MAX) {
-    Serial.println("In water 〜(꒪꒳꒪)〜");
-  }
-  else {
-    Serial.println("Sensor out of range! (⊙_⊙)？");
+  // Anything above MOISTURE_HUMID_MAX is considered wet, including values that might exceed MOISTURE_WET_MAX
+  else { 
+    Serial.println("In water / Very Wet 〜(꒪꒳꒪)〜"); // Changed message to reflect it covers all "wet" states
   }
   
   return (float)averageMoisture;
 }
 
-// Map moisture reading to app-compatible range (0.4-0.8)
+// Map moisture reading to app-compatible range (0.0-1.0)
 float moistureToAppValue(float moistureValue) {
   float appValue;
   
+  // Clamp moistureValue to be within the overall calibrated range to prevent issues with map()
+  // if MOISTURE_DRY is not 0 or MOISTURE_WET_MAX is not the absolute max.
+  // This is particularly important if your MOISTURE_DRY is higher than 0.
+  float clampedValue = constrain(moistureValue, MOISTURE_DRY, MOISTURE_WET_MAX);
+
   // Determine soil condition and map to appropriate range
-  if (moistureValue <= MOISTURE_DRY_MAX) {
-    // Dry soil (0-400) maps to 0.0-0.4
-    appValue = map(moistureValue, MOISTURE_DRY, MOISTURE_DRY_MAX, 0, 40) / 100.0;
+  if (clampedValue <= MOISTURE_DRY_MAX) {
+    // Dry soil maps to 0.0-0.4
+    appValue = map(clampedValue, MOISTURE_DRY, MOISTURE_DRY_MAX, 0, 40) / 100.0;
   } 
-  else if (moistureValue <= MOISTURE_HUMID_MAX) {
-    // Humid soil (401-700) maps to 0.4-0.7
-    appValue = map(moistureValue, MOISTURE_HUMID_MIN, MOISTURE_HUMID_MAX, 41, 80) / 100.0;
+  else if (clampedValue <= MOISTURE_HUMID_MAX) {
+    // Humid soil maps to 0.41-0.8
+    appValue = map(clampedValue, MOISTURE_HUMID_MIN, MOISTURE_HUMID_MAX, 41, 80) / 100.0;
   } 
-  else {
-    // In water (701-950) maps to 0.7-1.0
-    appValue = map(moistureValue, MOISTURE_WET_MIN, MOISTURE_WET_MAX, 81, 100) / 100.0;
+  else { // Covers MOISTURE_WET_MIN to MOISTURE_WET_MAX
+    // In water maps to 0.81-1.0
+    appValue = map(clampedValue, MOISTURE_WET_MIN, MOISTURE_WET_MAX, 81, 100) / 100.0;
   }
   
-  return appValue;
+  // Ensure appValue is strictly between 0.0 and 1.0
+  return constrain(appValue, 0.0, 1.0);
 }
 
 void sendSensorData() {
   // Read moisture sensor
-  float moistureValue = readSoilMoisture();
+  float moistureValue = readSoilMoisture(); // This is the smoothed average
   
-  // Check if valid reading
-  if (moistureValue > 950) {
-    Serial.println("Invalid sensor reading, not sending data... (눈_눈)");
+  // Check if valid reading (error code from readSoilMoisture is -1.0)
+  if (moistureValue < 0.0) {
+    Serial.println("Invalid sensor reading (error code), not sending data... (눈_눈)");
     return;
   }
-  
-  // Map to app-compatible value (0.4-0.8)
+
+  // Map to app-compatible value
   float appValue = moistureToAppValue(moistureValue);
   
   // Create JSON document
   StaticJsonDocument<200> doc;
   doc["sensor"] = SENSOR_NAME;
-  doc["raw_value"] = (int)moistureValue;
+  doc["raw_value"] = (int)moistureValue; // Send the smoothed average as raw_value
   doc["moisture_app_value"] = appValue;
   doc["voltage"] = appValue; // Send as voltage to be compatible with app
   doc["timestamp"] = millis();
@@ -217,7 +224,7 @@ void sendSensorData() {
     doc["soil_condition"] = "dry";
   } else if (moistureValue <= MOISTURE_HUMID_MAX) {
     doc["soil_condition"] = "humid";
-  } else {
+  } else { // Anything above MOISTURE_HUMID_MAX is "wet"
     doc["soil_condition"] = "wet";
   }
   
