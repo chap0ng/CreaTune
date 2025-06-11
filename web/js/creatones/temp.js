@@ -11,7 +11,7 @@ class TemperatureHandler {
         // Audio Params - Temperature Style
         this.fadeDuration = 1.8;
         this.baseLiquidVolume = 2; // INCREASED: For more prominent liquidSynth in general and for record mode
-        this.basePunchyVolume = 6; // DECREASED: As punchySynth is now only for generative accents
+        this.basePunchyVolume = 4; // DECREASED: As punchySynth is now only for generative accents
         // Rhythmic playback volume will be handled by baseLiquidVolume directly
 
         // State
@@ -885,45 +885,47 @@ class TemperatureHandler {
     startAudio() {
         if (this.isRecordMode) {
             if (this.debugMode) console.log("🌡️ startAudio (generative): Blocked, in record mode.");
-            this.updateUI(); // Ensure UI is updated even if blocked
+            this.updateUI();
             return;
         }
 
         const sensorEffectivelyActive = this.isActive && this.deviceStates.temperature.connected;
 
-        if (this.isExternallyMuted || 
-            !this.audioEnabled || 
-            !this.toneInitialized || 
-            !sensorEffectivelyActive || // Corrected check
-            this.isRecordMode || // This is redundant due to the early exit but kept for clarity in the combined check
-            !this.punchySynth || 
-            !this.mainTempLoop) { // Corrected to check mainTempLoop
+        if (this.isExternallyMuted ||
+            !this.audioEnabled ||
+            !this.toneInitialized ||
+            !sensorEffectivelyActive ||
+            !this.punchySynth || // punchySynth is used by accentLoop
+            !this.liquidSynthWrapper || // liquidSynthWrapper is used by mainTempLoop and cyclicLoop
+            !this.mainTempLoop ||
+            !this.accentLoop ||
+            !this.cyclicLoop) {
 
             if (this.debugMode) {
                 console.warn(`🌡️ startAudio (generative): Blocked. Details:
-                    ExtMuted=${this.isExternallyMuted}, 
-                    AudioEnabled=${this.audioEnabled}, 
-                    ToneInit=${this.toneInitialized}, 
-                    SensorEffectivelyActive=${sensorEffectivelyActive} (isActive=${this.isActive}, temp.connected=${this.deviceStates.temperature.connected}), 
-                    RecordMode=${this.isRecordMode}, 
-                    PunchySynthExists=${!!this.punchySynth}, 
-                    MainTempLoopExists=${!!this.mainTempLoop}`);
+                    ExtMuted=${this.isExternallyMuted},
+                    AudioEnabled=${this.audioEnabled},
+                    ToneInit=${this.toneInitialized},
+                    SensorEffectivelyActive=${sensorEffectivelyActive} (isActive=${this.isActive}, temp.connected=${this.deviceStates.temperature.connected}),
+                    PunchySynthExists=${!!this.punchySynth},
+                    LiquidSynthWrapperExists=${!!this.liquidSynthWrapper},
+                    MainTempLoopExists=${!!this.mainTempLoop},
+                    AccentLoopExists=${!!this.accentLoop},
+                    CyclicLoopExists=${!!this.cyclicLoop}`);
             }
-            this.updateUI(); 
+            this.updateUI();
             return;
         }
 
         if (this.isFadingOut) {
             if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
             this.isFadingOut = false;
-            // If fading out, volume might be ramping down. Ensure it's reset or ramped up correctly.
-            // if (this.liquidSynthWrapper?.volume) this.liquidSynthWrapper.volume.cancelScheduledValues(Tone.now()); 
-            // if (this.punchySynth?.volume) this.punchySynth.volume.cancelScheduledValues(Tone.now());
+            if (this.liquidSynthWrapper?.volume) this.liquidSynthWrapper.volume.cancelScheduledValues(Tone.now());
+            if (this.punchySynth?.volume) this.punchySynth.volume.cancelScheduledValues(Tone.now());
         }
-        
-        // If already playing, just update parameters
+
         if (this.isPlaying) {
-            this.updateSoundParameters();
+            this.updateSoundParameters(); // Already playing, just update params
             this.updateUI();
             return;
         }
@@ -932,67 +934,98 @@ class TemperatureHandler {
         this.isFadingOut = false;
         this.updateSoundParameters(); // Sets initial volume and synth params
 
-        // Ensure Transport is started
         if (Tone.Transport.state !== "started") {
             Tone.Transport.start();
+            if (this.debugMode) console.log('🌡️ startAudio: Tone.Transport started.');
         }
 
-        // Ensure mainTempLoop is stopped before starting to avoid potential conflicts
-        if (this.mainTempLoop.state === "started") {
-            this.mainTempLoop.stop(0);
+        // Start loops if they are not already started.
+        // Their probability/volume/interval will be handled by updateSoundParameters.
+        if (this.mainTempLoop && this.mainTempLoop.state !== "started") {
+            this.mainTempLoop.start(0); // Start at the next transport tick or measure
+            if (this.debugMode) console.log('🌡️ startAudio: mainTempLoop started.');
         }
-        this.mainTempLoop.start(0); // Start the mainTempLoop
-
-        // Also ensure accentLoop and cyclicLoop are started if they should be active
-        // Their probability is controlled in updateSoundParameters
         if (this.accentLoop && this.accentLoop.state !== "started") {
             this.accentLoop.start(0);
+            if (this.debugMode) console.log('🌡️ startAudio: accentLoop started.');
         }
         if (this.cyclicLoop && this.cyclicLoop.state !== "started") {
             this.cyclicLoop.start(0);
+            if (this.debugMode) console.log('🌡️ startAudio: cyclicLoop started.');
         }
-
 
         if (this.debugMode) console.log('🌡️ TempHandler: Audio started (mainTempLoop, accentLoop, cyclicLoop).');
         this.updateUI();
     }
 
     stopAudio(force = false) {
-        if (!this.audioEnabled || !this.toneInitialized || !this.mainVolume) {
-            this.isPlaying = false; this.isFadingOut = false;
-            this.updateUI(); return;
+        if (this.debugMode) console.log(`🌡️ stopAudio: Called. force=${force}, isPlaying=${this.isPlaying}, isFadingOut=${this.isFadingOut}, audioEnabled=${this.audioEnabled}, toneInitialized=${this.toneInitialized}`);
+
+        if (!this.audioEnabled || !this.toneInitialized) {
+            if (this.debugMode) console.log('🌡️ stopAudio: Bailed. Audio not enabled or Tone not initialized.');
+            this.isPlaying = false;
+            this.isFadingOut = false;
+            this.updateUI();
+            return;
         }
-        if (!this.isPlaying && !this.isFadingOut && !force) { this.updateUI(); return; }
-        if (this.isFadingOut && !force) return;
+
+        if (!this.isPlaying && !this.isFadingOut && !force) {
+            if (this.debugMode) console.log('🌡️ stopAudio: Bailed. Not playing, not fading, and not forced.');
+            this.updateUI();
+            return;
+        }
+        if (this.isFadingOut && !force) {
+            if (this.debugMode) console.log('🌡️ stopAudio: Bailed. Already fading out and not forced.');
+            return;
+        }
 
         this.isPlaying = false;
         this.isFadingOut = true;
         const fadeTime = force ? 0.01 : this.fadeDuration;
 
-        // Stop the generative loop immediately
-        if (this.generativeLoop && this.generativeLoop.state === "started") {
-            this.generativeLoop.stop(0);
+        if (this.debugMode) console.log(`🌡️ stopAudio: Stopping generative audio (with fade-out: ${fadeTime}s)...`);
+
+        // Stop all generative loops immediately
+        if (this.mainTempLoop && this.mainTempLoop.state === "started") {
+            this.mainTempLoop.stop(0);
+            if (this.debugMode) console.log('🌡️ stopAudio: mainTempLoop stopped.');
+        }
+        if (this.accentLoop && this.accentLoop.state === "started") {
+            this.accentLoop.stop(0);
+            if (this.debugMode) console.log('🌡️ stopAudio: accentLoop stopped.');
+        }
+        if (this.cyclicLoop && this.cyclicLoop.state === "started") {
+            this.cyclicLoop.stop(0);
+            if (this.debugMode) console.log('🌡️ stopAudio: cyclicLoop stopped.');
         }
 
-        // Ramp volume to -Infinity
-        if (this.mainVolume && this.mainVolume.volume) {
-            this.mainVolume.volume.cancelScheduledValues(Tone.now());
-            this.mainVolume.volume.rampTo(-Infinity, fadeTime, Tone.now());
+        // Ramp volumes to -Infinity
+        if (this.liquidSynthWrapper?.volume) {
+            this.liquidSynthWrapper.volume.cancelScheduledValues(Tone.now());
+            this.liquidSynthWrapper.volume.rampTo(-Infinity, fadeTime, Tone.now());
+        } else if (this.liquidSynth?.volume) { // Fallback if wrapper not fully there but synth is
+            this.liquidSynth.volume.cancelScheduledValues(Tone.now());
+            this.liquidSynth.volume.rampTo(-Infinity, fadeTime, Tone.now());
+        }
+
+        if (this.punchySynth?.volume) {
+            this.punchySynth.volume.cancelScheduledValues(Tone.now());
+            this.punchySynth.volume.rampTo(-Infinity, fadeTime, Tone.now());
         }
 
         if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
         this.stopTimeoutId = setTimeout(() => {
-            // Loop is already stopped.
-            // Ensure volume is fully down.
-            if (this.mainVolume && this.mainVolume.volume) {
-                this.mainVolume.volume.value = -Infinity;
-            }
             this.isFadingOut = false;
-            if (this.debugMode) console.log('🌡️ TempHandler: Audio fully stopped.');
+            // Ensure volumes are definitely -Infinity after fade
+            if (this.liquidSynthWrapper?.volume) this.liquidSynthWrapper.volume.value = -Infinity;
+            else if (this.liquidSynth?.volume) this.liquidSynth.volume.value = -Infinity;
+            if (this.punchySynth?.volume) this.punchySynth.volume.value = -Infinity;
+
+            if (this.debugMode) console.log('🌡️ stopAudio: Generative audio fully stopped.');
             this.updateUI();
         }, force ? 10 : (fadeTime * 1000 + 100)); // Ensure timeout is slightly longer than fade
 
-        if (force) this.updateUI();
+        if (force) this.updateUI(); // Update UI immediately if forced, otherwise timeout will handle it
     }
 
     exitRecordMode(force = false) {
