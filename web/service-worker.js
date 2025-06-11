@@ -31,9 +31,9 @@ const urlsToCache = [
   './sprites/backgrounds/Background_soil.gif', 
   './sprites/backgrounds/Background_light.gif',
   './sprites/backgrounds/Background_temp.gif', 
-  // './sprites/backgrounds/Background_lightsoil.gif', // <<< ADD IF YOU HAVE ONE
-  // './sprites/backgrounds/Background_tempsoil.gif', // <<< ADD IF YOU HAVE ONE
-  // './sprites/backgrounds/Background_templight.gif', // <<< ADD IF YOU HAVE ONE
+  './sprites/backgrounds/Background_lightsoil.gif', // <<< ADD IF YOU HAVE ONE
+  './sprites/backgrounds/Background_tempsoil.gif', // <<< ADD IF YOU HAVE ONE
+  './sprites/backgrounds/Background_templight.gif', // <<< ADD IF YOU HAVE ONE
 
   './sprites/frame/frameropeh.png',
   './sprites/frame/frameropel.png',
