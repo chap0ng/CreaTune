@@ -22,7 +22,6 @@ class SoilHandler {
         this.debugMode = true; // Keep this
         this.stopTimeoutId = null;
         this.isExternallyMuted = false; 
-        this.externalMuterId = null; // ADD THIS
 
         this.currentSoilCondition = "dry"; 
         this.currentSoilAppValue = 0.0;    
@@ -64,44 +63,23 @@ class SoilHandler {
         this.initializeWhenReady();
     }
 
-    setExternallyMuted(isMuted, muterId = null) {
-        const oldMutedState = this.isExternallyMuted;
-        const oldMuterId = this.externalMuterId;
+    setExternallyMuted(isMuted) { 
+        if (this.debugMode) console.log(`💧 SoilHandler: setExternallyMuted called with: ${isMuted}. Current state: ${this.isExternallyMuted}`);
+        if (this.isExternallyMuted === isMuted) return; 
 
-        if (isMuted) {
-            // If already muted by a different muter, don't overwrite unless the new muter is a record mode
-            // (Record mode mutes are high priority)
-            if (this.isExternallyMuted && this.externalMuterId && this.externalMuterId !== muterId && !muterId?.includes('-Record')) {
-                if (this.debugMode) console.log(`%c${this.constructor.name}: Already muted by ${this.externalMuterId}. Mute request by ${muterId} ignored.`, "color: orange");
-                return; // Do not change current mute state
-            }
-            this.isExternallyMuted = true;
-            this.externalMuterId = muterId;
-        } else { // Attempting to unmute
-            // Unmute only if the provided muterId matches the one who muted it,
-            // OR if the unmute request is generic (muterId is null - typically from a global "stop all record modes" or similar),
-            // OR if this handler wasn't muted by a specific ID in the first place.
-            if (this.externalMuterId === muterId || muterId === null || this.externalMuterId === null) {
-                this.isExternallyMuted = false;
-                this.externalMuterId = null;
-            } else {
-                // This means another handler (this.externalMuterId) still wants this muted. Don't unmute.
-                if (this.debugMode) console.log(`%c${this.constructor.name}: Unmute by ${muterId} DENIED. Still muted by ${this.externalMuterId}.`, "color: red");
-                return; // No change, so no MAV call needed
+        this.isExternallyMuted = isMuted;
+        if (this.debugMode) console.log(`💧 SoilHandler: isExternallyMuted set to ${this.isExternallyMuted}`);
+
+        if (this.isExternallyMuted) {
+            if (this.isRecordMode) {
+                if (this.debugMode) console.log(`💧 SoilHandler: Externally muted, forcing exit from record mode.`);
+                this.exitRecordMode(true); 
+            } else if (this.isPlaying || this.isFadingOut) {
+                if (this.debugMode) console.log(`💧 SoilHandler: Externally muted, stopping generative audio.`);
+                this.stopAudio(true); 
             }
         }
-
-        // Only proceed if the effective mute state or the muter ID has actually changed.
-        if (oldMutedState !== this.isExternallyMuted || oldMuterId !== this.externalMuterId) {
-            if (this.debugMode) {
-                console.log(`%c${this.constructor.name}: setExternallyMuted changed to ${this.isExternallyMuted} (Muter: ${this.externalMuterId || 'none'}). Requested by: ${muterId || 'generic'}. Old state: ${oldMutedState} (Old Muter: ${oldMuterId || 'none'})`, "color: blue; font-weight: bold;");
-            }
-            // manageAudioAndVisuals will handle stopping/starting audio and updating UI
-            this.manageAudioAndVisuals();
-        } else if (this.debugMode) {
-            // Log if no change occurred but a call was made, e.g. trying to mute an already muted handler by the same muter.
-            // console.log(`%c${this.constructor.name}: setExternallyMuted called but no change in state. Muted: ${this.isExternallyMuted}, Muter: ${this.externalMuterId}`, "color: gray");
-        }
+        this.manageAudioAndVisuals();
     }
 
     initializeWhenReady() {
@@ -391,7 +369,6 @@ class SoilHandler {
     updateUI() {
         const showCreature = this.deviceStates.soil.connected && this.isActive && !this.isExternallyMuted;
         if (this.soilCreatureVisual) {
-            // ... (creature logic is likely fine as per #attachment:soil.js_line369)
             const wasCreatureActive = this.soilCreatureVisual.classList.contains('active');
             this.soilCreatureVisual.classList.toggle('active', showCreature);
             this.soilCreatureVisual.classList.remove('soil-dry', 'soil-humid', 'soil-wet');
@@ -402,34 +379,26 @@ class SoilHandler {
                 this.soilCreatureVisual.style.backgroundPositionX = '0%';
             }
         }
-
         if (this.frameBackground) {
             const isConnected = this.deviceStates.soil.connected;
-            const soilConditionBgClass = isConnected ? `soil-${this.currentSoilCondition.replace('_', '-')}-bg` : 'soil-active-bg'; // Default to soil-active-bg if specific condition not met
-            const allSoilConditionBgs = ['soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg', 'soil-active-bg']; // Include generic active
-            
-            const otherHandlersBgClasses = [
-                'light-active-bg', 'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg',
-                'temp-active-bg', 'temp-very-cold-bg', 'temp-cold-bg', 'temp-cool-bg', 'temp-mild-bg', 'temp-warm-bg', 'temp-hot-bg',
-                'lightsoil-active-bg', 'tempsoil-active-bg', 'templight-active-bg', 'idle-bg'
-            ];
+            const soilActiveBgClass = 'soil-active-bg';
+            const otherHandlersBgClasses = ['light-active-bg', 'temp-active-bg', 'lightsoil-active-bg', 'tempsoil-active-bg', 'templight-active-bg', 'idle-bg'];
+            const soilConditionBgClass = isConnected ? `soil-${this.currentSoilCondition.replace('_', '-')}-bg` : '';
+            const allSoilConditionBgs = ['soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg'];
 
-            if (this.isRecordMode) { // SoilHandler's own record mode
+            if (this.isRecordMode) {
                 this.frameBackground.classList.add('record-mode-pulsing');
-                allSoilConditionBgs.forEach(cls => this.frameBackground.classList.remove(cls)); // Clear previous soil BGs
-                this.frameBackground.classList.add(soilConditionBgClass); // Add current soil BG
-                otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls)); // Clear all other handler BGs
+                if (soilConditionBgClass) this.frameBackground.classList.add(soilConditionBgClass); else this.frameBackground.classList.add(soilActiveBgClass);
             } else {
                 this.frameBackground.classList.remove('record-mode-pulsing');
-                if (isConnected && !this.isExternallyMuted) { // Soil should be visually active
-                    allSoilConditionBgs.forEach(cls => this.frameBackground.classList.remove(cls)); // Clear previous soil BGs
-                    this.frameBackground.classList.add(soilConditionBgClass); // Add current soil BG
-                    otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls)); // Clear all other handler BGs
-                } else { // Soil is not visually active (disconnected or externally muted)
-                    allSoilConditionBgs.forEach(cls => this.frameBackground.classList.remove(cls)); // Remove its own BGs
-                    // Do NOT clear otherHandlersBgClasses here, as another handler might be active.
-                    // The active handler is responsible for clearing others.
-                    // If no handler is active, an idle-bg might be set by a global manager or default CSS.
+                allSoilConditionBgs.forEach(cls => this.frameBackground.classList.remove(cls));
+                this.frameBackground.classList.remove(soilActiveBgClass);
+                if (isConnected) {
+                    if (soilConditionBgClass) this.frameBackground.classList.add(soilConditionBgClass);
+                    else this.frameBackground.classList.add(soilActiveBgClass);
+                    if (!this.isExternallyMuted) {
+                        otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
+                    }
                 }
             }
         }
@@ -445,7 +414,7 @@ class SoilHandler {
                 this.stopRecordModeButton.style.display = 'none';
             }
         }
-        if (this.debugMode && Math.random() < 0.05) console.log(`💧 UI Update (Soil): CreatureActive=${showCreature}, DeviceConnected=${this.deviceStates.soil.connected}, RecModeSoil=${this.isRecordMode}, ExtMuteSoil=${this.isExternallyMuted} (Muter: ${this.externalMuterId}), FrameBG Classes: ${this.frameBackground?.classList?.toString()}`);
+        if (this.debugMode && Math.random() < 0.02) console.log(`💧 UI Update (Soil): CreatureActive=${showCreature}, DeviceConnected=${this.deviceStates.soil.connected}, RecModeSoil=${this.isRecordMode}, ExtMuteSoil=${this.isExternallyMuted}, FrameBG Classes: ${this.frameBackground?.classList?.toString()}`);
     }
 
     async enterRecordMode() {

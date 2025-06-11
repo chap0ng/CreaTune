@@ -304,60 +304,65 @@ class LightSoilHandler {
         const oldCombinedActiveState = this.isCombinedActive;
         const oldShowLightSoilVisualContext = this.showLightSoilVisualContext;
 
+        // For creature and generative sound: both sensors must be connected AND active
         this.isCombinedActive = this.lightConnected && this.lightActive && this.soilConnected && this.soilActive;
+        // For background and muting others: both sensors just need to be connected
         this.showLightSoilVisualContext = this.lightConnected && this.soilConnected;
 
         if (this.debugMode) {
             console.log(`%c🌿💡 LightSoilHandler.updateCombinedState:
-Light: connected=${this.lightConnected}, active=${this.lightActive} (ExtMuted: ${window.lightHandlerInstance?.isExternallyMuted}, Muter: ${window.lightHandlerInstance?.externalMuterId})
-Soil:  connected=${this.soilConnected}, active=${this.soilActive} (ExtMuted: ${window.soilHandlerInstance?.isExternallyMuted}, Muter: ${window.soilHandlerInstance?.externalMuterId})
-==> isCombinedActive: ${this.isCombinedActive} (was ${oldCombinedActiveState})
-==> showLightSoilVisualContext: ${this.showLightSoilVisualContext} (was ${oldShowLightSoilVisualContext})`, 'color: #3498db; font-weight: bold;');
+    Light: connected=${this.lightConnected}, active=${this.lightActive}
+    Soil:  connected=${this.soilConnected}, active=${this.soilActive}
+    ==> isCombinedActive: ${this.isCombinedActive} (was ${oldCombinedActiveState})
+    ==> showLightSoilVisualContext: ${this.showLightSoilVisualContext} (was ${oldShowLightSoilVisualContext})`, 'color: #3498db; font-weight: bold;');
         }
 
-        const lsMuterId = 'LightSoilHandler';
-
-        if (this.showLightSoilVisualContext && !this.isRecordMode) {
+        // --- Manage Muting of Individual Handlers ---
+        if (this.showLightSoilVisualContext && !this.isRecordMode) { // If LightSoil context is active (both connected) and not in its own record mode
             if (window.lightHandlerInstance?.setExternallyMuted) {
-                window.lightHandlerInstance.setExternallyMuted(true, lsMuterId);
+                if (this.debugMode && !window.lightHandlerInstance.isExternallyMuted) console.log(`🌿💡 LightSoil: Muting LightHandler (LS context active).`);
+                window.lightHandlerInstance.setExternallyMuted(true);
             }
             if (window.soilHandlerInstance?.setExternallyMuted) {
-                window.soilHandlerInstance.setExternallyMuted(true, lsMuterId);
+                if (this.debugMode && !window.soilHandlerInstance.isExternallyMuted) console.log(`🌿💡 LightSoil: Muting SoilHandler (LS context active).`);
+                window.soilHandlerInstance.setExternallyMuted(true);
             }
-        } else if (!this.isRecordMode) { // Not showing LS visual context OR LS is in record mode (its exitRecordMode will handle unmuting)
-            // Attempt to unmute LightHandler if LightSoil was the muter
+        } else if (!this.isRecordMode) { // If LightSoil context is NOT active, or LightSoil is in record mode (letting others be)
             if (window.lightHandlerInstance?.setExternallyMuted) {
-                // Only request unmute if no other *active combined handler* needs Light muted.
-                const tlWantsLightMuted = window.tempLightHandlerInstance?.showTempLightVisualContext && !window.tempLightHandlerInstance?.isRecordMode;
-                if (!tlWantsLightMuted) {
-                    window.lightHandlerInstance.setExternallyMuted(false, lsMuterId);
-                } else if (this.debugMode) {
-                    console.log(`🌿💡 LightSoil: Not unmuting Light (via ${lsMuterId}) because TempLight context is active.`);
-                }
+                if (this.debugMode && window.lightHandlerInstance.isExternallyMuted) console.log(`🌿💡 LightSoil: Un-muting LightHandler (LS context not active or LS in rec mode).`);
+                window.lightHandlerInstance.setExternallyMuted(false);
             }
-            // Attempt to unmute SoilHandler if LightSoil was the muter
             if (window.soilHandlerInstance?.setExternallyMuted) {
-                // Only request unmute if no other *active combined handler* needs Soil muted.
-                const tsWantsSoilMuted = window.tempSoilHandlerInstance?.showTempSoilVisualContext && !window.tempSoilHandlerInstance?.isRecordMode;
-                if (!tsWantsSoilMuted) {
-                    window.soilHandlerInstance.setExternallyMuted(false, lsMuterId);
+                // Before unmuting Soil, check if TempSoil wants it muted
+                const tempSoilShowsContext = window.tempSoilHandlerInstance?.showTempSoilVisualContext;
+                if (!tempSoilShowsContext) { // Only unmute if TempSoil is NOT showing its context
+                    if (this.debugMode && window.soilHandlerInstance.isExternallyMuted) console.log(`🌿💡 LightSoil: Un-muting SoilHandler (LS context not active, TS context not active).`);
+                    window.soilHandlerInstance.setExternallyMuted(false);
                 } else if (this.debugMode) {
-                    console.log(`🌿💡 LightSoil: Not unmuting Soil (via ${lsMuterId}) because TempSoil context is active.`);
+                    console.log(`🌿💡 LightSoil: NOT un-muting SoilHandler because TempSoil context is active.`);
                 }
             }
         }
-        // Note: If LightSoil enters record mode, its enterRecordMode mutes others with 'LightSoilHandler-Record'.
-        // Its exitRecordMode will unmute with 'LightSoilHandler-Record'.
-        // The logic above handles the case where LightSoil is NOT in record mode but its visual context changes.
+        // --- End Muting Logic ---
 
         if (this.isCombinedActive !== oldCombinedActiveState || this.showLightSoilVisualContext !== oldShowLightSoilVisualContext) {
-            if (this.debugMode) console.log(`%c🌿💡 LightSoilHandler: Combined state or visual context CHANGED. Calling MAV.`, 'color: #e67e22; font-weight: bold;');
-            this.manageAudioAndVisuals();
-        } else if (this.isCombinedActive && this.isPlaying && !this.isRecordMode) {
-            this.updateSoundParameters();
+            if (this.debugMode) console.log(`%c🌿💡 LightSoilHandler: Combined state CHANGED. isCombinedActive: ${this.isCombinedActive}, showLightSoilVisualContext: ${this.showLightSoilVisualContext}`, 'color: #e67e22; font-weight: bold;');
+            this.manageAudioAndVisuals(); // This will handle starting/stopping audio based on this.isCombinedActive
+        } else if (this.isCombinedActive) { // Combined state unchanged but active
+            if (this.isPlaying && !this.isRecordMode) {
+                if (this.debugMode) console.log(`🌿💡 LightSoilHandler: Combined state active & playing. Updating sound params.`);
+                this.updateSoundParameters();
+            } else if (!this.isRecordMode) { // Was not playing, but should be
+                 if (this.debugMode) console.log(`🌿💡 LightSoilHandler: Combined state active, but not playing. Calling manageAudioAndVisuals.`);
+                 this.manageAudioAndVisuals();
+            }
+        } else { // Combined state unchanged and not active
+             if (this.debugMode && oldCombinedActiveState) {
+                console.log(`🌿💡 LightSoilHandler: Combined state remains not active. Ensuring audio is stopped via MAV.`);
+            }
+            this.manageAudioAndVisuals(); // Ensure audio is stopped if it shouldn't be playing
         }
-        // updateUI is called within manageAudioAndVisuals or separately if needed
-        this.updateUI(); // Ensure UI reflects current state regardless of MAV call
+        this.updateUI(); // Always update UI
     }
 
 
@@ -431,7 +436,7 @@ Soil:  connected=${this.soilConnected}, active=${this.soilActive} (ExtMuted: ${w
                 generativeNoteIndex++;
             }, "2n"); 
             this.generativeLoop.humanize = "8n";
-            if this.generativeLoop.state === "started") this.generativeLoop.stop(0);
+            if (this.generativeLoop.state === "started") this.generativeLoop.stop(0);
 
             this.toneInitialized = true;
             if (this.debugMode) console.log('🌿💡 LightSoilHandler.initTone: Tone.js components initialized.');
@@ -516,13 +521,13 @@ Soil:  connected=${this.soilConnected}, active=${this.soilActive} (ExtMuted: ${w
 
     updateUI() {
         const oldShowCreature = this.lightSoilCreatureVisual ? this.lightSoilCreatureVisual.classList.contains('active') : false;
-        // Creature is active if the combined sensors are active AND LightSoil is not externally muted by another source (e.g. another record mode)
-        // However, LightSoil itself doesn't have an isExternallyMuted property. Its activity is determined by isCombinedActive.
-        const showCreature = this.isCombinedActive && !this.isRecordMode; // Show creature if combined active and LS not in its own record mode
+        // Condition for creature visibility: combined sensors active.
+        // Record mode no longer hides the creature.
+        const showCreature = this.isCombinedActive;
 
         if (this.lightSoilCreatureVisual) {
             this.lightSoilCreatureVisual.classList.toggle('active', showCreature);
-            if (!showCreature && oldShowCreature) {
+            if (!showCreature && oldShowCreature) { // Became inactive
                 this.lightSoilCreatureCurrentFrame = 0;
                 this.lightSoilCreatureVisual.style.backgroundPositionX = '0%';
             }
@@ -530,28 +535,36 @@ Soil:  connected=${this.soilConnected}, active=${this.soilActive} (ExtMuted: ${w
 
         if (this.frameBackground) {
             const lightSoilBgClass = 'lightsoil-active-bg';
+            // Backgrounds from individual handlers that LightSoil might override
             const individualHandlersBgClasses = [
-                'light-active-bg', 'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg',
-                'soil-active-bg', 'soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg',
-                'temp-active-bg', 'temp-very-cold-bg', 'temp-cold-bg', 'temp-cool-bg', 'temp-mild-bg', 'temp-warm-bg', 'temp-hot-bg'
+                'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg',
+                'soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg', 'soil-connected-bg', // Added soil-connected-bg
+                'idle-bg'
             ];
-            const otherCombinedHandlersBgClasses = ['tempsoil-active-bg', 'templight-active-bg'];
+            // Backgrounds from other combined handlers
+            const otherCombinedHandlersBgClasses = [
+                'tempsoil-active-bg',
+                'templight-active-bg' // ADDED templight
+            ];
 
-            if (this.isRecordMode) {
+            if (this.isRecordMode) { // 1. LightSoilHandler is in its own record mode
                 this.frameBackground.classList.add('record-mode-pulsing');
-                this.frameBackground.classList.add(lightSoilBgClass);
+                this.frameBackground.classList.add(lightSoilBgClass); // Show its own BG with pulsing
+                // When LightSoil is in record mode, it's dominant. Clear other BGs.
                 individualHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
-                otherCombinedHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
-            } else {
+                otherCombinedHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls)); // Clear other combined BGs
+            } else { // Not in LightSoilHandler's own record mode
                 this.frameBackground.classList.remove('record-mode-pulsing');
-                if (this.showLightSoilVisualContext) { // If LS should show its context
+
+                if (this.showLightSoilVisualContext) { // 2. LightSoil visual context is active (both sensors connected)
                     this.frameBackground.classList.add(lightSoilBgClass);
+                    // LightSoil context is active, it's dominant. Clear other BGs.
                     individualHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
-                    otherCombinedHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
-                } else {
+                    otherCombinedHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls)); // Clear other combined BGs
+                } else { // 3. LightSoil visual context is NOT active
                     this.frameBackground.classList.remove(lightSoilBgClass);
-                    // Do NOT clear other BGs here, as another handler might be active.
-                    // The active handler is responsible for clearing others.
+                    // Do not clear individualHandlersBgClasses or otherCombinedHandlersBgClasses here,
+                    // as one of them might be active.
                 }
             }
         }
@@ -571,32 +584,34 @@ Soil:  connected=${this.soilConnected}, active=${this.soilActive} (ExtMuted: ${w
             // If other handlers are in record mode, their own handlers will show the button.
         }
         // Corrected debug log to use classList.toString()
-        if (this.debugMode && Math.random() < 0.05) console.log(`🌿💡 UI Update (LS): CreatureVis=${showCreature}, ShowLSVisualContext=${this.showLightSoilVisualContext}, RecModeLS=${this.isRecordMode}, FrameBG Classes: ${this.frameBackground?.classList?.toString()}`);
+        if (this.debugMode && Math.random() < 0.02) console.log(`🌿💡 UI Update (LS): CreatureVis=${showCreature}, ShowLSVisualContext=${this.showLightSoilVisualContext}, RecModeLS=${this.isRecordMode}, FrameBG Classes: ${this.frameBackground?.classList?.toString()}`);
     }
 
     _unmuteOtherHandlersForRecordModeExit() {
-        if (this.debugMode) console.log('🌿💡 LS _unmuteOtherHandlersForRecordModeExit: Unmuting other handlers using ID LightSoilHandler-Record.');
-        const recordMuterId = 'LightSoilHandler-Record';
+        if (this.debugMode) console.log('🌿💡 LS _unmuteOtherHandlersForRecordModeExit: Unmuting other handlers.');
+        // LightSoil was in record mode, so it had muted Light and Soil.
+        // Now, when exiting, it needs to decide if they should be unmuted.
+        // This depends on whether TempLight or TempSoil now need them muted.
 
-        // Unmute individual handlers that LightSoil muted for its record mode
+        // Unmute LightHandler if TempLightHandler doesn't need it muted
         if (window.lightHandlerInstance?.setExternallyMuted) {
-            window.lightHandlerInstance.setExternallyMuted(false, recordMuterId);
+            const tlWantsLightMuted = window.tempLightHandlerInstance?.showTempLightVisualContext;
+            if (!tlWantsLightMuted) {
+                window.lightHandlerInstance.setExternallyMuted(false, null);
+            } else if (this.debugMode) {
+                console.log(`🌿💡 LS: NOT unmuting Light as TL wants mute: ${tlWantsLightMuted}`);
+            }
         }
+        // Unmute SoilHandler if TempSoilHandler doesn't need it muted
         if (window.soilHandlerInstance?.setExternallyMuted) {
-            window.soilHandlerInstance.setExternallyMuted(false, recordMuterId);
+            const tsWantsSoilMuted = window.tempSoilHandlerInstance?.showTempSoilVisualContext;
+            if (!tsWantsSoilMuted) {
+                window.soilHandlerInstance.setExternallyMuted(false, null);
+            } else if (this.debugMode) {
+                console.log(`🌿💡 LS: NOT unmuting Soil as TS wants mute: ${tsWantsSoilMuted}`);
+            }
         }
-        if (window.temperatureHandlerInstance?.setExternallyMuted) { // Muted all others
-            window.temperatureHandlerInstance.setExternallyMuted(false, recordMuterId);
-        }
-        // Also unmute other combined handlers
-        if (window.tempSoilHandlerInstance?.setExternallyMuted) {
-             window.tempSoilHandlerInstance.setExternallyMuted(false, recordMuterId);
-        }
-        if (window.tempLightHandlerInstance?.setExternallyMuted) {
-             window.tempLightHandlerInstance.setExternallyMuted(false, recordMuterId);
-        }
-        // After this, updateCombinedState will run (called from exitRecordMode) and re-evaluate mutes
-        // based on current sensor states for combined contexts.
+        // LightSoil doesn't typically mute other combined handlers.
     }
 
     async exitRecordMode(force = false) { // Ensure this is the complete and robust version

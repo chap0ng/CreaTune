@@ -296,45 +296,59 @@ class TempSoilHandler {
 
         if (this.debugMode) {
             console.log(`%c🌡️💧 TempSoilHandler.updateCombinedState:
-Temp: connected=${this.tempConnected}, active=${this.tempActive} (ExtMuted: ${window.temperatureHandlerInstance?.isExternallyMuted}, Muter: ${window.temperatureHandlerInstance?.externalMuterId})
-Soil: connected=${this.soilConnected}, active=${this.soilActive} (ExtMuted: ${window.soilHandlerInstance?.isExternallyMuted}, Muter: ${window.soilHandlerInstance?.externalMuterId})
-==> isCombinedActive: ${this.isCombinedActive} (was ${oldCombinedActiveState})
-==> showTempSoilVisualContext: ${this.showTempSoilVisualContext} (was ${oldShowTempSoilVisualContext})`, 'color: #8e44ad; font-weight: bold;');
+    Temp: connected=${this.tempConnected}, active=${this.tempActive}
+    Soil: connected=${this.soilConnected}, active=${this.soilActive}
+    ==> isCombinedActive: ${this.isCombinedActive} (was ${oldCombinedActiveState})
+    ==> showTempSoilVisualContext: ${this.showTempSoilVisualContext} (was ${oldShowTempSoilVisualContext})`, 'color: #8e44ad; font-weight: bold;');
         }
 
-        const tsMuterId = 'TempSoilHandler';
-
         if (this.showTempSoilVisualContext && !this.isRecordMode) {
+            // TempSoil context IS active (and not in record mode).
+            // Mute individual handlers that TempSoil is responsible for.
             if (window.temperatureHandlerInstance?.setExternallyMuted) {
-                window.temperatureHandlerInstance.setExternallyMuted(true, tsMuterId);
+                if (this.debugMode && !window.temperatureHandlerInstance.isExternallyMuted) console.log(`🌡️💧 TempSoil: Muting TemperatureHandler (TS context active).`);
+                window.temperatureHandlerInstance.setExternallyMuted(true, 'TempSoilHandler');
             }
             if (window.soilHandlerInstance?.setExternallyMuted) {
-                window.soilHandlerInstance.setExternallyMuted(true, tsMuterId);
+                if (this.debugMode && !window.soilHandlerInstance.isExternallyMuted) console.log(`🌡️💧 TempSoil: Muting SoilHandler (TS context active).`);
+                window.soilHandlerInstance.setExternallyMuted(true, 'TempSoilHandler');
             }
         } else if (!this.isRecordMode) {
+            // TempSoil context IS NOT active (or we are in record mode, which has its own mute logic via enter/exitRecordMode).
+            // Try to unmute individual handlers, but ONLY if no OTHER combined handler needs them muted.
+
             if (window.temperatureHandlerInstance?.setExternallyMuted) {
-                const tlWantsTempMuted = window.tempLightHandlerInstance?.showTempLightVisualContext && !window.tempLightHandlerInstance?.isRecordMode;
-                if (!tlWantsTempMuted) {
-                    window.temperatureHandlerInstance.setExternallyMuted(false, tsMuterId);
+                const tempLightShowsContext = window.tempLightHandlerInstance?.showTempLightVisualContext;
+                if (!tempLightShowsContext) { // Only unmute if TempLight is NOT showing its context
+                    if (this.debugMode && window.temperatureHandlerInstance.isExternallyMuted) console.log(`🌡️💧 TempSoil: Un-muting TemperatureHandler (TS context NOT active, TL context NOT active).`);
+                    window.temperatureHandlerInstance.setExternallyMuted(false, null);
                 } else if (this.debugMode) {
-                    console.log(`🌡️💧 TempSoil: Not unmuting Temp (via ${tsMuterId}) because TempLight context is active.`);
+                    console.log(`🌡️💧 TempSoil: NOT un-muting TemperatureHandler (TS context NOT active) because TempLight context IS active.`);
                 }
             }
+
             if (window.soilHandlerInstance?.setExternallyMuted) {
-                const lsWantsSoilMuted = window.lightSoilHandlerInstance?.showLightSoilVisualContext && !window.lightSoilHandlerInstance?.isRecordMode;
-                if (!lsWantsSoilMuted) {
-                    window.soilHandlerInstance.setExternallyMuted(false, tsMuterId);
+                const lightSoilShowsContext = window.lightSoilHandlerInstance?.showLightSoilVisualContext;
+                if (!lightSoilShowsContext) { // Only unmute if LightSoil is NOT showing its context
+                    if (this.debugMode && window.soilHandlerInstance.isExternallyMuted) console.log(`🌡️💧 TempSoil: Un-muting SoilHandler (TS context NOT active, LS context NOT active).`);
+                    window.soilHandlerInstance.setExternallyMuted(false, null);
                 } else if (this.debugMode) {
-                    console.log(`🌡️💧 TempSoil: Not unmuting Soil (via ${tsMuterId}) because LightSoil context is active.`);
+                    console.log(`🌡️💧 TempSoil: NOT un-muting SoilHandler (TS context NOT active) because LightSoil context IS active.`);
                 }
             }
         }
 
         if (this.isCombinedActive !== oldCombinedActiveState || this.showTempSoilVisualContext !== oldShowTempSoilVisualContext) {
-            if (this.debugMode) console.log(`%c🌡️💧 TempSoilHandler: Combined state or visual context CHANGED. Calling MAV.`, 'color: #d35400; font-weight: bold;');
+            if (this.debugMode) console.log(`%c🌡️💧 TempSoilHandler: Combined state CHANGED.`, 'color: #d35400; font-weight: bold;');
             this.manageAudioAndVisuals();
-        } else if (this.isCombinedActive && this.isPlaying && !this.isRecordMode) {
-            this.updateSoundParameters();
+        } else if (this.isCombinedActive) {
+            if (this.isPlaying && !this.isRecordMode) {
+                this.updateSoundParameters();
+            } else if (!this.isRecordMode) {
+                 this.manageAudioAndVisuals();
+            }
+        } else {
+            this.manageAudioAndVisuals();
         }
         this.updateUI();
     }
@@ -539,10 +553,11 @@ Soil: connected=${this.soilConnected}, active=${this.soilActive} (ExtMuted: ${wi
 
     updateUI() {
         const oldShowCreature = this.tempSoilCreatureVisual ? this.tempSoilCreatureVisual.classList.contains('active') : false;
-        const showCreature = this.isCombinedActive && !this.isRecordMode; // Creature active if combined sensors are truly active and TS not in its own record mode
+        const showCreature = this.isCombinedActive; // Creature visible if TempSoil is the active combined state
 
         if (this.tempSoilCreatureVisual) {
             this.tempSoilCreatureVisual.classList.toggle('active', showCreature);
+
             // Remove previous condition-specific classes
             // This ensures only the current combined state class is present, plus base classes.
             const classPrefix = 'tempsoil-';
@@ -568,24 +583,28 @@ Soil: connected=${this.soilConnected}, active=${this.soilActive} (ExtMuted: ${wi
 
         if (this.frameBackground) {
             const tempSoilBgClass = 'tempsoil-active-bg';
-            const individualAndOtherCombinedBgs = [
+            const otherHandlersBgClasses = [ // Combined list of individual and other combined handlers' BGs
                 'temp-active-bg', 'temp-very-cold-bg', 'temp-cold-bg', 'temp-cool-bg', 'temp-mild-bg', 'temp-warm-bg', 'temp-hot-bg',
                 'soil-active-bg', 'soil-dry-bg', 'soil-humid-bg', 'soil-wet-bg',
                 'light-active-bg', 'light-dark-bg', 'light-dim-bg', 'light-bright-bg', 'light-very-bright-bg', 'light-extremely-bright-bg',
-                'lightsoil-active-bg', 'templight-active-bg', 'idle-bg'
+                'lightsoil-active-bg',
+                'templight-active-bg', // ADDED templight
+                'idle-bg'
             ];
 
             if (this.isRecordMode) {
                 this.frameBackground.classList.add('record-mode-pulsing');
                 this.frameBackground.classList.add(tempSoilBgClass);
-                individualAndOtherCombinedBgs.forEach(cls => this.frameBackground.classList.remove(cls));
+                otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
             } else {
                 this.frameBackground.classList.remove('record-mode-pulsing');
                 if (this.showTempSoilVisualContext) {
                     this.frameBackground.classList.add(tempSoilBgClass);
-                    individualAndOtherCombinedBgs.forEach(cls => this.frameBackground.classList.remove(cls));
+                    otherHandlersBgClasses.forEach(cls => this.frameBackground.classList.remove(cls));
                 } else {
                     this.frameBackground.classList.remove(tempSoilBgClass);
+                    // Do not clear other backgrounds if TempSoil is not showing its context,
+                    // as another handler might be active.
                 }
             }
         }
@@ -603,7 +622,7 @@ Soil: connected=${this.soilConnected}, active=${this.soilActive} (ExtMuted: ${wi
                 this.stopRecordModeButton.style.display = 'none';
             }
         }
-        if (this.debugMode && Math.random() < 0.05) console.log(`🌡️💧 UI Update (TS): CreatureVis=${showCreature}, ShowTSVisualContext=${this.showTempSoilVisualContext}, RecModeTS=${this.isRecordMode}, FrameBG Classes: ${this.frameBackground?.classList?.toString()}`);
+        if (this.debugMode && Math.random() < 0.02) console.log(`🌡️💧 UI Update (TS): CreatureVis=${showCreature}, ShowTSVisualContext=${this.showTempSoilVisualContext}, RecModeTS=${this.isRecordMode}, CreatureClasses: ${this.tempSoilCreatureVisual?.classList.toString()}, FrameBG Classes: ${this.frameBackground?.classList.toString()}`);
     }
 
     startAudio() {

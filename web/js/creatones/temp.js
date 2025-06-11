@@ -23,7 +23,6 @@ class TemperatureHandler {
         this.debugMode = true;
         this.stopTimeoutId = null;
         this.isExternallyMuted = false;
-        this.externalMuterId = null; // ADD THIS
 
         this.currentTempCondition = "mild"; 
         this.currentTempAppValue = 0.5;     
@@ -72,44 +71,23 @@ class TemperatureHandler {
         this.initializeWhenReady();
     }
 
-    setExternallyMuted(isMuted, muterId = null) {
-        const oldMutedState = this.isExternallyMuted;
-        const oldMuterId = this.externalMuterId;
+    setExternallyMuted(isMuted) {
+        if (this.debugMode) console.log(`🌡️ TemperatureHandler: setExternallyMuted called with: ${isMuted}. Current state: ${this.isExternallyMuted}`);
+        if (this.isExternallyMuted === isMuted) return;
 
-        if (isMuted) {
-            // If already muted by a different muter, don't overwrite unless the new muter is a record mode
-            // (Record mode mutes are high priority)
-            if (this.isExternallyMuted && this.externalMuterId && this.externalMuterId !== muterId && !muterId?.includes('-Record')) {
-                if (this.debugMode) console.log(`%c${this.constructor.name}: Already muted by ${this.externalMuterId}. Mute request by ${muterId} ignored.`, "color: orange");
-                return; // Do not change current mute state
-            }
-            this.isExternallyMuted = true;
-            this.externalMuterId = muterId;
-        } else { // Attempting to unmute
-            // Unmute only if the provided muterId matches the one who muted it,
-            // OR if the unmute request is generic (muterId is null - typically from a global "stop all record modes" or similar),
-            // OR if this handler wasn't muted by a specific ID in the first place.
-            if (this.externalMuterId === muterId || muterId === null || this.externalMuterId === null) {
-                this.isExternallyMuted = false;
-                this.externalMuterId = null;
-            } else {
-                // This means another handler (this.externalMuterId) still wants this muted. Don't unmute.
-                if (this.debugMode) console.log(`%c${this.constructor.name}: Unmute by ${muterId} DENIED. Still muted by ${this.externalMuterId}.`, "color: red");
-                return; // No change, so no MAV call needed
+        this.isExternallyMuted = isMuted;
+        if (this.debugMode) console.log(`🌡️ TemperatureHandler: isExternallyMuted set to ${this.isExternallyMuted}`);
+
+        if (this.isExternallyMuted) {
+            if (this.isRecordMode) {
+                if (this.debugMode) console.log(`🌡️ TemperatureHandler: Externally muted, forcing exit from record mode.`);
+                this.exitRecordMode(true);
+            } else if (this.isPlaying || this.isFadingOut) {
+                if (this.debugMode) console.log(`🌡️ TemperatureHandler: Externally muted, stopping generative audio.`);
+                this.stopAudio(true);
             }
         }
-
-        // Only proceed if the effective mute state or the muter ID has actually changed.
-        if (oldMutedState !== this.isExternallyMuted || oldMuterId !== this.externalMuterId) {
-            if (this.debugMode) {
-                console.log(`%c${this.constructor.name}: setExternallyMuted changed to ${this.isExternallyMuted} (Muter: ${this.externalMuterId || 'none'}). Requested by: ${muterId || 'generic'}. Old state: ${oldMutedState} (Old Muter: ${oldMuterId || 'none'})`, "color: blue; font-weight: bold;");
-            }
-            // manageAudioAndVisuals will handle stopping/starting audio and updating UI
-            this.manageAudioAndVisuals();
-        } else if (this.debugMode) {
-            // Log if no change occurred but a call was made, e.g. trying to mute an already muted handler by the same muter.
-            // console.log(`%c${this.constructor.name}: setExternallyMuted called but no change in state. Muted: ${this.isExternallyMuted}, Muter: ${this.externalMuterId}`, "color: gray");
-        }
+        this.manageAudioAndVisuals();
     }
 
     initializeWhenReady() {
