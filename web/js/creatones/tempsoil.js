@@ -303,28 +303,38 @@ class TempSoilHandler {
         }
 
         if (this.showTempSoilVisualContext && !this.isRecordMode) {
+            // TempSoil context IS active (and not in record mode).
+            // Mute individual handlers that TempSoil is responsible for.
             if (window.temperatureHandlerInstance?.setExternallyMuted) {
-                if (this.debugMode && !window.temperatureHandlerInstance.isExternallyMuted) console.log(`🌡️💧 TempSoil: Muting TemperatureHandler.`);
-                window.temperatureHandlerInstance.setExternallyMuted(true);
+                if (this.debugMode && !window.temperatureHandlerInstance.isExternallyMuted) console.log(`🌡️💧 TempSoil: Muting TemperatureHandler (TS context active).`);
+                window.temperatureHandlerInstance.setExternallyMuted(true, 'TempSoilHandler');
             }
+            if (window.soilHandlerInstance?.setExternallyMuted) {
+                if (this.debugMode && !window.soilHandlerInstance.isExternallyMuted) console.log(`🌡️💧 TempSoil: Muting SoilHandler (TS context active).`);
+                window.soilHandlerInstance.setExternallyMuted(true, 'TempSoilHandler');
+            }
+        } else if (!this.isRecordMode) {
+            // TempSoil context IS NOT active (or we are in record mode, which has its own mute logic via enter/exitRecordMode).
+            // Try to unmute individual handlers, but ONLY if no OTHER combined handler needs them muted.
+
+            if (window.temperatureHandlerInstance?.setExternallyMuted) {
+                const tempLightShowsContext = window.tempLightHandlerInstance?.showTempLightVisualContext;
+                if (!tempLightShowsContext) { // Only unmute if TempLight is NOT showing its context
+                    if (this.debugMode && window.temperatureHandlerInstance.isExternallyMuted) console.log(`🌡️💧 TempSoil: Un-muting TemperatureHandler (TS context NOT active, TL context NOT active).`);
+                    window.temperatureHandlerInstance.setExternallyMuted(false, null);
+                } else if (this.debugMode) {
+                    console.log(`🌡️💧 TempSoil: NOT un-muting TemperatureHandler (TS context NOT active) because TempLight context IS active.`);
+                }
+            }
+
             if (window.soilHandlerInstance?.setExternallyMuted) {
                 const lightSoilShowsContext = window.lightSoilHandlerInstance?.showLightSoilVisualContext;
                 if (!lightSoilShowsContext) { // Only unmute if LightSoil is NOT showing its context
-                    if (this.debugMode && window.soilHandlerInstance.isExternallyMuted) console.log(`🌡️💧 TempSoil: Un-muting SoilHandler (TS context not active, LS context not active).`);
-                    window.soilHandlerInstance.setExternallyMuted(false);
+                    if (this.debugMode && window.soilHandlerInstance.isExternallyMuted) console.log(`🌡️💧 TempSoil: Un-muting SoilHandler (TS context NOT active, LS context NOT active).`);
+                    window.soilHandlerInstance.setExternallyMuted(false, null);
                 } else if (this.debugMode) {
-                    // This log SHOULD have appeared if the logic was correct and LS context was active
-                    console.log(`🌡️💧 TempSoil: NOT un-muting SoilHandler because LightSoil context IS active.`);
+                    console.log(`🌡️💧 TempSoil: NOT un-muting SoilHandler (TS context NOT active) because LightSoil context IS active.`);
                 }
-            }
-        } else if (!this.isRecordMode) {
-            if (window.temperatureHandlerInstance?.setExternallyMuted) {
-                if (this.debugMode && window.temperatureHandlerInstance.isExternallyMuted) console.log(`🌡️💧 TempSoil: Un-muting TemperatureHandler.`);
-                window.temperatureHandlerInstance.setExternallyMuted(false);
-            }
-            if (window.soilHandlerInstance?.setExternallyMuted) {
-                if (this.debugMode && window.soilHandlerInstance.isExternallyMuted) console.log(`🌡️💧 TempSoil: Un-muting SoilHandler.`);
-                window.soilHandlerInstance.setExternallyMuted(false);
             }
         }
 

@@ -241,7 +241,7 @@ body {
 
 /* --- LightSoil Background State --- */
 .framebackground.lightsoil-active-bg {
-  /* background-image: url(sprites/backgrounds/Background_lightsoil.gif); /* Uncomment if you have this */
+  background-image: url(sprites/backgrounds/Background_lightsoil.gif); /* Uncomment if you have this */
   background-color: var(--warm-beige); /* Your existing base color */
   background-size: cover;
   background-position: center;
@@ -249,7 +249,7 @@ body {
 
 /* --- TempSoil Background State --- */
 .framebackground.tempsoil-active-bg {
-  /* background-image: url(sprites/backgrounds/Background_tempsoil.gif); /* CREATE THIS GIF */
+  background-image: url(sprites/backgrounds/Background_tempsoil.gif); /* CREATE THIS GIF */
   background-color: var(--warm-beige); /* Or a new blend for temp+soil */
   background-size: cover;
   background-position: center;
@@ -257,7 +257,7 @@ body {
 
 /* --- TempLight Background State --- */
 .framebackground.templight-active-bg {
-  /* background-image: url(sprites/backgrounds/Background_templight.gif); /* CREATE THIS GIF */
+  background-image: url(sprites/backgrounds/Background_templight.gif); /* CREATE THIS GIF */
   background-color: var(--warm-beige); /* Or a new blend for temp+light */
   background-size: cover;
   background-position: center;
