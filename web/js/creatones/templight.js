@@ -47,8 +47,8 @@ class TempLightHandler {
         this.rhythmFollower = null;
         this.rhythmicLoop = null; // Loop that triggers synth based on recorded audio rhythm
         this.recordingDuration = 5000; // ms
-        this.rhythmThreshold = -28; // dB, sensitivity for rhythm detection
-        this.rhythmNoteCooldown = 130; // ms, min time between rhythm-triggered notes
+        this.rhythmThreshold = -35; // dB, sensitivity for rhythm detection
+        this.rhythmNoteCooldown = 120; // ms, min time between rhythm-triggered notes
         this.lastRhythmNoteTime = 0;
         this.recordedAudioBlobUrl = null;
         this.rhythmicPlaybackVolume = -3; // Volume for synth during rhythmic playback
@@ -227,10 +227,7 @@ class TempLightHandler {
             if (deviceType === 'temperature' || deviceType === 'light') {
                 if (this.debugMode) console.log(`🌡️💡 TempLightHandler: Received 'disconnected' for ${deviceType}`);
                 handleDeviceUpdate(deviceType, { connected: false, active: false });
-                if (this.isRecordMode) { // If TempLight itself is in record mode
-                    this.exitRecordMode(true); // Force exit its own record mode
-                }
-                // updateCombinedState will be called by handleDeviceUpdate
+                if (this.isRecordMode) this.exitRecordMode(true);
             }
         });
         window.creatune.on('stateChange', (deviceType, state) => {
@@ -358,9 +355,10 @@ class TempLightHandler {
         if (this.isCurrentlyRecording) return;
         if (this.creatureVisual && this.creatureVisual.classList.contains('active')) {
             this.creatureCurrentFrame = (this.creatureCurrentFrame + 1) % this.creatureTotalFrames;
+            // Apply the 20% rule for backgroundPositionX
             this.creatureVisual.style.backgroundPositionX = (this.creatureCurrentFrame * 20) + '%';
-            if (this.debugMode && Math.random() < 0.01) { // Log 1%
-                 console.log(`🌡️💡 TL Creature Animation: Frame ${this.creatureCurrentFrame}`);
+            if (this.debugMode && Math.random() < 0.03) {
+                 console.log(`🌡️💡 TempLight Creature Animation: Frame ${this.creatureCurrentFrame}, PosX: ${this.creatureVisual.style.backgroundPositionX}`);
             }
         }
     }
@@ -547,66 +545,207 @@ class TempLightHandler {
                 this.stopRecordModeButton.style.display = 'none';
             }
         }
-        if (this.debugMode && Math.random() < 0.02) console.log(`🌡️💡 UI Update (TL): CreatureVis=${showCreature}, ShowTLVisualContext=${this.showTempLightVisualContext}, RecModeTL=${this.isRecordMode}, FrameBG Classes: ${this.frameBackground?.classList?.toString()}`);
+        if (this.debugMode && Math.random() < 0.03) console.log(`🌡️💡 UI Update (TempLight): CreatureVis=${showCreature}, ShowTLVisualCtx=${this.showTempLightVisualContext}, RecModeTL=${this.isRecordMode}`);
     }
 
-    _unmuteOtherHandlersForRecordModeExit() {
-        if (this.debugMode) console.log('🌡️💡 TL _unmuteOtherHandlersForRecordModeExit: Unmuting other handlers.');
-        // TempLight was in record mode, so it had muted Temp and Light.
-        // Unmute TemperatureHandler if TempSoilHandler doesn't need it muted
-        if (window.temperatureHandlerInstance?.setExternallyMuted) {
-            const tsWantsTempMuted = window.tempSoilHandlerInstance?.showTempSoilVisualContext;
-            if (!tsWantsTempMuted) {
-                window.temperatureHandlerInstance.setExternallyMuted(false, null);
-            } else if (this.debugMode) {
-                console.log(`🌡️💡 TL: NOT unmuting Temp as TS wants mute: ${tsWantsTempMuted}`);
-            }
+    startAudio() {
+        if (this.debugMode) console.log(`%c🌡️💡 TL startAudio: Conditions: audioEn=${this.audioEnabled}, toneInit=${this.toneInitialized}, combinedAct=${this.isCombinedActive}, isRecMode=${this.isRecordMode}`, 'color: #27ae60; font-weight: bold;');
+        if (!this.audioEnabled || !this.toneInitialized || !this.isCombinedActive || this.isRecordMode || !this.mainSynth || !this.generativeLoop || !this.accentLoop) {
+            if (this.debugMode) console.warn("🌡️💡 TL startAudio: Conditions not met. Returning.");
+            this.updateUI(); return;
         }
-        // Unmute LightHandler if LightSoilHandler doesn't need it muted
-        if (window.lightHandlerInstance?.setExternallyMuted) {
-            const lsWantsLightMuted = window.lightSoilHandlerInstance?.showLightSoilVisualContext;
-            if (!lsWantsLightMuted) {
-                window.lightHandlerInstance.setExternallyMuted(false, null);
-            } else if (this.debugMode) {
-                console.log(`🌡️💡 TL: NOT unmuting Light as LS wants mute: ${lsWantsLightMuted}`);
-            }
+        if (this.isFadingOut) {
+            if (this.debugMode) console.log('🌡️💡 TL startAudio: Cancelling fade-out.');
+            if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId); this.isFadingOut = false;
         }
+        if (this.isPlaying) {
+            if (this.debugMode) console.log("🌡️💡 TL startAudio: Already playing. Updating params.");
+            this.updateSoundParameters(); this.updateUI(); return;
+        }
+
+        if (this.debugMode) console.log('🌡️💡 TL startAudio: Starting generative audio...');
+        this.isPlaying = true; this.isFadingOut = false;
+        this.updateSoundParameters(); // Set initial params
+
+        if (Tone.Transport.state !== "started") Tone.Transport.start();
+        if (this.generativeLoop.state !== "started") this.generativeLoop.start(0);
+        if (this.accentLoop.state !== "started") this.accentLoop.start(0);
+
+        if (this.debugMode) console.log('🌡️💡 TL startAudio: Generative audio started.');
+        this.updateUI();
     }
 
-    async exitRecordMode(force = false) { // Ensure this is the complete and robust version
-        if (!this.isRecordMode && !force) {
-            if (this.debugMode) console.log(`🌡️💡 TL exitRecordMode: Called but not in record mode and not forced.`);
-            return;
+    stopAudio(force = false) {
+        if (this.debugMode) console.log(`%c🌡️💡 TL stopAudio: force=${force}, isPlaying=${this.isPlaying}, isFadingOut=${this.isFadingOut}`, 'color: #c0392b; font-weight: bold;');
+        if (!this.audioEnabled || !this.toneInitialized || !this.mainVolume) {
+            this.isPlaying = false; this.isFadingOut = false;
+            if (this.debugMode && !force) console.warn("🌡️💡 TL stopAudio: Audio system not ready.");
+            this.updateUI(); return;
         }
-        if (this.debugMode) console.log(`%c🌡️💡 TL exitRecordMode: Exiting record mode. Force: ${force}`, 'color: orange; font-weight: bold;');
-        const wasRecordMode = this.isRecordMode;
-        this.isRecordMode = false;
-        this.isCurrentlyRecording = false;
-
-        this.mic?.close(); this.mic = null;
-        const recorder = this.recorder; this.recorder = null;
-        recorder?.stop().then(() => recorder.dispose()).catch(e => recorder?.dispose());
-        this.rhythmicLoop?.stop(0).dispose(); this.rhythmicLoop = null;
-        this.recordedBufferPlayer?.stop(0).dispose(); this.recordedBufferPlayer = null;
-        if (this.recordedAudioBlobUrl) { URL.revokeObjectURL(this.recordedAudioBlobUrl); this.recordedAudioBlobUrl = null; }
-        this.rhythmFollower?.dispose(); this.rhythmFollower = null;
-
-        if (this.mainSynth?.volume && this.mainSynth.volume.value === this.rhythmicPlaybackVolume) {
-             if (this.debugMode) console.log('🌡️💡 TL exitRecordMode: mainSynth volume was at rhythmic level.');
+        if (!this.isPlaying && !this.isFadingOut && !force) {
+            if (this.debugMode) console.log("🌡️💡 TL stopAudio: Already stopped.");
+            this.updateUI(); return;
         }
-        
-        if (this.noteDisplayTimeoutId) {
-            clearTimeout(this.noteDisplayTimeoutId);
-            const noteDisplayElement = document.querySelector('#notes-display p');
-            if (noteDisplayElement) noteDisplayElement.textContent = '-';
-        }
+        if (this.isFadingOut && !force) return;
 
-        if (wasRecordMode || force) {
-            this._unmuteOtherHandlersForRecordModeExit();
-            this.updateCombinedState(); // This will call manageAudioAndVisuals
-        } else {
+        this.isPlaying = false; this.isFadingOut = true;
+        const fadeTime = force ? 0.01 : this.fadeDuration;
+        this.mainVolume.volume.cancelScheduledValues(Tone.now());
+        this.mainVolume.volume.rampTo(-Infinity, fadeTime, Tone.now());
+
+        if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
+        this.stopTimeoutId = setTimeout(() => {
+            if (this.generativeLoop?.state === "started") this.generativeLoop.stop(0);
+            if (this.accentLoop?.state === "started") this.accentLoop.stop(0);
+            if (this.mainVolume) this.mainVolume.volume.value = -Infinity;
+            this.isFadingOut = false;
+            if (this.debugMode) console.log('🌡️💡 TL stopAudio: Generative audio fully stopped.');
             this.updateUI();
+        }, force ? 10 : (this.fadeDuration * 1000 + 100));
+        if (force) this.updateUI();
+    }
+
+    async enterRecordMode() {
+        if (this.isRecordMode || !this.audioEnabled || !this.toneInitialized || !this.isCombinedActive) {
+            if (this.debugMode) console.warn(`🌡️💡 TL enterRecordMode: Blocked. Conditions not met.`); return;
         }
+        if (window.temperatureHandlerInstance?.isRecordMode || window.lightHandlerInstance?.isRecordMode ||
+            window.lightSoilHandlerInstance?.isRecordMode || window.tempSoilHandlerInstance?.isRecordMode) {
+            if (this.debugMode) console.warn(`🌡️💡 TL enterRecordMode: Blocked. Another creature is in record mode.`); return;
+        }
+        if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+            console.error('❌ TL enterRecordMode: getUserMedia API not available.'); alert('Microphone access not available.'); return;
+        }
+
+        if (this.debugMode) console.log('🌡️💡 TL enterRecordMode: Starting...');
+        this.isRecordMode = true;
+
+        if (window.temperatureHandlerInstance?.setExternallyMuted) window.temperatureHandlerInstance.setExternallyMuted(true);
+        if (window.lightHandlerInstance?.setExternallyMuted) window.lightHandlerInstance.setExternallyMuted(true);
+
+        if (this.isPlaying || this.isFadingOut) this.stopAudio(true);
+        if (this.mainVolume) this.mainVolume.volume.value = -Infinity; // Ensure main generative audio is silent
+        if (this.generativeLoop?.state === "started") this.generativeLoop.stop(0);
+        if (this.accentLoop?.state === "started") this.accentLoop.stop(0);
+        this.isPlaying = false; this.isFadingOut = false;
+        this.updateUI();
+        await new Promise(resolve => setTimeout(resolve, 150));
+        if (!this.isRecordMode) { this.updateCombinedState(); return; }
+
+        try {
+            this.mic = new Tone.UserMedia(); await this.mic.open();
+            if (!this.isRecordMode) { if (this.mic.state === "started") this.mic.close(); this.mic = null; this.updateCombinedState(); return; }
+
+            this.isCurrentlyRecording = true;
+            this.recorder = new Tone.Recorder(); this.mic.connect(this.recorder);
+            this.recorder.start();
+            if (this.debugMode) console.log(`🌡️💡 TL enterRecordMode: Recording for ${this.recordingDuration / 1000}s...`);
+
+            setTimeout(async () => {
+                this.isCurrentlyRecording = false;
+                if (!this.recorder || !this.isRecordMode) {
+                    if (this.mic?.state === "started") this.mic.close(); this.mic = null;
+                    if (this.recorder?.state === "started") { try { await this.recorder.stop(); } catch (e) { /*ignore*/ } }
+                    if (this.isRecordMode) this.exitRecordMode(true); return;
+                }
+                const audioBlob = await this.recorder.stop();
+                if (this.mic?.state === "started") this.mic.close(); this.mic = null;
+                if (this.debugMode) console.log('🌡️💡 TL enterRecordMode: Recording stopped. Blob size:', audioBlob.size);
+                if (!this.isRecordMode) { this.updateCombinedState(); return; }
+                this._setupRhythmicPlayback(audioBlob);
+            }, this.recordingDuration);
+        } catch (err) {
+            console.error(`❌ TL enterRecordMode: Error: ${err.message}`, err);
+            alert(`Could not start recording for TempLight: ${err.message}.`);
+            this.isCurrentlyRecording = false; this.exitRecordMode(true);
+        }
+    }
+
+    _setupRhythmicPlayback(audioBlob) {
+        if (!this.isRecordMode || !this.toneInitialized || !this.mainSynth) { // mainSynth is the bell
+            if (this.debugMode) console.warn(`🌡️💡 TL _setupRhythmicPlayback: Blocked. Forcing exit.`);
+            this.exitRecordMode(true); return;
+        }
+        if (this.debugMode) console.log('🌡️💡 TL _setupRhythmicPlayback: Starting using Bell synth...');
+
+        // Use mainVolume for recorded playback + synth, or mainSynth directly if no overall volume node for it
+        if (this.mainSynth.volume) { // MetalSynth has its own volume
+             this.mainSynth.volume.value = this.rhythmicPlaybackVolume; // Set bell synth volume for rhythm
+        } else if (this.mainVolume) { // Fallback if bell synth was connected to mainVolume directly
+            this.mainVolume.volume.value = this.rhythmicPlaybackVolume;
+        }
+
+
+        if (this.recordedAudioBlobUrl) URL.revokeObjectURL(this.recordedAudioBlobUrl);
+        this.recordedAudioBlobUrl = URL.createObjectURL(audioBlob);
+
+        this.rhythmFollower = new Tone.Meter({ smoothing: 0.2 });
+        this.lastRhythmNoteTime = 0;
+        const rhythmicBellNotes = ["C4", "E4", "G4", "A4", "C5"]; // Notes for Bell
+
+        this.recordedBufferPlayer = new Tone.Player({
+            url: this.recordedAudioBlobUrl, loop: true,
+            onload: () => {
+                if (!this.isRecordMode || !this.recordedBufferPlayer) {
+                    if (this.recordedBufferPlayer) { this.recordedBufferPlayer.dispose(); this.recordedBufferPlayer = null; }
+                    if (this.rhythmFollower) { this.rhythmFollower.dispose(); this.rhythmFollower = null; }
+                    if (this.rhythmicLoop) { this.rhythmicLoop.dispose(); this.rhythmicLoop = null; }
+                    if (this.mainSynth?.volume?.value === this.rhythmicPlaybackVolume) this.mainSynth.volume.value = -Infinity; // Silence bell
+                    return;
+                }
+                this.recordedBufferPlayer.connect(this.rhythmFollower);
+                this.recordedBufferPlayer.toDestination(); // Play recorded audio
+                this.recordedBufferPlayer.start();
+                if (this.debugMode) console.log('🌡️💡 TL _setupRhythmicPlayback: Recorded audio Player started.');
+
+                this.rhythmicLoop = new Tone.Loop(time => {
+                    if (!this.isRecordMode || !this.rhythmFollower || !this.mainSynth || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') return;
+                    const level = this.rhythmFollower.getValue();
+                    const currentTime = Tone.now() * 1000;
+                    if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
+                        const note = rhythmicBellNotes[Math.floor(Math.random() * rhythmicBellNotes.length)];
+                        const velocity = 0.4 + (Math.min(15, Math.max(0, level - this.rhythmThreshold)) * 0.03);
+                        this.mainSynth.triggerAttack(note, time, Math.min(0.9, velocity)); // Trigger bell
+                        this._displayNote(note);
+                        this.triggerCreatureAnimation();
+                        this.lastRhythmNoteTime = currentTime;
+                    }
+                }, "16n").start(0);
+                if (this.debugMode) console.log('🌡️💡 TL _setupRhythmicPlayback: Rhythmic loop for Bell synth initiated.');
+            },
+            onerror: (err) => { console.error('❌ TL _setupRhythmicPlayback: Error loading recorded audio:', err); this.exitRecordMode(true); }
+        });
+        if (Tone.Transport.state !== "started") Tone.Transport.start();
+    }
+
+    exitRecordMode(force = false) {
+        if (!this.isRecordMode && !force) {
+            if (this.debugMode) console.log(`🌡️💡 TL exitRecordMode: Called but not in record mode and not forced.`); return;
+        }
+        if (this.debugMode) console.log(`🌡️💡 TL exitRecordMode: Starting. Forced: ${force}. Was inRecordMode: ${this.isRecordMode}`);
+        const wasRecordMode = this.isRecordMode;
+        this.isRecordMode = false; this.isCurrentlyRecording = false;
+
+        if (this.mic?.state === "started") this.mic.close(); this.mic = null;
+        if (this.recorder) { if (this.recorder.state === "started") try { this.recorder.stop(); } catch (e) { /*ignore*/ } this.recorder.dispose(); this.recorder = null; }
+        if (this.rhythmicLoop) { if (this.rhythmicLoop.state === "started") this.rhythmicLoop.stop(0); this.rhythmicLoop.dispose(); this.rhythmicLoop = null; }
+        if (this.recordedBufferPlayer) { if (this.recordedBufferPlayer.state === "started") this.recordedBufferPlayer.stop(0); this.recordedBufferPlayer.dispose(); this.recordedBufferPlayer = null; if (this.recordedAudioBlobUrl) { URL.revokeObjectURL(this.recordedAudioBlobUrl); this.recordedAudioBlobUrl = null; } }
+        if (this.rhythmFollower) { this.rhythmFollower.dispose(); this.rhythmFollower = null; }
+
+        // Silence the bell synth if it was used for rhythmic playback
+        if (this.mainSynth?.volume && this.mainSynth.volume.value === this.rhythmicPlaybackVolume) {
+            this.mainSynth.volume.value = -Infinity;
+        }
+        // Ensure main generative audio is marked as stopped and its volume node is silent
+        if (this.mainVolume) this.mainVolume.volume.value = -Infinity;
+        if (this.generativeLoop?.state === "started") this.generativeLoop.stop(0);
+        if (this.accentLoop?.state === "started") this.accentLoop.stop(0);
+        this.isPlaying = false;
+
+        if (this.noteDisplayTimeoutId) { clearTimeout(this.noteDisplayTimeoutId); const noteEl = document.querySelector('#notes-display p'); if (noteEl) noteEl.textContent = '-'; }
+        
+        if (wasRecordMode || force) this.updateCombinedState(); // Re-evaluate muting and audio/visuals
+        else this.updateUI();
         if (this.debugMode) console.log(`🌡️💡 TL exitRecordMode: Finished. isRecordMode is now ${this.isRecordMode}.`);
     }
 }
