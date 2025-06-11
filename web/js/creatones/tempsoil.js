@@ -175,7 +175,7 @@ class TempSoilHandler {
 
             if (deviceType === 'temperature') {
                 if (data.connected !== undefined && this.tempConnected !== data.connected) { this.tempConnected = data.connected; stateChanged = true; }
-                if (data.active !== undefined && this.tempActive !== data.active) { this.tempActive = state.active; stateChanged = true; }
+                if (data.active !== undefined && this.tempActive !== data.active) { this.tempActive = data.active; stateChanged = true; }
                 if (data.rawData) {
                     this.currentTempAppValue = data.rawData.temp_app_value !== undefined ? data.rawData.temp_app_value : this.currentTempAppValue;
                     this.currentTempCondition = data.rawData.temp_condition || this.currentTempCondition;
@@ -185,7 +185,7 @@ class TempSoilHandler {
                 }
             } else if (deviceType === 'soil') {
                 if (data.connected !== undefined && this.soilConnected !== data.connected) { this.soilConnected = data.connected; stateChanged = true; }
-                if (data.active !== undefined && this.soilActive !== data.active) { this.soilActive = state.active; stateChanged = true; }
+                if (data.active !== undefined && this.soilActive !== data.active) { this.soilActive = data.active; stateChanged = true; }
                 if (data.rawData) {
                     this.currentSoilAppValue = data.rawData.moisture_app_value !== undefined ? data.rawData.moisture_app_value : this.currentSoilAppValue;
                     this.currentSoilCondition = data.rawData.soil_condition || this.currentSoilCondition;
@@ -195,7 +195,9 @@ class TempSoilHandler {
                 }
             }
 
-            if (stateChanged) {
+            // CRITICAL: Ensure this line (around 188) uses 'stateChanged' and not 'state'.
+            // If your file has 'if (state)' here, change it to 'if (stateChanged)'.
+            if (stateChanged) { 
                 this.updateCombinedState();
             } else if (this.isCombinedActive && this.isPlaying && !this.isRecordMode) {
                 this.updateSoundParameters();
@@ -221,7 +223,10 @@ class TempSoilHandler {
         window.creatune.on('stateChange', (deviceType, state) => {
             if (deviceType === 'temperature' || deviceType === 'soil') {
                 if (this.debugMode) console.log(`🌡️💧 TempSoilHandler: Received 'stateChange' for ${deviceType}`, state);
-                handleDeviceUpdate(deviceType, { ...state });
+                // Ensure 'state' is an object before spreading to prevent issues if it's null or undefined.
+                // This helps avoid TypeErrors if data.rawData is accessed later, but the original error is a ReferenceError.
+                const eventData = (typeof state === 'object' && state !== null) ? { ...state } : {};
+                handleDeviceUpdate(deviceType, eventData);
             }
         });
         window.creatune.on('data', (deviceType, data) => {

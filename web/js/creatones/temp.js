@@ -882,6 +882,86 @@ class TemperatureHandler {
         }
     }
 
+    startAudio() {
+        if (this.isRecordMode) {
+            if (this.debugMode) console.log("🌡️ startAudio (generative): Blocked, in record mode.");
+            return;
+        }
+        if (this.isExternallyMuted || !this.audioEnabled || !this.toneInitialized || !this.isSensorActive || this.isRecordMode || !this.punchySynth || !this.generativeLoop) {
+            if (this.debugMode) console.warn(`🌡️ startAudio (generative): Blocked. ExtMuted=${this.isExternallyMuted}, AudioEnabled=${this.audioEnabled}, ToneInit=${this.toneInitialized}`);
+            this.updateUI(); return;
+        }
+        if (this.isFadingOut) {
+            if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
+            this.isFadingOut = false;
+            // If fading out, volume might be ramping down. Ensure it's reset or ramped up correctly.
+            // this.mainVolume.volume.cancelScheduledValues(Tone.now()); // Optional: cancel previous ramp
+        }
+        
+        // If already playing, just update parameters
+        if (this.isPlaying) {
+            this.updateSoundParameters();
+            this.updateUI();
+            return;
+        }
+
+        this.isPlaying = true;
+        this.isFadingOut = false;
+        this.updateSoundParameters(); // Sets initial volume and synth params
+
+        // Ensure Transport is started
+        if (Tone.Transport.state !== "started") {
+            Tone.Transport.start();
+        }
+
+        // Ensure loop is stopped before starting to avoid potential conflicts
+        if (this.generativeLoop.state === "started") {
+            this.generativeLoop.stop(0);
+        }
+        this.generativeLoop.start(0); // Start the loop relative to the transport
+
+        if (this.debugMode) console.log('🌡️ TempHandler: Audio started.');
+        this.updateUI();
+    }
+
+    stopAudio(force = false) {
+        if (!this.audioEnabled || !this.toneInitialized || !this.mainVolume) {
+            this.isPlaying = false; this.isFadingOut = false;
+            this.updateUI(); return;
+        }
+        if (!this.isPlaying && !this.isFadingOut && !force) { this.updateUI(); return; }
+        if (this.isFadingOut && !force) return;
+
+        this.isPlaying = false;
+        this.isFadingOut = true;
+        const fadeTime = force ? 0.01 : this.fadeDuration;
+
+        // Stop the generative loop immediately
+        if (this.generativeLoop && this.generativeLoop.state === "started") {
+            this.generativeLoop.stop(0);
+        }
+
+        // Ramp volume to -Infinity
+        if (this.mainVolume && this.mainVolume.volume) {
+            this.mainVolume.volume.cancelScheduledValues(Tone.now());
+            this.mainVolume.volume.rampTo(-Infinity, fadeTime, Tone.now());
+        }
+
+        if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
+        this.stopTimeoutId = setTimeout(() => {
+            // Loop is already stopped.
+            // Ensure volume is fully down.
+            if (this.mainVolume && this.mainVolume.volume) {
+                this.mainVolume.volume.value = -Infinity;
+            }
+            this.isFadingOut = false;
+            if (this.debugMode) console.log('🌡️ TempHandler: Audio fully stopped.');
+            this.updateUI();
+        }, force ? 10 : (fadeTime * 1000 + 100)); // Ensure timeout is slightly longer than fade
+
+        if (force) this.updateUI();
+    }
+
     exitRecordMode(force = false) {
         if (!this.isRecordMode && !force) {
             if (this.debugMode) console.log(`🌡️ exitRecordMode: Called when not in record mode and not forced. Returning.`);
@@ -968,225 +1048,6 @@ class TemperatureHandler {
              this.manageAudioAndVisuals();
         }
         if (this.debugMode) console.log(`%c🌡️ exitRecordMode: Finished. isRecordMode=${this.isRecordMode}, isPlaying=${this.isPlaying}`, 'color: red; font-weight: bold;');
-    }
-
-    startAudio() {
-        if (this.isRecordMode) {
-            if (this.debugMode) console.log("🌡️ startAudio (generative): Blocked, in record mode.");
-            return;
-        }
-        if (this.isExternallyMuted || !this.audioEnabled || !this.toneInitialized) {
-            if (this.debugMode) console.warn(`🌡️ startAudio (generative): Blocked. ExtMuted=${this.isExternallyMuted}, AudioEnabled=${this.audioEnabled}, ToneInit=${this.toneInitialized}`);
-            this.updateUI(); return;
-        }
-        if (this.isFadingOut) {
-            if (this.debugMode) console.log('🌡️ startAudio (generative): Cancelling fade-out.');
-            if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
-            this.isFadingOut = false;
-        }
-        if (this.isPlaying) {
-            if (this.debugMode) console.log("🌡️ startAudio (generative): Called, but already playing. Ensuring params.");
-            this.updateSoundParameters(); this.updateUI(); return;
-        }
-        if (!this.deviceStates.temperature.connected || !this.isActive) {
-            if (this.debugMode) console.log(`🌡️ startAudio (generative): Conditions not met (DeviceConnected:${this.deviceStates.temperature.connected}, SensorActive:${this.isActive}).`);
-            this.updateUI(); return;
-        }
-        if (!this.liquidSynth || !this.punchySynth || !this.mainTempLoop || !this.accentLoop || !this.cyclicLoop) { // Added cyclicLoop check
-            console.error("❌ startAudio (generative) Temp: Critical: Synths/Loops not available. Attempting re-init.");
-            this.initTone();
-            if (!this.liquidSynth || !this.punchySynth || !this.mainTempLoop || !this.accentLoop || !this.cyclicLoop) { // Added cyclicLoop check
-                console.error("❌ startAudio (generative) Temp: Critical: Re-init failed. Cannot start.");
-                return;
-            }
-            // MODIFIED: Commented out the problematic line to resolve syntax error
-            // if (this.isPlaying) return; // Re-check after init
-        }
-
-        if (this.debugMode) console.log('🌡️ startAudio (generative): Starting...');
-        this.isPlaying = true;
-        this.isFadingOut = false;
-
-        if (Tone.Transport.state !== "started") {
-            Tone.Transport.start();
-            if (this.debugMode) console.log('🌡️ startAudio (generative): Tone.Transport started.');
-        }
-
-        this.updateSoundParameters(); // Set initial volumes and params
-
-        // Start loops at the current time on the transport with a small offset
-        const loopStartTime = Tone.now() + 0.1; // 100ms offset
-        if (this.mainTempLoop && this.mainTempLoop.state !== "started") this.mainTempLoop.start(loopStartTime);
-        if (this.accentLoop && this.accentLoop.state !== "started") this.accentLoop.start(loopStartTime);
-        if (this.cyclicLoop && this.cyclicLoop.state !== "started") this.cyclicLoop.start(loopStartTime);
-
-        if (this.debugMode) console.log('🌡️ startAudio (generative): Loops started. isPlaying is true.');
-        this.updateUI();
-    }
-
-    stopAudio(force = false) {
-        if (!this.audioEnabled || !this.toneInitialized) {
-            this.isPlaying = false; this.isFadingOut = false;
-            if (this.debugMode && !force) console.warn("🌡️ stopAudio (generative): Audio system not ready. Forcing isPlaying=false.");
-            this.updateUI(); return;
-        }
-        if (!this.isPlaying && !this.isFadingOut && !force) {
-            return;
-        }
-        if (this.isFadingOut && !force) {
-            return;
-        }
-
-        if (this.debugMode) console.log(`🌡️ stopAudio (generative): Stopping. Forced: ${force}, WasPlaying: ${this.isPlaying}, WasFading: ${this.isFadingOut}`);
-
-        const wasPlaying = this.isPlaying;
-        this.isPlaying = false;
-
-        if (!force && wasPlaying) {
-            this.isFadingOut = true;
-        } else {
-            this.isFadingOut = false;
-        }
-
-        const fadeTime = force ? 0.01 : this.fadeDuration;
-
-        if (this.liquidSynth?.volume) {
-            this.liquidSynth.volume.cancelScheduledValues(Tone.now());
-            this.liquidSynth.volume.rampTo(-Infinity, fadeTime, Tone.now());
-        }
-        if (this.punchySynth?.volume) {
-            this.punchySynth.volume.cancelScheduledValues(Tone.now());
-            this.punchySynth.volume.rampTo(-Infinity, fadeTime, Tone.now());
-        }
-
-        if (this.stopTimeoutId) clearTimeout(this.stopTimeoutId);
-
-        const completeStop = () => {
-            if (this.mainTempLoop?.state === "started") this.mainTempLoop.stop(0);
-            if (this.accentLoop?.state === "started") this.accentLoop.stop(0);
-            if (this.cyclicLoop?.state === "started") this.cyclicLoop.stop(0);
-
-            if (this.liquidSynth?.volume) this.liquidSynth.volume.value = -Infinity;
-            if (this.punchySynth?.volume) this.punchySynth.volume.value = -Infinity;
-
-            this.isFadingOut = false;
-            if (this.debugMode) console.log('🌡️ stopAudio (generative): Fully stopped and loops cleared.');
-            this.updateUI();
-        };
-
-        if (force || !wasPlaying) {
-            completeStop();
-        } else {
-            this.stopTimeoutId = setTimeout(completeStop, (this.fadeDuration * 1000 + 150));
-        }
-
-        if (!force || !wasPlaying) { // Update UI immediately if not forced full stop or wasn't playing
-             this.updateUI();
-        }
-    }
-
-    async _setupRhythmicPlayback(audioBlob) {
-        if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback: Starting with blob size:', audioBlob.size);
-
-        if (!this.isRecordMode || !this.toneInitialized || !this.liquidSynthWrapper || !this.liquidSynth) { // Check for liquidSynthWrapper
-            if (this.debugMode) console.warn(`🌡️ _setupRhythmicPlayback: Conditions not met. isRecordMode=${this.isRecordMode}, toneInitialized=${this.toneInitialized}, liquidSynthWrapper=${!!this.liquidSynthWrapper}. Forcing exit.`);
-            this.exitRecordMode(true); // Force exit if conditions are bad
-            return;
-        }
-
-        try {
-            // Ensure liquidSynthWrapper (and its underlying liquidSynth) is ready for rhythmic playback
-            if (this.liquidSynth && this.liquidSynth.volume) {
-                this.liquidSynth.volume.cancelScheduledValues(Tone.now()); // Cancel any ramps
-                this.liquidSynth.volume.value = this.baseLiquidVolume; 
-                if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: liquidSynth (for wrapper) volume set to ${this.baseLiquidVolume} dB for rhythmic notes.`);
-            } else {
-                console.error("❌ _setupRhythmicPlayback: liquidSynth not available for rhythmic playback.");
-                this.exitRecordMode(true);
-                return;
-            }
-
-            // Ensure punchySynth (generative accent) is silent during record mode playback
-            if (this.punchySynth?.volume) {
-                 this.punchySynth.volume.cancelScheduledValues(Tone.now());
-                 this.punchySynth.volume.value = -Infinity;
-                 if (this.debugMode) console.log(`🌡️ _setupRhythmicPlayback: punchySynth volume set to -Infinity.`);
-            }
-
-
-            if (this.recordedAudioBlobUrl) {
-                URL.revokeObjectURL(this.recordedAudioBlobUrl);
-            }
-            this.recordedAudioBlobUrl = URL.createObjectURL(audioBlob);
-
-            this.rhythmFollower = new Tone.Meter({ smoothing: 0.2 });
-            this.lastRhythmNoteTime = 0;
-
-            // Notes more suitable for the liquidSynthWrapper's character
-            const rhythmicNotes = ["C2", "D2", "F2", "G2", "A#2", "C3", "D3"]; 
-
-            this.recordedBufferPlayer = new Tone.Player({
-                url: this.recordedAudioBlobUrl,
-                loop: true,
-                onload: () => {
-                    if (!this.isRecordMode || !this.recordedBufferPlayer) {
-                        if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Record mode exited or player disposed during load. Aborting playback setup.');
-                        this.recordedBufferPlayer?.dispose(); this.recordedBufferPlayer = null;
-                        this.rhythmFollower?.dispose(); this.rhythmFollower = null;
-                        this.rhythmicLoop?.dispose(); this.rhythmicLoop = null;
-                        if (this.liquidSynth?.volume.value === this.baseLiquidVolume) { // Check against baseLiquidVolume
-                            this.liquidSynth.volume.value = -Infinity; // Ensure it's silenced if we abort
-                        }
-                        this.manageAudioAndVisuals(); 
-                        return;
-                    }
-
-                    if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Recorded buffer player loaded.');
-                    this.recordedBufferPlayer.connect(this.rhythmFollower);
-                    this.recordedBufferPlayer.toDestination(); // User hears their recording
-                    this.recordedBufferPlayer.start();
-                    if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Recorded buffer player started.');
-
-                    this.rhythmicLoop = new Tone.Loop(time => {
-                        if (!this.isRecordMode || !this.rhythmFollower || !this.liquidSynthWrapper || !this.recordedBufferPlayer || this.recordedBufferPlayer.state !== 'started') {
-                            return; 
-                        }
-
-                        const level = this.rhythmFollower.getValue();
-                        const currentTime = Tone.now() * 1000;
-
-                        if (level > this.rhythmThreshold && (currentTime - this.lastRhythmNoteTime > this.rhythmNoteCooldown)) {
-                            const noteToPlay = rhythmicNotes[Math.floor(Math.random() * rhythmicNotes.length)];
-                            const velocity = 1.0; 
-                            const duration = "8n."; // Slightly longer duration for liquidSynthWrapper
-
-                            if (this.debugMode) {
-                                console.log(`%c🌡️ Rhythmic trigger (Temp LiquidSynthWrapper)! Level: ${typeof level === 'number' ? level.toFixed(2) : level}, Note: ${noteToPlay}, Velocity: ${velocity.toFixed(2)}, Duration: "${duration}"`, "color: #2ecc71");
-                            }
-                            
-                            this.liquidSynthWrapper.triggerAttackRelease(noteToPlay, duration, time, velocity);
-                            this.triggerCreatureAnimation();
-                            this._displayNote(noteToPlay);
-                            this.lastRhythmNoteTime = currentTime;
-                        }
-                    }, "16n").start(); 
-                    if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback (onload): Rhythmic loop with liquidSynthWrapper initiated.');
-                },
-                onerror: (err) => {
-                    console.error('❌ _setupRhythmicPlayback: Error loading recorded buffer player for Temperature:', err);
-                    this.exitRecordMode(true); 
-                }
-            });
-
-            if (Tone.Transport.state !== "started") {
-                Tone.Transport.start();
-            }
-            if (this.debugMode) console.log('🌡️ _setupRhythmicPlayback: Setup initiated, player loading asynchronously.');
-
-        } catch (error) {
-            console.error('❌ _setupRhythmicPlayback: Error setting up playback in TemperatureHandler:', error);
-            this.exitRecordMode(true); // Force exit on general error
-        }
     }
 }
 
