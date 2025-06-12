@@ -207,7 +207,7 @@ body {
 
 /* --- Soil Background States --- */
 .framebackground.soil-active-bg {
-  /*background-image: url(sprites/backgrounds/Background_soil.gif);*/
+  background-image: url(sprites/backgrounds/Background_soil.gif);
   background-size: cover;
   background-position: center;
   background-color: var(--warm-beige); /* Fallback if needed */
@@ -222,7 +222,7 @@ body {
 .framebackground.light-bright-bg,
 .framebackground.light-very-bright-bg,
 .framebackground.light-extremely-bright-bg {
-  /*background-image: url(sprites/backgrounds/Background_light.gif);*/
+  background-image: url(sprites/backgrounds/Background_light.gif);
   background-size: cover;
   background-position: center;
   background-repeat: repeat;
@@ -233,7 +233,7 @@ body {
 
 /* --- Temperature Background States --- */
 .framebackground.temp-active-bg { /* Generic active, if no specific condition matches */
-  /*background-image: url(sprites/backgrounds/Background_temp.gif); */
+  background-image: url(sprites/backgrounds/Background_temp.gif); 
   background-color: var(--warm-beige); /* Fallback if needed */
   background-size: cover;
   background-position: center;
@@ -241,7 +241,7 @@ body {
 
 /* --- LightSoil Background State --- */
 .framebackground.lightsoil-active-bg {
-  /*background-image: url(sprites/backgrounds/Background_lightsoil.gif); /* Uncomment if you have this */
+  background-image: url(sprites/backgrounds/Background_lightsoil.gif); /* Uncomment if you have this */
   background-color: var(--warm-beige); /* Your existing base color */
   background-size: cover;
   background-position: center;
@@ -249,7 +249,7 @@ body {
 
 /* --- TempSoil Background State --- */
 .framebackground.tempsoil-active-bg {
-  /*background-image: url(sprites/backgrounds/Background_tempsoil.gif); /* CREATE THIS GIF */
+  background-image: url(sprites/backgrounds/Background_tempsoil.gif); /* CREATE THIS GIF */
   background-color: var(--warm-beige); /* Or a new blend for temp+soil */
   background-size: cover;
   background-position: center;
@@ -257,7 +257,7 @@ body {
 
 /* --- TempLight Background State --- */
 .framebackground.templight-active-bg {
-  /*background-image: url(sprites/backgrounds/Background_templight.gif); /* CREATE THIS GIF */
+  background-image: url(sprites/backgrounds/Background_templight.gif); /* CREATE THIS GIF */
   background-color: var(--warm-beige); /* Or a new blend for temp+light */
   background-size: cover;
   background-position: center;
@@ -339,7 +339,7 @@ body {
 
 /* --- Temperature Creature --- */
 .temp-creature {
-  /* background-image: url('../sprites/creatures/temp-creature.png'); */
+  background-image: url('../sprites/creatures/temp-creature.png');
   background-size: 600% 100%; 
   background-position: 0% 0%;
 }
