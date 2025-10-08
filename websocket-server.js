@@ -94,7 +94,7 @@ function serveFile(filePath, res, contentType) {
 const wss = new WebSocket.Server({
   server,
   pingInterval: 2000, // ws library's built-in ping
-  pingTimeout: 3000   // ws library's built-in timeout for pong
+  pingTimeout: 5000   // ws library's built-in timeout for pong
 });
 
 // Client tracking
