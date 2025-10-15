@@ -404,8 +404,8 @@ class LightSoilHandler {
 
         if (this.debugMode) console.log('🌿💡 LightSoilHandler.initTone: Initializing Tone.js components...');
         try {
-            this.padReverb = new Tone.Reverb({ decay: 3, wet: 0.5 }).toDestination();
-            this.padChorus = new Tone.Chorus({ frequency: 0.7, delayTime: 2.5, depth: 0.6, wet: 0.4 }).connect(this.padReverb);
+            this.padReverb = new Tone.Reverb({ decay: 3, wet: 0.2 }).toDestination();
+            this.padChorus = new Tone.Chorus({ frequency: 0.7, delayTime: 2.5, depth: 0.6, wet: 0.2 }).connect(this.padReverb);
 
             this.mainSynth = new Tone.PluckSynth({ // Already correctly uses mainSynth for initialization
                 attackNoise: 0.8,

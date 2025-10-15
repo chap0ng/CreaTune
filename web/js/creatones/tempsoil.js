@@ -386,7 +386,7 @@ class TempSoilHandler {
             this.mainVolume = new Tone.Volume(this.baseVolume).toDestination();
             
             // Effects for Bubbly Synth
-            this.autoPanner = new Tone.AutoPanner({ frequency: "16n", depth: 0.7, wet: 0.6 }).connect(this.mainVolume);
+            this.autoPanner = new Tone.AutoPanner({ frequency: "8n", depth: 0.7, wet: 0.3 }).connect(this.mainVolume);
             this.phaserEffect = new Tone.Phaser({
                 frequency: 0.5,
                 octaves: 2.5,
@@ -400,10 +400,10 @@ class TempSoilHandler {
                 harmonicity: 1.2,
                 modulationIndex: 7,
                 oscillator: { type: "sine" },
-                envelope: { attack: 0.008, decay: 0.15, sustain: 0.02, release: 0.25 },
+                envelope: { attack: 0.08, decay: 0.15, sustain: 0.02, release: 0.25 },
                 modulation: { type: "triangle" },
                 modulationEnvelope: { attack: 0.008, decay: 0.08, sustain: 0, release: 0.15 },
-                volume: -3 // Initial synth volume, overall controlled by this.mainVolume
+                volume: 0 // Initial synth volume, overall controlled by this.mainVolume
             }).connect(this.phaserEffect);
 
             // Harmonica Synth and its Reverb

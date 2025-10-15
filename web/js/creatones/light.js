@@ -10,10 +10,10 @@ class LightHandler {
 
         // Audio Params
         this.fadeDuration = 1.0;
-        this.baseAmbientVolume = 9; 
-        this.baseSparkleVolume = 9; 
-        this.baseWoodenPluckVolume = 9; // ADDED: Base volume for wooden pluck, adjust as needed
-        this.rhythmicPlaybackVolume = 9; // Volume for the synth used in record mode
+        this.baseAmbientVolume = 18; 
+        this.baseSparkleVolume = 18; 
+        this.baseWoodenPluckVolume = 15; // ADDED: Base volume for wooden pluck, adjust as needed
+        this.rhythmicPlaybackVolume = 15; // Volume for the synth used in record mode
 
         // State
         this.isActive = false;
