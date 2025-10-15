@@ -380,7 +380,7 @@ class TempLightHandler {
             this.mainSynth = new Tone.MetalSynth({ // Bell Synth
                 frequency: 200, harmonicity: 6.1, modulationIndex: 22, octaves: 2.5, resonance: 3500,
                 envelope: { attack: 0.001, decay: 0.6, sustain: 0, release: 0.3 },
-                volume: -8 
+                volume: -3 
             }).connect(this.bellReverb);
 
             this.secondarySynth = new Tone.FMSynth({ // Melodic FM

@@ -10,8 +10,8 @@ class TemperatureHandler {
 
         // Audio Params - Temperature Style
         this.fadeDuration = 1.8;
-        this.baseLiquidVolume = 2; // INCREASED: For more prominent liquidSynth in general and for record mode
-        this.basePunchyVolume = 4; // DECREASED: As punchySynth is now only for generative accents
+        this.baseLiquidVolume = -3; // INCREASED: For more prominent liquidSynth in general and for record mode
+        this.basePunchyVolume = 0; // DECREASED: As punchySynth is now only for generative accents
         // Rhythmic playback volume will be handled by baseLiquidVolume directly
 
         // State
