@@ -403,7 +403,7 @@ class TempSoilHandler {
                 envelope: { attack: 0.008, decay: 0.15, sustain: 0.02, release: 0.25 },
                 modulation: { type: "triangle" },
                 modulationEnvelope: { attack: 0.008, decay: 0.08, sustain: 0, release: 0.15 },
-                volume: -6 // Initial synth volume, overall controlled by this.mainVolume
+                volume: -3 // Initial synth volume, overall controlled by this.mainVolume
             }).connect(this.phaserEffect);
 
             // Harmonica Synth and its Reverb
@@ -420,7 +420,7 @@ class TempSoilHandler {
                     sustain: 0.2,
                     release: 0.3
                 },
-                volume: -10 // Quieter than bubbly synth
+                volume: -6 // Quieter than bubbly synth
             }).connect(this.harmonicaReverb);
 
 

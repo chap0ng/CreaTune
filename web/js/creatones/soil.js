@@ -8,9 +8,9 @@ class SoilHandler {
 
         // Audio Params - Toypiano Style
         this.fadeDuration = 1.5; 
-        this.baseToyPianoVolume = 6; 
-        this.baseBellVolume = 5;     
-        this.rhythmicPlaybackVolume = 6; 
+        this.baseToyPianoVolume = 3; 
+        this.baseBellVolume = 0;     
+        this.rhythmicPlaybackVolume = 3; 
 
         // State
         this.isActive = false; 

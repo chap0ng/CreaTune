@@ -380,7 +380,7 @@ class TempLightHandler {
             this.mainSynth = new Tone.MetalSynth({ // Bell Synth
                 frequency: 200, harmonicity: 6.1, modulationIndex: 22, octaves: 2.5, resonance: 3500,
                 envelope: { attack: 0.001, decay: 0.6, sustain: 0, release: 0.3 },
-                volume: -3 
+                volume: -6 
             }).connect(this.bellReverb);
 
             this.secondarySynth = new Tone.FMSynth({ // Melodic FM
@@ -388,7 +388,7 @@ class TempLightHandler {
                 envelope: { attack: 0.02, decay: 0.3, sustain: 0.1, release: 0.5 },
                 modulation: { type: "triangle" },
                 modulationEnvelope: { attack: 0.02, decay: 0.2, sustain: 0, release: 0.3 },
-                volume: -15
+                volume: -9
             }).connect(this.fmChorus);
 
             const bellNotes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
